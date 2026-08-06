@@ -18,8 +18,10 @@ import {
   releaseStudentFromSeat,
   getSeatsFromFirestore,
   syncExistingStudentsToSeats,
+  getSlotsFromBatchInput,
+  BASE_SLOTS,
 } from "../services/seatsService";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, runTransaction, collection } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 
 // Trigger automatic seat sync on app startup
@@ -138,50 +140,148 @@ export const getStudents = async () => {
 };
 
 export const saveStudent = async (student) => {
+  const newSeatNumber = Number(student.seatNumber) || 0;
+  const targetSlots = getSlotsFromBatchInput(student.batch);
+
   try {
-    let oldSeatNumber = 0;
-
-    // If editing an existing student, read their previous seat number from Firestore
-    if (student.id) {
-      const studentDocRef = doc(db, "students", student.id);
-      const snap = await getDoc(studentDocRef);
-      if (snap.exists()) {
-        oldSeatNumber = Number(snap.data().seatNumber) || 0;
+    const savedStudent = await runTransaction(db, async (transaction) => {
+      // 1. Get or create student doc reference
+      const studentId = student.id || doc(collection(db, "students")).id;
+      const studentDocRef = doc(db, "students", studentId);
+      
+      let oldSeatNumber = 0;
+      if (student.id) {
+        const snap = await transaction.get(studentDocRef);
+        if (snap.exists()) {
+          oldSeatNumber = Number(snap.data().seatNumber) || 0;
+        }
       }
-    }
 
-    let savedStudent = null;
-    if (student.id) {
-      savedStudent = await updateStudentInFirestore(student.id, student);
-    } else {
-      savedStudent = await addStudentToFirestore(student);
-    }
+      // 2. Validate seat conflict (Rule 1, 2, 3, 4, 5, 6)
+      if (newSeatNumber > 0) {
+        const seatDocRef = doc(db, "seats", String(newSeatNumber));
+        const seatSnap = await transaction.get(seatDocRef);
+        
+        if (seatSnap.exists()) {
+          const seatData = seatSnap.data();
+          const currentSlots = seatData.slots || { a: null, b: null, c: null, d: null };
 
-    const newSeatNumber = Number(student.seatNumber) || 0;
+          // Filter other students' occupied slots
+          const occupiedSlotVals = Object.keys(currentSlots)
+            .map(k => currentSlots[k])
+            .filter(val => val !== null && val.studentId && val.studentId !== studentId);
 
-    // Release old seat if student changed seat number
-    if (student.id && oldSeatNumber > 0 && oldSeatNumber !== newSeatNumber) {
-      await releaseStudentFromSeat(oldSeatNumber, student.id);
-    }
+          // Rule 1: Check if seat is fully occupied by All Batch (owns all 4 slots)
+          const isFullyOccupiedByAllBatch = Object.keys(currentSlots).every(k => {
+            const val = currentSlots[k];
+            return val && val.studentId && val.studentId !== studentId;
+          }) && occupiedSlotVals.length > 0 && new Set(occupiedSlotVals.map(v => v.studentId)).size === 1;
 
-    // Sync new seat assignment in Firestore seats collection
-    if (savedStudent && newSeatNumber > 0) {
-      await assignStudentSlotsInSeat(newSeatNumber, {
-        id: savedStudent.id || student.id,
-        name: student.name,
-        phone: student.phone,
-        batch: student.batch,
-        status: student.status,
-        validityTo: student.validityTo || student.validityEnd,
-      });
-    }
+          if (isFullyOccupiedByAllBatch) {
+            throw new Error(`SEAT_CONFLICT: Seat ${newSeatNumber} is fully occupied by an All Batch student.`);
+          }
 
-    // Record payment log if payment was made
+          // Rule 2 & 3: If new student selects All Batch, but seat has ANY slot occupied
+          const isNewStudentAllBatch = targetSlots.length === 4;
+          if (isNewStudentAllBatch && occupiedSlotVals.length > 0) {
+            throw new Error(`SEAT_CONFLICT: Seat ${newSeatNumber} has existing slot assignments. All Batch requires a fully vacant seat.`);
+          }
+
+          // Rule 4: Standard slot overlap check
+          for (const slotKey of targetSlots) {
+            const slotVal = currentSlots[slotKey];
+            if (slotVal && slotVal.studentId && slotVal.studentId !== studentId) {
+              const slotObj = BASE_SLOTS.find((s) => s.id === slotKey);
+              const batchName = slotObj ? slotObj.name : slotKey.toUpperCase() + " Batch";
+              throw new Error(`SEAT_CONFLICT: Seat ${newSeatNumber} is already occupied in ${batchName} by ${slotVal.name}.`);
+            }
+          }
+        }
+      }
+
+      // 3. Prepare data for student document
+      const cleanBatches = targetSlots.map((sCode) => sCode.toUpperCase() + " Batch");
+      const studentData = {
+        ...student,
+        id: studentId,
+        batch: cleanBatches,
+        seatNumber: newSeatNumber,
+        paidAmount: Number(student.paidAmount || 0),
+        totalAmount: Number(student.totalAmount || 0),
+        updatedAt: new Date().toISOString(),
+      };
+      if (!student.id) {
+        studentData.createdAt = new Date().toISOString();
+      }
+
+      // 4. Update student document inside transaction
+      transaction.set(studentDocRef, studentData, { merge: true });
+
+      // 5. Handle old seat release
+      if (student.id && oldSeatNumber > 0 && oldSeatNumber !== newSeatNumber) {
+        const oldSeatDocRef = doc(db, "seats", String(oldSeatNumber));
+        const oldSeatSnap = await transaction.get(oldSeatDocRef);
+        if (oldSeatSnap.exists()) {
+          const oldSlots = oldSeatSnap.data().slots || { a: null, b: null, c: null, d: null };
+          let changed = false;
+          Object.keys(oldSlots).forEach((k) => {
+            if (oldSlots[k]?.studentId === studentId) {
+              oldSlots[k] = null;
+              changed = true;
+            }
+          });
+          if (changed) {
+            transaction.update(oldSeatDocRef, { slots: oldSlots });
+          }
+        }
+      }
+
+      // 6. Handle new seat assignment slots
+      if (newSeatNumber > 0) {
+        const seatDocRef = doc(db, "seats", String(newSeatNumber));
+        const seatSnap = await transaction.get(seatDocRef);
+        
+        let currentSlots = { a: null, b: null, c: null, d: null };
+        if (seatSnap.exists()) {
+          currentSlots = seatSnap.data().slots || { a: null, b: null, c: null, d: null };
+        }
+
+        // Clear previous occurrences of this student on this seat
+        Object.keys(currentSlots).forEach((k) => {
+          if (currentSlots[k]?.studentId === studentId) {
+            currentSlots[k] = null;
+          }
+        });
+
+        // Set student info in new slots
+        const studentInfo = {
+          studentId: studentId,
+          name: studentData.name,
+          phone: studentData.phone,
+          batch: cleanBatches.join(", "),
+          status: studentData.status || "Paid",
+          validityTo: studentData.validityTo || "",
+        };
+
+        targetSlots.forEach((slotKey) => {
+          currentSlots[slotKey] = studentInfo;
+        });
+
+        transaction.set(seatDocRef, {
+          seatNumber: Number(newSeatNumber),
+          slots: currentSlots,
+        }, { merge: true });
+      }
+
+      return studentData;
+    });
+
+    // 7. Write payment transaction log outside Firestore transaction if save succeeded
     if (student.paidAmount > 0) {
       await recordPaymentInFirestore({
-        studentId: savedStudent ? savedStudent.id : student.id,
+        studentId: savedStudent.id,
         studentName: student.name,
-        amount: student.paidAmount,
+        amount: Number(student.paidAmount),
         status: student.status || "Paid",
         method: "Cash / Online",
         date: new Date().toISOString().split("T")[0],
@@ -190,8 +290,13 @@ export const saveStudent = async (student) => {
 
     return savedStudent;
   } catch (err) {
-    console.error("Error in saveStudent:", err);
-    return null;
+    console.error("Error in saveStudent transaction:", err);
+    if (err.message.startsWith("SEAT_CONFLICT:")) {
+      alert(err.message.substring(14)); // Show alert with conflict message
+    } else {
+      alert("Failed to save student details. A database conflict occurred.");
+    }
+    throw err;
   }
 };
 

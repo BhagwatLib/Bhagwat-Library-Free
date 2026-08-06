@@ -101,20 +101,42 @@ export const StudentForm = ({
       let isOccupied = false;
       let conflictingStudent = null;
       let conflictingSlots = [];
+      let customStatusText = "";
 
-      for (const st of seatStudents) {
+      // Rule 1: Check if any existing student occupies All Batch (owns all 4 slots)
+      const allBatchStudent = seatStudents.find(st => {
         const stSlots = getSlotsFromBatch(st.batch);
-        const overlapping = targetSlots.filter((slot) => stSlots.includes(slot));
+        return stSlots.length === 4;
+      });
 
-        if (overlapping.length > 0) {
+      if (allBatchStudent) {
+        isOccupied = true;
+        conflictingStudent = allBatchStudent;
+        customStatusText = `🔒 Full (All Batch) occupied by ${allBatchStudent.name}`;
+      } else {
+        // Rule 2 & 3: If new student selects All Batch, but seat has ANY student assigned
+        const isNewStudentAllBatch = targetSlots.length === 4;
+        if (isNewStudentAllBatch && seatStudents.length > 0) {
           isOccupied = true;
-          conflictingStudent = st;
-          overlapping.forEach((sId) => {
-            const bObj = BASE_SLOTS.find((b) => b.id === sId);
-            if (bObj && !conflictingSlots.includes(bObj.name)) {
-              conflictingSlots.push(bObj.name);
+          conflictingStudent = seatStudents[0];
+          customStatusText = `🔒 Occupied (All Batch requires vacant seat) by ${seatStudents[0].name}`;
+        } else {
+          // Standard slot overlap check
+          for (const st of seatStudents) {
+            const stSlots = getSlotsFromBatch(st.batch);
+            const overlapping = targetSlots.filter((slot) => stSlots.includes(slot));
+
+            if (overlapping.length > 0) {
+              isOccupied = true;
+              conflictingStudent = st;
+              overlapping.forEach((sId) => {
+                const bObj = BASE_SLOTS.find((b) => b.id === sId);
+                if (bObj && !conflictingSlots.includes(bObj.name)) {
+                  conflictingSlots.push(bObj.name);
+                }
+              });
             }
-          });
+          }
         }
       }
 
@@ -123,9 +145,9 @@ export const StudentForm = ({
         isOccupied,
         conflictingStudent,
         conflictingSlots,
-        statusText: isOccupied
+        statusText: customStatusText || (isOccupied
           ? `🔒 Occupied in ${conflictingSlots.join(", ")} by ${conflictingStudent?.name}`
-          : "✅ Available",
+          : "✅ Available"),
       };
     }
 

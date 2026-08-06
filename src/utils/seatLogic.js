@@ -121,6 +121,28 @@ export const checkSeatConflict = (targetSeatNumber, newStudentBatch, currentStud
     (s) => Number(s.seatNumber) === Number(targetSeatNumber) && s.id !== currentStudentId
   );
 
+  // RULE 1: If any existing student occupies All Batch (owns all 4 slots) on this seat
+  const hasAllBatchStudent = seatStudents.some(s => {
+    const sSlots = getSlotsFromBatch(s.batch);
+    return sSlots.length === 4; // All Batch owns all 4 slots
+  });
+  if (hasAllBatchStudent) {
+    return {
+      conflict: true,
+      message: `Seat ${targetSeatNumber} is fully occupied by an All Batch student.`,
+    };
+  }
+
+  // RULE 2 & 3: If new student selects All Batch, but seat has ANY student assigned
+  const isNewStudentAllBatch = targetSlots.length === 4;
+  if (isNewStudentAllBatch && seatStudents.length > 0) {
+    return {
+      conflict: true,
+      message: `Seat ${targetSeatNumber} has existing slot assignments. All Batch requires a fully vacant seat.`,
+    };
+  }
+
+  // Standard slot overlap check
   for (const student of seatStudents) {
     const existingSlots = getSlotsFromBatch(student.batch);
     const overlappingSlot = targetSlots.find((slot) => existingSlots.includes(slot));
