@@ -45,6 +45,7 @@ export const StudentForm = ({
     seatNumber: student?.seatNumber || 0,
   });
 
+  // Fetch live batches dynamically from Batches & Shifts section
   useEffect(() => {
     const loadData = async () => {
       const bList = await getBatches();
@@ -55,56 +56,31 @@ export const StudentForm = ({
     loadData();
   }, []);
 
-  // Standard 5 Batches configuration
-  const STANDARD_5_BATCHES = useMemo(() => [
-    { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", price: 500, slotKey: "morning" },
-    { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", price: 500, slotKey: "noon" },
-    { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", price: 500, slotKey: "afternoon" },
-    { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", price: 500, slotKey: "evening" },
-    { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", price: 1500, slotKey: "all" },
-  ], []);
-
-  // Use loaded batches or fallback to standard 5
-  const displayBatches = useMemo(() => {
-    if (batches.length > 0) {
-      // Ensure only standard 5 or mapped batches
-      const map = {};
-      batches.forEach((b) => {
-        const str = (b.name || b.time || "").toLowerCase();
-        if (str.includes("all")) map["all"] = b;
-        else if (str.includes("a batch") || str.includes("6:00 am - 10:00 am")) map["a"] = b;
-        else if (str.includes("b batch") || str.includes("10:00 am - 2:00 pm")) map["b"] = b;
-        else if (str.includes("c batch") || str.includes("2:00 pm - 6:00 pm")) map["c"] = b;
-        else if (str.includes("d batch") || str.includes("6:00 pm - 10:00 pm")) map["d"] = b;
-      });
-
-      return [
-        map["a"] || STANDARD_5_BATCHES[0],
-        map["b"] || STANDARD_5_BATCHES[1],
-        map["c"] || STANDARD_5_BATCHES[2],
-        map["d"] || STANDARD_5_BATCHES[3],
-        map["all"] || STANDARD_5_BATCHES[4],
-      ];
-    }
-    return STANDARD_5_BATCHES;
-  }, [batches, STANDARD_5_BATCHES]);
-
-  // Calculate total fee based on selected batches
+  // Calculate total fee directly based on selected batches from Batches section
   useEffect(() => {
-    if (displayBatches.length > 0) {
-      const isAll = formData.batch.includes("All Batch") || formData.batch.includes("6:00 AM - 10:00 PM");
+    if (batches.length > 0) {
+      const isAll = formData.batch.some(
+        (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
+      );
       if (isAll) {
-        const allB = displayBatches.find((b) => b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM");
-        setFormData((prev) => ({ ...prev, totalAmount: Number(allB?.price || 1500) }));
+        const allB = batches.find(
+          (b) => b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM" || b.slotKey === "all"
+        );
+        if (allB) {
+          setFormData((prev) => ({ ...prev, totalAmount: Number(allB.price || 1500) }));
+        } else {
+          const total = batches.reduce((sum, b) => sum + Number(b.price || 0), 0);
+          setFormData((prev) => ({ ...prev, totalAmount: total }));
+        }
       } else {
-        const selected = displayBatches.filter(
+        const selected = batches.filter(
           (b) => formData.batch.includes(b.time) || formData.batch.includes(b.name)
         );
         const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
         setFormData((prev) => ({ ...prev, totalAmount: total }));
       }
     }
-  }, [formData.batch, displayBatches]);
+  }, [formData.batch, batches]);
 
   // Compute selected batch slots ("morning", "noon", "afternoon", "evening")
   const targetSlots = useMemo(() => {
@@ -215,33 +191,26 @@ export const StudentForm = ({
 
   // Handle batch selection & "All Batch" auto-checking rule
   const handleBatchToggle = (batchObj) => {
-    const bName = batchObj.name;
+    const bName = batchObj.name || batchObj.time;
     const bTime = batchObj.time;
-    const isAllBatch = bName === "All Batch" || bTime === "6:00 AM - 10:00 PM";
+    const isAllBatch = bName === "All Batch" || bTime === "6:00 AM - 10:00 PM" || batchObj.slotKey === "all";
 
     setFormData((prev) => {
       let currentBatches = [...prev.batch];
 
       if (isAllBatch) {
-        if (currentBatches.includes("All Batch") || currentBatches.includes("6:00 AM - 10:00 PM")) {
+        const alreadyHasAll = currentBatches.some(
+          (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
+        );
+        if (alreadyHasAll) {
           // Deselect All Batch -> Clear selection
           return { ...prev, batch: [] };
         } else {
-          // Select All Batch -> Auto assign A, B, C, D and All Batch
+          // Select All Batch -> Auto assign all batch names/times in list
+          const allBatchIdentifiers = batches.flatMap((b) => [b.name, b.time]).filter(Boolean);
           return {
             ...prev,
-            batch: [
-              "A Batch",
-              "B Batch",
-              "C Batch",
-              "D Batch",
-              "All Batch",
-              "6:00 AM - 10:00 AM",
-              "10:00 AM - 2:00 PM",
-              "2:00 PM - 6:00 PM",
-              "6:00 PM - 10:00 PM",
-              "6:00 AM - 10:00 PM",
-            ],
+            batch: Array.from(new Set([...allBatchIdentifiers, "All Batch", "6:00 AM - 10:00 PM"])),
           };
         }
       } else {
@@ -252,8 +221,8 @@ export const StudentForm = ({
             (b) => b !== bName && b !== bTime && b !== "All Batch" && b !== "6:00 AM - 10:00 PM"
           );
         } else {
-          currentBatches.push(bName);
-          currentBatches.push(bTime);
+          if (bName) currentBatches.push(bName);
+          if (bTime && bTime !== bName) currentBatches.push(bTime);
         }
         return { ...prev, batch: currentBatches };
       }
@@ -261,7 +230,9 @@ export const StudentForm = ({
   };
 
   const isAllBatchSelected = useMemo(() => {
-    return formData.batch.includes("All Batch") || formData.batch.includes("6:00 AM - 10:00 PM");
+    return formData.batch.some(
+      (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
+    );
   }, [formData.batch]);
 
   const handleImageUpload = (e) => {
@@ -448,22 +419,22 @@ export const StudentForm = ({
             </>
           )}
 
-          {/* Batches Selection (Strictly 5 Standard Batches) */}
+          {/* Dynamic Batches Selection directly from Batches & Shifts section */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-400">
-                Select Batch Shift(s) <span className="text-[11px] text-slate-500">(Check multiple if needed)</span>
+                Select Batch Shift(s) <span className="text-[11px] text-slate-500">(Loaded from Batches section)</span>
               </label>
               {isAllBatchSelected && (
                 <span className="text-[10px] text-amber-400 font-bold">
-                  ⚡ All Batches (A, B, C, D) Auto-Selected
+                  ⚡ All Batches Selected
                 </span>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              {displayBatches.map((b) => {
-                const isAllThis = b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM";
+            <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+              {batches.map((b) => {
+                const isAllThis = b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM" || b.slotKey === "all";
                 const isChecked =
                   formData.batch.includes(b.time) ||
                   formData.batch.includes(b.name) ||
@@ -473,7 +444,7 @@ export const StudentForm = ({
 
                 return (
                   <label
-                    key={b.id || b.name}
+                    key={b.id || b.name || b.time}
                     className={clsx(
                       "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
                       isChecked
@@ -490,12 +461,20 @@ export const StudentForm = ({
                       className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
                     />
                     <div className="flex-1 flex items-center justify-between text-xs">
-                      <span className="font-bold">{b.name} <span className="font-normal text-slate-400">({b.time})</span></span>
+                      <span className="font-bold">
+                        {b.name ? `${b.name} (${b.time})` : b.time}
+                      </span>
                       <span className="font-semibold text-emerald-400">₹{b.price}</span>
                     </div>
                   </label>
                 );
               })}
+
+              {batches.length === 0 && (
+                <p className="text-xs text-slate-500 italic p-2 text-center">
+                  Loading batches from Firestore...
+                </p>
+              )}
             </div>
           </div>
 
