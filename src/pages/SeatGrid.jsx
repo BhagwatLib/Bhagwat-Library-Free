@@ -204,230 +204,101 @@ export const SeatGrid = () => {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4 overflow-x-auto pb-1 custom-scrollbar">
-          <div className="flex items-center gap-1.5">
-            {["All", "Available", "Partial", "Full", "A Batch", "B Batch", "C Batch", "D Batch"].map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={clsx(
-                  "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
-                  activeFilter === filter
-                    ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                    : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white"
-                )}
-              >
-                {filter}
-              </button>
-            ))}
-          </div>
-
-          {/* Desktop View Mode Toggle */}
-          <div className="hidden lg:flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+          {["All", "Available", "Partial", "Full", "A Batch", "B Batch", "C Batch", "D Batch"].map((filter) => (
             <button
-              onClick={() => setViewMode("grid")}
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
               className={clsx(
-                "p-1.5 rounded-lg transition-all",
-                viewMode === "grid"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-slate-400 hover:text-white"
+                "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
+                activeFilter === filter
+                  ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
+                  : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white"
               )}
-              title="Grid View"
             >
-              <LayoutGrid size={15} />
+              {filter}
             </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={clsx(
-                "p-1.5 rounded-lg transition-all",
-                viewMode === "list"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "text-slate-400 hover:text-white"
-              )}
-              title="List View"
-            >
-              <List size={15} />
-            </button>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* DESKTOP SEAT VIEW (1024px and above) */}
-      <div className="hidden lg:block">
-        {viewMode === "grid" ? (
-          <div className="grid lg:grid-cols-6 gap-4">
-            {filteredSeats.map((seat) => {
-              const isFull = seat.occupiedSlotsCount === 4;
-              const isPartial = seat.occupiedSlotsCount > 0 && seat.occupiedSlotsCount < 4;
-              const isAvailable = seat.occupiedSlotsCount === 0;
+      {/* DESKTOP SEAT GRID VIEW (1024px and above) */}
+      <div className="hidden lg:grid lg:grid-cols-6 gap-4">
+        {filteredSeats.map((seat) => {
+          const isFull = seat.occupiedSlotsCount === 4;
+          const isPartial = seat.occupiedSlotsCount > 0 && seat.occupiedSlotsCount < 4;
+          const isAvailable = seat.occupiedSlotsCount === 0;
 
-              return (
-                <motion.div
-                  key={seat.seatNumber}
-                  whileHover={{ y: -3, scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={() => setSelectedSeat(seat)}
+          return (
+            <motion.div
+              key={seat.seatNumber}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setSelectedSeat(seat)}
+              className={clsx(
+                "rounded-2xl border p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[125px] relative group shadow-md lg:p-5 lg:min-h-[140px]",
+                isFull
+                  ? "bg-slate-900/95 border-purple-500/40 hover:border-purple-400 shadow-purple-500/5"
+                  : isPartial
+                  ? "bg-slate-900/90 border-blue-500/40 hover:border-blue-400 shadow-blue-500/5"
+                  : "bg-slate-950/60 border-slate-800/80 hover:border-emerald-500/60 opacity-80"
+              )}
+            >
+              {/* Header: Seat Number & Count */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1 lg:text-sm">
+                  Seat {seat.seatNumber}
+                </span>
+                <span
                   className={clsx(
-                    "rounded-2xl border p-4.5 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[140px] relative group shadow-sm bg-slate-900/60",
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded-md border lg:text-[11px] lg:px-2 lg:py-1",
                     isFull
-                      ? "border-purple-500/30 hover:border-purple-400/80 shadow-purple-500/5 bg-[#1b152d]/40"
+                      ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
                       : isPartial
-                      ? "border-blue-500/30 hover:border-blue-400/80 shadow-blue-500/5 bg-[#0f1b34]/40"
-                      : "border-slate-800/80 hover:border-emerald-500/50 opacity-95 bg-slate-950/20"
+                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                      : "bg-slate-800 border-slate-700 text-slate-400"
                   )}
                 >
-                  {/* Top Row: Seat & Occupancy Count */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                      <Armchair size={15} className="text-slate-450 group-hover:text-blue-400 transition-colors" />
-                      Seat {seat.seatNumber}
-                    </span>
-                    <span
+                  {seat.occupiedSlotsCount}/4
+                </span>
+              </div>
+
+              {/* Realtime Batch Status Indicators (A 🟢, B 🟢, C ⚪, D 🟢) */}
+              <div className="grid grid-cols-4 gap-1.5 my-2.5 lg:my-3 lg:gap-2">
+                {BASE_SLOTS.map((slot) => {
+                  const sData = seat.slots[slot.id];
+                  const isOcc = sData.occupied;
+
+                  return (
+                    <div
+                      key={slot.id}
                       className={clsx(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-md border",
-                        isFull
-                          ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
-                          : isPartial
-                          ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                          : "bg-slate-800 border-slate-700 text-slate-400"
+                        "h-5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all border lg:h-6 lg:text-[11px]",
+                        isOcc
+                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                          : "bg-slate-950/80 border-slate-800 text-slate-600"
                       )}
+                      title={`${slot.name}: ${isOcc ? sData.student?.name : "Available"}`}
                     >
-                      {seat.occupiedSlotsCount}/4
-                    </span>
-                  </div>
+                      {slot.slotCode} {isOcc ? "🟢" : "⚪"}
+                    </div>
+                  );
+                })}
+              </div>
 
-                  {/* Mid Row: ABCD slot indicators */}
-                  <div className="grid grid-cols-4 gap-1.5 my-3">
-                    {BASE_SLOTS.map((slot) => {
-                      const sData = seat.slots[slot.id];
-                      const isOcc = sData.occupied;
-
-                      return (
-                        <div
-                          key={slot.id}
-                          className={clsx(
-                            "h-5 rounded-lg text-[9px] font-bold flex items-center justify-center transition-all border",
-                            isOcc
-                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                              : "bg-slate-950/80 border-slate-800/85 text-slate-650"
-                          )}
-                          title={`${slot.name}: ${isOcc ? sData.student?.name : "Available"}`}
-                        >
-                          {slot.slotCode}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Bottom Row: Max 2 Student Names (untruncated list) */}
-                  <div className="space-y-1 mt-auto pt-2 border-t border-slate-800/40">
-                    {seat.assignedStudents.length > 0 ? (
-                      <div className="flex flex-col gap-0.5">
-                        {seat.assignedStudents.slice(0, 2).map((s) => (
-                          <div key={s.id} className="text-[10px] text-slate-350 font-medium truncate flex items-center gap-1">
-                            <span className="w-1 h-1 rounded-full bg-blue-500 flex-shrink-0" />
-                            {s.name}
-                          </div>
-                        ))}
-                        {seat.assignedStudents.length > 2 && (
-                          <div className="text-[9px] text-slate-500 font-bold pl-2">
-                            +{seat.assignedStudents.length - 2} more
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-emerald-400/80 font-bold tracking-tight">Available</span>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4">Seat</th>
-                    <th className="px-6 py-4 text-center">Occupancy</th>
-                    <th className="px-6 py-4">Assigned Students</th>
-                    <th className="px-6 py-4">Available Slots</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-850">
-                  {filteredSeats.map((seat) => {
-                    const isFull = seat.occupiedSlotsCount === 4;
-                    const isPartial = seat.occupiedSlotsCount > 0 && seat.occupiedSlotsCount < 4;
-                    const isAvailable = seat.occupiedSlotsCount === 0;
-
-                    const freeSlots = BASE_SLOTS.filter(s => !seat.slots[s.id].occupied).map(s => s.slotCode);
-
-                    return (
-                      <tr key={seat.seatNumber} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="px-6 py-4 font-bold text-white flex items-center gap-2">
-                          <Armchair size={15} className="text-slate-500" />
-                          Seat #{seat.seatNumber}
-                        </td>
-                        <td className="px-6 py-4 text-center font-bold text-slate-200">
-                          {seat.occupiedSlotsCount}/4
-                        </td>
-                        <td className="px-6 py-4">
-                          {seat.assignedStudents.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {seat.assignedStudents.map((s) => (
-                                <span key={s.id} className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-slate-700/60">
-                                  {s.name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-slate-500 italic">None</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {freeSlots.length > 0 ? (
-                            <div className="flex gap-1">
-                              {freeSlots.map((code) => (
-                                <span key={code} className="w-5 h-5 rounded-md bg-slate-950 border border-slate-800 text-slate-400 font-bold flex items-center justify-center text-[9px]">
-                                  {code}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-rose-400 font-semibold text-[10px]">No slots free</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant={isFull ? "danger" : isPartial ? "warning" : "success"}>
-                            {isFull ? "Full" : isPartial ? "Partial" : "Available"}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => setSelectedSeat(seat)}
-                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 hover:text-white font-bold text-[10px] transition-colors active:scale-95"
-                          >
-                            View Details
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {filteredSeats.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">
-                        No matching seats found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+              {/* Footer: Status or Student Names */}
+              <div className="text-[10px] truncate font-medium lg:text-[11px]">
+                {seat.assignedStudents.length > 0 ? (
+                  <span className="text-slate-350">
+                    {seat.assignedStudents.map((s) => s.name).join(", ")}
+                  </span>
+                ) : (
+                  <span className="text-emerald-400/80 italic font-semibold">Available</span>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* MOBILE GRID VIEW (< 1024px) - 100% UNTOUCHED ORIGINAL MOBILE CODE */}
