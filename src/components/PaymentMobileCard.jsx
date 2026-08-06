@@ -2,8 +2,9 @@ import React from "react";
 import { Users, DollarSign, Bell, Edit2, Calendar } from "lucide-react";
 import { Badge } from "./Badge";
 import { SaaSCard } from "./SaaSCard";
+import { clsx } from "clsx";
 
-export const PaymentMobileCard = ({ student, onEdit, onReminder, onView }) => {
+export const PaymentMobileCard = ({ student, onEdit, onSendWhatsApp, isSending, onView }) => {
   const status =
     student.status ||
     (student.paidAmount >= student.totalAmount && student.totalAmount > 0
@@ -13,6 +14,15 @@ export const PaymentMobileCard = ({ student, onEdit, onReminder, onView }) => {
       : "Unpaid");
 
   const balance = Math.max(0, (student.totalAmount || 0) - (student.paidAmount || 0));
+
+  const formatLastMessage = (lastMsg) => {
+    if (!lastMsg || !lastMsg.sentAt) return null;
+    const date = new Date(lastMsg.sentAt);
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const typeLabel = lastMsg.type === "invoice" ? "Invoice Sent" : "Reminder Sent";
+    return `${typeLabel} on ${dateStr} at ${timeStr}`;
+  };
 
   return (
     <SaaSCard className="p-4 space-y-3">
@@ -35,6 +45,11 @@ export const PaymentMobileCard = ({ student, onEdit, onReminder, onView }) => {
             <p className="text-xs text-slate-400 mt-0.5">
               {Array.isArray(student.batch) ? student.batch.join(", ") : student.batch || "No Batch"}
             </p>
+            {student.lastMessageSent && (
+              <p className="text-[9px] text-emerald-400 font-semibold mt-1">
+                {formatLastMessage(student.lastMessageSent)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -85,15 +100,48 @@ export const PaymentMobileCard = ({ student, onEdit, onReminder, onView }) => {
           onClick={onEdit}
           className="h-12 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md shadow-blue-600/20"
         >
-          <Edit2 size={16} /> Collect Payment
+          <Edit2 size={16} /> Collect Fee
         </button>
-        <button
-          onClick={onReminder}
-          disabled={balance === 0}
-          className="h-12 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all"
-        >
-          <Bell size={16} /> Send Reminder
-        </button>
+
+        {status === "Paid" ? (
+          <button
+            disabled={isSending}
+            onClick={() => onSendWhatsApp("invoice")}
+            className={clsx(
+              "h-12 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
+              student.lastMessageSent?.type === "invoice"
+                ? "bg-slate-800 border-slate-700 text-slate-400"
+                : "bg-emerald-600 border-emerald-500 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/10"
+            )}
+          >
+            {isSending ? (
+              <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : student.lastMessageSent?.type === "invoice" ? (
+              "✓ Invoice Sent"
+            ) : (
+              "Send Invoice"
+            )}
+          </button>
+        ) : (
+          <button
+            disabled={isSending}
+            onClick={() => onSendWhatsApp("reminder")}
+            className={clsx(
+              "h-12 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all border",
+              student.lastMessageSent?.type === "reminder"
+                ? "bg-slate-800 border-slate-700 text-slate-400"
+                : "bg-amber-600 border-amber-500 hover:bg-amber-500 text-white shadow-md shadow-amber-600/10"
+            )}
+          >
+            {isSending ? (
+              <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : student.lastMessageSent?.type === "reminder" ? (
+              "✓ Reminder Sent"
+            ) : (
+              "Send Reminder"
+            )}
+          </button>
+        )}
       </div>
     </SaaSCard>
   );

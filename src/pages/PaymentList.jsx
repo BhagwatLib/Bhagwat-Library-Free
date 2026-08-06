@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 import { subscribeStudents } from "../services/studentsService";
+import { sendWhatsAppInvoice, sendWhatsAppReminder } from "../services/whatsappService";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
 import { Pagination } from "../components/Pagination";
@@ -30,10 +31,35 @@ export const PaymentList = () => {
   const [viewingStudent, setViewingStudent] = useState(null);
   const [notificationSent, setNotificationSent] = useState(null);
   const [historyModalStudent, setHistoryModalStudent] = useState(null);
+  const [sendingMap, setSendingMap] = useState({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const handleSendWhatsApp = async (student, type) => {
+    setSendingMap((prev) => ({ ...prev, [student.id]: true }));
+    try {
+      if (type === "invoice") {
+        await sendWhatsAppInvoice(student);
+      } else {
+        await sendWhatsAppReminder(student);
+      }
+    } catch (err) {
+      alert("Failed to send WhatsApp message. Please try again.");
+    } finally {
+      setSendingMap((prev) => ({ ...prev, [student.id]: false }));
+    }
+  };
+
+  const formatLastMessage = (lastMsg) => {
+    if (!lastMsg || !lastMsg.sentAt) return null;
+    const date = new Date(lastMsg.sentAt);
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const typeLabel = lastMsg.type === "invoice" ? "Invoice Sent" : "Reminder Sent";
+    return `${typeLabel} on ${dateStr} at ${timeStr}`;
+  };
 
   // Realtime subscription to students collection
   useEffect(() => {
@@ -360,6 +386,11 @@ export const PaymentList = () => {
                               {student.name}
                             </p>
                             <p className="text-[10px] text-slate-400">{student.phone}</p>
+                            {student.lastMessageSent && (
+                              <p className="text-[9px] text-emerald-400 font-semibold mt-0.5">
+                                {formatLastMessage(student.lastMessageSent)}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -405,7 +436,47 @@ export const PaymentList = () => {
                       </td>
 
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-2">
+                          {status === "Paid" ? (
+                            <button
+                              disabled={sendingMap[student.id]}
+                              onClick={() => handleSendWhatsApp(student, "invoice")}
+                              className={clsx(
+                                "px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border flex items-center gap-1 active:scale-95 disabled:opacity-50",
+                                student.lastMessageSent?.type === "invoice"
+                                  ? "bg-slate-800 border-slate-700 text-slate-400"
+                                  : "bg-emerald-600 border-emerald-500 hover:bg-emerald-500 text-white shadow-md"
+                              )}
+                            >
+                              {sendingMap[student.id] ? (
+                                <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                              ) : student.lastMessageSent?.type === "invoice" ? (
+                                "✓ Invoice Sent"
+                              ) : (
+                                "Send Invoice"
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              disabled={sendingMap[student.id]}
+                              onClick={() => handleSendWhatsApp(student, "reminder")}
+                              className={clsx(
+                                "px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border flex items-center gap-1 active:scale-95 disabled:opacity-50",
+                                student.lastMessageSent?.type === "reminder"
+                                  ? "bg-slate-800 border-slate-700 text-slate-400"
+                                  : "bg-amber-600 border-amber-500 hover:bg-amber-500 text-white shadow-md"
+                              )}
+                            >
+                              {sendingMap[student.id] ? (
+                                <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                              ) : student.lastMessageSent?.type === "reminder" ? (
+                                "✓ Reminder Sent"
+                              ) : (
+                                "Send Reminder"
+                              )}
+                            </button>
+                          )}
+
                           <button
                             onClick={() => setEditingStudent(student)}
                             className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
@@ -421,21 +492,6 @@ export const PaymentList = () => {
                           >
                             <History size={15} />
                           </button>
-
-                          {balance > 0 && (
-                            <button
-                              onClick={() => {
-                                setNotificationSent({
-                                  name: student.name,
-                                  amount: balance,
-                                });
-                              }}
-                              className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
-                              title="Send Reminder"
-                            >
-                              <Bell size={15} />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -491,10 +547,8 @@ export const PaymentList = () => {
               student={student}
               onView={() => setViewingStudent(student)}
               onEdit={() => setEditingStudent(student)}
-              onReminder={() => {
-                const balance = Math.max(0, (student.totalAmount || 0) - (student.paidAmount || 0));
-                setNotificationSent({ name: student.name, amount: balance });
-              }}
+              isSending={sendingMap[student.id]}
+              onSendWhatsApp={(type) => handleSendWhatsApp(student, type)}
             />
           ))}
 
