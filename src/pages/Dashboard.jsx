@@ -33,6 +33,7 @@ import { getSeatMatrix } from "../utils/seatLogic";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
 import { SkeletonLoader } from "../components/SkeletonLoader";
+import { MembershipAlertsWidget } from "../components/MembershipAlertsWidget";
 
 export const Dashboard = ({ onTabChange }) => {
   const [loading, setLoading] = useState(true);
@@ -217,6 +218,9 @@ export const Dashboard = ({ onTabChange }) => {
           </div>
         </SaaSCard>
       </div>
+
+      {/* MAJOR DASHBOARD FEATURE: MEMBERSHIP EXPIRY ALERTS WIDGET */}
+      <MembershipAlertsWidget students={students} />
 
       {/* CHARTS & QUICK ACTIONS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
