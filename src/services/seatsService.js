@@ -5,6 +5,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
@@ -14,14 +15,14 @@ const STUDENTS_COLLECTION = "students";
 const seatsRef = collection(db, COLLECTION_NAME);
 
 export const BASE_SLOTS = [
-  { id: "morning", slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM" },
-  { id: "noon", slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM" },
-  { id: "afternoon", slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM" },
-  { id: "evening", slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM" },
+  { id: "a", slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM" },
+  { id: "b", slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM" },
+  { id: "c", slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM" },
+  { id: "d", slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM" },
 ];
 
 /**
- * Normalizes any batch input string/array into slot IDs ("morning", "noon", "afternoon", "evening")
+ * Maps batch inputs into strict slot codes ("a", "b", "c", "d")
  */
 export const getSlotsFromBatchInput = (batchInput) => {
   if (!batchInput) return [];
@@ -30,26 +31,21 @@ export const getSlotsFromBatchInput = (batchInput) => {
 
   batches.forEach((b) => {
     if (!b) return;
-    const str = b.toString().toLowerCase().replace(/\s+/g, "");
+    const str = b.toString().toUpperCase().trim();
 
-    if (str.includes("allbatch") || str.includes("allshift") || str.includes("6:00am-10:00pm") || str.includes("6am-10pm") || str === "all") {
-      slotsSet.add("morning");
-      slotsSet.add("noon");
-      slotsSet.add("afternoon");
-      slotsSet.add("evening");
-    } else if (str.includes("abatch") || str.includes("6:00am-10:00am") || str.includes("6am-10am") || str === "a") {
-      slotsSet.add("morning");
-    } else if (str.includes("bbatch") || str.includes("10:00am-2:00pm") || str.includes("10am-2pm") || str === "b") {
-      slotsSet.add("noon");
-    } else if (str.includes("cbatch") || str.includes("2:00pm-6:00pm") || str.includes("2pm-6pm") || str === "c") {
-      slotsSet.add("afternoon");
-    } else if (str.includes("dbatch") || str.includes("6:00pm-10:00pm") || str.includes("6pm-10pm") || str === "d") {
-      slotsSet.add("evening");
-    } else {
-      if (str.includes("morning") || str.includes("6am")) slotsSet.add("morning");
-      if (str.includes("noon") || str.includes("10am")) slotsSet.add("noon");
-      if (str.includes("afternoon") || str.includes("2pm")) slotsSet.add("afternoon");
-      if (str.includes("evening") || str.includes("6pm")) slotsSet.add("evening");
+    if (str.includes("ALL") || str.includes("6:00 AM - 10:00 PM") || str.includes("6AM-10PM")) {
+      slotsSet.add("a");
+      slotsSet.add("b");
+      slotsSet.add("c");
+      slotsSet.add("d");
+    } else if (str === "A" || str.includes("A BATCH") || str.includes("6:00 AM - 10:00 AM") || str.includes("6AM-10AM") || str.includes("MORNING")) {
+      slotsSet.add("a");
+    } else if (str === "B" || str.includes("B BATCH") || str.includes("10:00 AM - 2:00 PM") || str.includes("10AM-2PM") || str.includes("NOON")) {
+      slotsSet.add("b");
+    } else if (str === "C" || str.includes("C BATCH") || str.includes("2:00 PM - 6:00 PM") || str.includes("2PM-6PM") || str.includes("AFTERNOON")) {
+      slotsSet.add("c");
+    } else if (str === "D" || str.includes("D BATCH") || str.includes("6:00 PM - 10:00 PM") || str.includes("6PM-10PM") || str.includes("EVENING")) {
+      slotsSet.add("d");
     }
   });
 
@@ -73,10 +69,10 @@ export const initializeSeatsInFirestore = async () => {
           setDoc(seatDocRef, {
             seatNumber: i,
             slots: {
-              morning: null,
-              noon: null,
-              afternoon: null,
-              evening: null,
+              a: null,
+              b: null,
+              c: null,
+              d: null,
             },
           })
         );
@@ -90,7 +86,8 @@ export const initializeSeatsInFirestore = async () => {
 };
 
 /**
- * Automatic Sync/Migration: Reads all existing students in Firestore and populates seat documents
+ * Clean legacy names in Student Documents and Seat Documents in Firestore.
+ * Migrates existing data automatically.
  */
 export const syncExistingStudentsToSeats = async () => {
   try {
@@ -99,26 +96,40 @@ export const syncExistingStudentsToSeats = async () => {
 
     const students = studentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-    // Group students by seatNumber
     const seatMap = {};
     for (let i = 1; i <= 100; i++) {
       seatMap[i] = {
-        morning: null,
-        noon: null,
-        afternoon: null,
-        evening: null,
+        a: null,
+        b: null,
+        c: null,
+        d: null,
       };
     }
 
-    students.forEach((student) => {
+    for (const student of students) {
+      // Map batch string/array to normalized codes "A", "B", "C", "D"
+      const targetSlots = getSlotsFromBatchInput(student.batch);
+      const cleanBatches = targetSlots.map((sCode) => sCode.toUpperCase() + " Batch");
+
+      // Update student batch list in Firestore if it contains old labels
+      const hasOldLabels = Array.isArray(student.batch)
+        ? student.batch.some((b) => /morning|noon|afternoon|evening/i.test(String(b)))
+        : /morning|noon|afternoon|evening/i.test(String(student.batch || ""));
+
+      if (hasOldLabels) {
+        const studentDocRef = doc(db, STUDENTS_COLLECTION, student.id);
+        await updateDoc(studentDocRef, {
+          batch: cleanBatches,
+        });
+      }
+
       const seatNum = Number(student.seatNumber);
       if (seatNum > 0 && seatNum <= 100) {
-        const targetSlots = getSlotsFromBatchInput(student.batch);
         const studentInfo = {
           studentId: student.id,
           name: student.name || "",
           phone: student.phone || "",
-          batch: Array.isArray(student.batch) ? student.batch.join(", ") : String(student.batch || ""),
+          batch: cleanBatches.join(", "),
           status: student.status || "Paid",
           validityTo: student.validityTo || student.validityEnd || "",
         };
@@ -129,9 +140,9 @@ export const syncExistingStudentsToSeats = async () => {
           }
         });
       }
-    });
+    }
 
-    // Write grouped seat data to Firestore seats collection
+    // Write all seat allocations back to Firestore
     const promises = [];
     for (let i = 1; i <= 100; i++) {
       const seatDocRef = doc(db, COLLECTION_NAME, String(i));
@@ -143,14 +154,14 @@ export const syncExistingStudentsToSeats = async () => {
       );
     }
     await Promise.all(promises);
-    console.log("Firestore seats auto-sync completed for all existing students.");
+    console.log("Firestore A, B, C, D batch slot migration complete.");
   } catch (error) {
-    console.error("Error syncing existing students to seats:", error);
+    console.error("Error during Firestore migration:", error);
   }
 };
 
 /**
- * Fetch all 100 seats from Firestore with automatic student sync
+ * Fetch all 100 seats from Firestore with automatic sync
  */
 export const getSeatsFromFirestore = async () => {
   try {
@@ -207,7 +218,7 @@ export const checkSeatSlotConflict = async (seatNumber, targetBatchInput, studen
       const slotVal = currentSlots[slotKey];
       if (slotVal && slotVal.studentId && slotVal.studentId !== studentId) {
         const slotObj = BASE_SLOTS.find((s) => s.id === slotKey);
-        const batchName = slotObj ? slotObj.name : slotKey;
+        const batchName = slotObj ? slotObj.name : slotKey.toUpperCase() + " Batch";
         return {
           conflict: true,
           conflictingSlot: batchName,
@@ -234,7 +245,7 @@ export const releaseStudentFromSeat = async (seatNumber, studentId) => {
     const docSnap = await getDoc(seatDocRef);
 
     if (docSnap.exists()) {
-      const currentSlots = docSnap.data().slots || { morning: null, noon: null, afternoon: null, evening: null };
+      const currentSlots = docSnap.data().slots || { a: null, b: null, c: null, d: null };
       let changed = false;
 
       Object.keys(currentSlots).forEach((k) => {
@@ -265,8 +276,8 @@ export const assignStudentSlotsInSeat = async (seatNumber, studentData) => {
     const docSnap = await getDoc(seatDocRef);
     
     let currentSlots = docSnap.exists()
-      ? docSnap.data().slots || { morning: null, noon: null, afternoon: null, evening: null }
-      : { morning: null, noon: null, afternoon: null, evening: null };
+      ? docSnap.data().slots || { a: null, b: null, c: null, d: null }
+      : { a: null, b: null, c: null, d: null };
 
     // Clear previous occurrences of this student on this seat
     Object.keys(currentSlots).forEach((k) => {
@@ -275,12 +286,14 @@ export const assignStudentSlotsInSeat = async (seatNumber, studentData) => {
       }
     });
 
+    const cleanBatches = targetSlots.map((sCode) => sCode.toUpperCase() + " Batch");
+
     // Set new slots
     const studentInfo = {
       studentId: studentData.id,
       name: studentData.name,
       phone: studentData.phone,
-      batch: Array.isArray(studentData.batch) ? studentData.batch.join(", ") : String(studentData.batch || ""),
+      batch: cleanBatches.join(", "),
       status: studentData.status || "Paid",
       validityTo: studentData.validityTo || studentData.validityEnd || "",
     };

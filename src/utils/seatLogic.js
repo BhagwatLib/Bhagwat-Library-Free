@@ -1,14 +1,14 @@
 // Realtime Seat & Batch Business Logic Utility (A, B, C, D & All Batch)
 
 export const BASE_SLOTS = [
-  { id: "morning", slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", label: "A Batch (6:00 AM - 10:00 AM)", key: "slot1" },
-  { id: "noon", slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", label: "B Batch (10:00 AM - 2:00 PM)", key: "slot2" },
-  { id: "afternoon", slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", label: "C Batch (2:00 PM - 6:00 PM)", key: "slot3" },
-  { id: "evening", slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", label: "D Batch (6:00 PM - 10:00 PM)", key: "slot4" },
+  { id: "a", slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", label: "A Batch (6:00 AM - 10:00 AM)", key: "slot1" },
+  { id: "b", slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", label: "B Batch (10:00 AM - 2:00 PM)", key: "slot2" },
+  { id: "c", slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", label: "C Batch (2:00 PM - 6:00 PM)", key: "slot3" },
+  { id: "d", slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", label: "D Batch (6:00 PM - 10:00 PM)", key: "slot4" },
 ];
 
 /**
- * Normalizes any batch string or array into base slot IDs ("morning", "noon", "afternoon", "evening")
+ * Normalizes any batch string or array into base slot IDs ("a", "b", "c", "d")
  */
 export const getSlotsFromBatch = (batchInput) => {
   if (!batchInput) return [];
@@ -18,27 +18,21 @@ export const getSlotsFromBatch = (batchInput) => {
 
   batches.forEach((b) => {
     if (!b) return;
-    const str = b.toString().toLowerCase().trim();
+    const str = b.toString().toUpperCase().trim();
 
-    if (str.includes("all batch") || str.includes("allshift") || str.includes("6:00 am - 10:00 pm") || str.includes("6am-10pm") || str === "all") {
-      slotsSet.add("morning");
-      slotsSet.add("noon");
-      slotsSet.add("afternoon");
-      slotsSet.add("evening");
-    } else if (str.includes("a batch") || str.includes("6:00 am - 10:00 am") || str.includes("6am-10am") || str === "a") {
-      slotsSet.add("morning");
-    } else if (str.includes("b batch") || str.includes("10:00 am - 2:00 pm") || str.includes("10am-2pm") || str === "b") {
-      slotsSet.add("noon");
-    } else if (str.includes("c batch") || str.includes("2:00 pm - 6:00 pm") || str.includes("2pm-6pm") || str === "c") {
-      slotsSet.add("afternoon");
-    } else if (str.includes("d batch") || str.includes("6:00 pm - 10:00 pm") || str.includes("6pm-10pm") || str === "d") {
-      slotsSet.add("evening");
-    } else {
-      // Fallback keyword matching
-      if (str.includes("morning") || str.includes("6am") || str.includes("6:00am")) slotsSet.add("morning");
-      if (str.includes("noon") || str.includes("10am") || str.includes("10:00am")) slotsSet.add("noon");
-      if (str.includes("afternoon") || str.includes("2pm") || str.includes("2:00pm")) slotsSet.add("afternoon");
-      if (str.includes("evening") || str.includes("6pm") || str.includes("6:00pm")) slotsSet.add("evening");
+    if (str.includes("ALL") || str.includes("6:00 AM - 10:00 PM") || str.includes("6AM-10PM")) {
+      slotsSet.add("a");
+      slotsSet.add("b");
+      slotsSet.add("c");
+      slotsSet.add("d");
+    } else if (str === "A" || str.includes("A BATCH") || str.includes("6:00 AM - 10:00 AM") || str.includes("6AM-10AM") || str.includes("MORNING")) {
+      slotsSet.add("a");
+    } else if (str === "B" || str.includes("B BATCH") || str.includes("10:00 AM - 2:00 PM") || str.includes("10AM-2PM") || str.includes("NOON")) {
+      slotsSet.add("b");
+    } else if (str === "C" || str.includes("C BATCH") || str.includes("2:00 PM - 6:00 PM") || str.includes("2PM-6PM") || str.includes("AFTERNOON")) {
+      slotsSet.add("c");
+    } else if (str === "D" || str.includes("D BATCH") || str.includes("6:00 PM - 10:00 PM") || str.includes("6PM-10PM") || str.includes("EVENING")) {
+      slotsSet.add("d");
     }
   });
 
@@ -69,10 +63,10 @@ export const getSeatMatrix = (studentsList = [], capacity = 100) => {
     );
 
     const slotsStatus = {
-      morning: { slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", occupied: false, student: null, status: "available" },
-      noon: { slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", occupied: false, student: null, status: "available" },
-      afternoon: { slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", occupied: false, student: null, status: "available" },
-      evening: { slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", occupied: false, student: null, status: "available" },
+      a: { slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", occupied: false, student: null, status: "available" },
+      b: { slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", occupied: false, student: null, status: "available" },
+      c: { slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", occupied: false, student: null, status: "available" },
+      d: { slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", occupied: false, student: null, status: "available" },
     };
 
     seatStudents.forEach((student) => {
@@ -133,7 +127,7 @@ export const checkSeatConflict = (targetSeatNumber, newStudentBatch, currentStud
     
     if (overlappingSlot) {
       const slotObj = BASE_SLOTS.find((s) => s.id === overlappingSlot);
-      const batchName = slotObj ? slotObj.name : overlappingSlot;
+      const batchName = slotObj ? slotObj.name : overlappingSlot.toUpperCase() + " Batch";
       return {
         conflict: true,
         conflictingSlot: batchName,

@@ -45,7 +45,7 @@ export const StudentForm = ({
     seatNumber: student?.seatNumber || 0,
   });
 
-  // Fetch live batches dynamically from Batches & Shifts section
+  // Fetch batches & students from Firestore
   useEffect(() => {
     const loadData = async () => {
       const bList = await getBatches();
@@ -56,33 +56,34 @@ export const StudentForm = ({
     loadData();
   }, []);
 
-  // Calculate total fee directly based on selected batches from Batches section
-  useEffect(() => {
-    if (batches.length > 0) {
-      const isAll = formData.batch.some(
-        (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
-      );
-      if (isAll) {
-        const allB = batches.find(
-          (b) => b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM" || b.slotKey === "all"
-        );
-        if (allB) {
-          setFormData((prev) => ({ ...prev, totalAmount: Number(allB.price || 1500) }));
-        } else {
-          const total = batches.reduce((sum, b) => sum + Number(b.price || 0), 0);
-          setFormData((prev) => ({ ...prev, totalAmount: total }));
-        }
-      } else {
-        const selected = batches.filter(
-          (b) => formData.batch.includes(b.time) || formData.batch.includes(b.name)
-        );
-        const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
-        setFormData((prev) => ({ ...prev, totalAmount: total }));
-      }
-    }
-  }, [formData.batch, batches]);
+  // Standardized 5 batches (strictly name A Batch, B Batch, C Batch, D Batch, All Batch)
+  const displayBatches = useMemo(() => [
+    { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", price: 500, code: "A" },
+    { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", price: 500, code: "B" },
+    { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", price: 500, code: "C" },
+    { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", price: 500, code: "D" },
+    { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", price: 1500, code: "All" },
+  ], []);
 
-  // Compute selected batch slots ("morning", "noon", "afternoon", "evening")
+  // Check if All Batch is selected
+  const isAllBatchSelected = useMemo(() => {
+    return formData.batch.includes("All Batch") || formData.batch.includes("All");
+  }, [formData.batch]);
+
+  // Calculate total fee based on selected batches
+  useEffect(() => {
+    if (isAllBatchSelected) {
+      setFormData((prev) => ({ ...prev, totalAmount: 1500 }));
+    } else {
+      const selected = displayBatches.filter(
+        (b) => formData.batch.includes(b.name) || formData.batch.includes(b.time)
+      );
+      const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
+      setFormData((prev) => ({ ...prev, totalAmount: total }));
+    }
+  }, [formData.batch, isAllBatchSelected, displayBatches]);
+
+  // Compute selected batch slots ("a", "b", "c", "d")
   const targetSlots = useMemo(() => {
     return getSlotsFromBatch(formData.batch);
   }, [formData.batch]);
@@ -92,6 +93,7 @@ export const StudentForm = ({
     const map = {};
 
     for (let n = 1; n <= 100; n++) {
+      // Find other students on seat n
       const seatStudents = allStudents.filter(
         (s) => Number(s.seatNumber) === n && s.id !== student?.id
       );
@@ -135,6 +137,7 @@ export const StudentForm = ({
     const list = [];
     for (let n = 1; n <= 100; n++) {
       const data = seatOccupancyMap[n];
+      // EDIT Student Exception: The student's current seat remains selectable
       if (!showAvailableOnly || !data.isOccupied || n === formData.seatNumber) {
         list.push(data);
       }
@@ -146,7 +149,7 @@ export const StudentForm = ({
   useEffect(() => {
     if (formData.seatNumber > 0 && formData.batch.length > 0) {
       const seatInfo = seatOccupancyMap[formData.seatNumber];
-      if (seatInfo && seatInfo.isOccupied) {
+      if (seatInfo && seatInfo.isOccupied && formData.seatNumber !== student?.seatNumber) {
         setConflictWarning(
           `Seat ${formData.seatNumber} is occupied in ${seatInfo.conflictingSlots.join(", ")} by ${seatInfo.conflictingStudent?.name}. Please choose another seat.`
         );
@@ -156,7 +159,7 @@ export const StudentForm = ({
     } else {
       setConflictWarning("");
     }
-  }, [formData.seatNumber, formData.batch, seatOccupancyMap]);
+  }, [formData.seatNumber, formData.batch, seatOccupancyMap, student?.seatNumber]);
 
   // Calculate status & auto validity
   useEffect(() => {
@@ -190,50 +193,36 @@ export const StudentForm = ({
   }, [formData.validityFrom]);
 
   // Handle batch selection & "All Batch" auto-checking rule
-  const handleBatchToggle = (batchObj) => {
-    const bName = batchObj.name || batchObj.time;
-    const bTime = batchObj.time;
-    const isAllBatch = bName === "All Batch" || bTime === "6:00 AM - 10:00 PM" || batchObj.slotKey === "all";
+  const handleBatchToggle = (batchName) => {
+    const isAllBatch = batchName === "All Batch" || batchName === "All";
 
     setFormData((prev) => {
       let currentBatches = [...prev.batch];
 
       if (isAllBatch) {
-        const alreadyHasAll = currentBatches.some(
-          (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
-        );
+        const alreadyHasAll = currentBatches.includes("All Batch");
         if (alreadyHasAll) {
-          // Deselect All Batch -> Clear selection
+          // Unchecked -> remove all selections
           return { ...prev, batch: [] };
         } else {
-          // Select All Batch -> Auto assign all batch names/times in list
-          const allBatchIdentifiers = batches.flatMap((b) => [b.name, b.time]).filter(Boolean);
+          // Checked -> Automatically select all A, B, C, D and All Batch
           return {
             ...prev,
-            batch: Array.from(new Set([...allBatchIdentifiers, "All Batch", "6:00 AM - 10:00 PM"])),
+            batch: ["A Batch", "B Batch", "C Batch", "D Batch", "All Batch"],
           };
         }
       } else {
-        // Individual batch checkbox toggle
-        const exists = currentBatches.includes(bName) || currentBatches.includes(bTime);
+        // Individual checkbox toggle
+        const exists = currentBatches.includes(batchName);
         if (exists) {
-          currentBatches = currentBatches.filter(
-            (b) => b !== bName && b !== bTime && b !== "All Batch" && b !== "6:00 AM - 10:00 PM"
-          );
+          currentBatches = currentBatches.filter((b) => b !== batchName);
         } else {
-          if (bName) currentBatches.push(bName);
-          if (bTime && bTime !== bName) currentBatches.push(bTime);
+          currentBatches.push(batchName);
         }
         return { ...prev, batch: currentBatches };
       }
     });
   };
-
-  const isAllBatchSelected = useMemo(() => {
-    return formData.batch.some(
-      (b) => b === "All Batch" || b === "6:00 AM - 10:00 PM"
-    );
-  }, [formData.batch]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -253,8 +242,8 @@ export const StudentForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Re-validate against fresh Firestore state before saving
-    if (formData.seatNumber > 0 && formData.batch.length > 0) {
+    // Re-validate against fresh Firestore state before saving (excluding current seat)
+    if (formData.seatNumber > 0 && formData.batch.length > 0 && formData.seatNumber !== student?.seatNumber) {
       const freshStudents = await getStudents();
       const res = checkSeatConflict(
         formData.seatNumber,
@@ -419,11 +408,11 @@ export const StudentForm = ({
             </>
           )}
 
-          {/* Dynamic Batches Selection directly from Batches & Shifts section */}
+          {/* Batches Selection (Strictly A Batch, B Batch, C Batch, D Batch, All Batch) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-400">
-                Select Batch Shift(s) <span className="text-[11px] text-slate-500">(Loaded from Batches section)</span>
+                Select Batch Shift(s)
               </label>
               {isAllBatchSelected && (
                 <span className="text-[10px] text-amber-400 font-bold">
@@ -432,11 +421,10 @@ export const StudentForm = ({
               )}
             </div>
 
-            <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-              {batches.map((b) => {
-                const isAllThis = b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM" || b.slotKey === "all";
+            <div className="space-y-1.5">
+              {displayBatches.map((b) => {
+                const isAllThis = b.name === "All Batch";
                 const isChecked =
-                  formData.batch.includes(b.time) ||
                   formData.batch.includes(b.name) ||
                   (isAllBatchSelected && !isAllThis);
                 
@@ -444,7 +432,7 @@ export const StudentForm = ({
 
                 return (
                   <label
-                    key={b.id || b.name || b.time}
+                    key={b.name}
                     className={clsx(
                       "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
                       isChecked
@@ -457,24 +445,18 @@ export const StudentForm = ({
                       type="checkbox"
                       disabled={isDisabled}
                       checked={isChecked}
-                      onChange={() => handleBatchToggle(b)}
+                      onChange={() => handleBatchToggle(b.name)}
                       className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
                     />
                     <div className="flex-1 flex items-center justify-between text-xs">
                       <span className="font-bold">
-                        {b.name ? `${b.name} (${b.time})` : b.time}
+                        {b.name} <span className="font-normal text-slate-400">({b.time})</span>
                       </span>
                       <span className="font-semibold text-emerald-400">₹{b.price}</span>
                     </div>
                   </label>
                 );
               })}
-
-              {batches.length === 0 && (
-                <p className="text-xs text-slate-500 italic p-2 text-center">
-                  Loading batches from Firestore...
-                </p>
-              )}
             </div>
           </div>
 
@@ -520,15 +502,19 @@ export const StudentForm = ({
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value={0}>-- No Seat Assigned --</option>
-                {Object.values(seatOccupancyMap).map((seat) => (
-                  <option
-                    key={seat.seatNumber}
-                    value={seat.seatNumber}
-                    disabled={seat.isOccupied && seat.seatNumber !== formData.seatNumber}
-                  >
-                    Seat #{seat.seatNumber} - {seat.statusText}
-                  </option>
-                ))}
+                {Object.values(seatOccupancyMap).map((seat) => {
+                  const isCurrentSeat = seat.seatNumber === student?.seatNumber;
+                  const isOccupied = seat.isOccupied && !isCurrentSeat;
+                  return (
+                    <option
+                      key={seat.seatNumber}
+                      value={seat.seatNumber}
+                      disabled={isOccupied}
+                    >
+                      Seat #{seat.seatNumber} - {isCurrentSeat ? "✅ Current" : seat.statusText}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -549,7 +535,9 @@ export const StudentForm = ({
 
               {visibleSeats.map((seat) => {
                 const isSelected = formData.seatNumber === seat.seatNumber;
-                const isOccupied = seat.isOccupied && !isSelected;
+                const isCurrentSeat = seat.seatNumber === student?.seatNumber;
+                // EDIT Student Exception: current student's seat remains selectable
+                const isOccupied = seat.isOccupied && !isCurrentSeat && !isSelected;
 
                 return (
                   <button
@@ -557,7 +545,7 @@ export const StudentForm = ({
                     type="button"
                     disabled={isOccupied}
                     onClick={() => setFormData({ ...formData, seatNumber: seat.seatNumber })}
-                    title={seat.statusText}
+                    title={isOccupied ? `Occupied by ${seat.conflictingStudent?.name} (${seat.conflictingSlots.join(", ")})` : seat.statusText}
                     className={clsx(
                       "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex flex-col items-center justify-center relative",
                       isSelected
@@ -582,12 +570,14 @@ export const StudentForm = ({
             {/* Hint Line */}
             {formData.seatNumber > 0 && seatOccupancyMap[formData.seatNumber] && (
               <p className="text-[10px] text-slate-400 italic">
-                {seatOccupancyMap[formData.seatNumber].statusText}
+                {formData.seatNumber === student?.seatNumber
+                  ? "✅ Currently Assigned to Student"
+                  : seatOccupancyMap[formData.seatNumber].statusText}
               </p>
             )}
           </div>
 
-          {/* Financials & Dates with Automatic Today / 1-Month Defaults */}
+          {/* Financials & Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
