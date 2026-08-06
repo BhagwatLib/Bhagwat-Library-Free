@@ -270,101 +270,68 @@ export const Dashboard = ({ onTabChange }) => {
 
       {/* ROW 2: 50% / 50% GRID (MEMBERSHIP ALERTS LEFT & QUICK ACTIONS RIGHT) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* LEFT 50%: MEMBERSHIP ALERTS (MAX 5 STUDENTS) */}
+        {/* LEFT 50%: MEMBERSHIP ALERTS (MAX 8 STUDENTS IN COMPACT TABLE/LIST) */}
         <div>
-          <MembershipAlertsWidget students={students} maxStudents={5} />
+          <MembershipAlertsWidget students={students} maxStudents={8} />
         </div>
 
-        {/* RIGHT 50%: QUICK ADMIN ACTIONS */}
+        {/* RIGHT 50%: QUICK ADMIN ACTIONS (REDUCED TO ONLY FOUR KEY ACTIONS) */}
         <div>
-          <SaaSCard className="p-5 md:p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-slate-800 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Zap size={18} className="text-amber-400" /> Quick Admin Actions
-              </h3>
-              <span className="text-xs text-slate-400 font-medium">Shortcuts</span>
+          <SaaSCard className="p-5 md:p-6 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-slate-800 space-y-4 h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Zap size={18} className="text-amber-400" /> Quick Admin Actions
+                </h3>
+                <span className="text-xs text-slate-400 font-medium">Shortcuts</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5 mt-4">
+                <button
+                  onClick={() => onTabChange("students")}
+                  className="p-4 rounded-2xl bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
+                >
+                  <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400">
+                    <UserPlus size={20} />
+                  </div>
+                  <span>➕ Add Student</span>
+                </button>
+
+                <button
+                  onClick={() => onTabChange("seats")}
+                  className="p-4 rounded-2xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
+                >
+                  <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400">
+                    <Armchair size={20} />
+                  </div>
+                  <span>🪑 Assign Seat</span>
+                </button>
+
+                <button
+                  onClick={() => onTabChange("payments")}
+                  className="p-4 rounded-2xl bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
+                >
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400">
+                    <DollarSign size={20} />
+                  </div>
+                  <span>💰 Collect Payment</span>
+                </button>
+
+                <button
+                  onClick={() => onTabChange("reports")}
+                  className="p-4 rounded-2xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
+                >
+                  <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400">
+                    <FileText size={20} />
+                  </div>
+                  <span>📄 Export Report</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <button
-                onClick={() => onTabChange("students")}
-                className="p-3.5 rounded-2xl bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
-                  <UserPlus size={20} />
-                </div>
-                <span>Add Student</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("seats")}
-                className="p-3.5 rounded-2xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
-                  <Armchair size={20} />
-                </div>
-                <span>Assign Seat</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("payments")}
-                className="p-3.5 rounded-2xl bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
-                  <DollarSign size={20} />
-                </div>
-                <span>Collect Payment</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("payments")}
-                className="p-3.5 rounded-2xl bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 text-amber-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
-                  <Bell size={20} />
-                </div>
-                <span>Send Reminder</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("batches")}
-                className="p-3.5 rounded-2xl bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 text-indigo-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
-                  <School size={20} />
-                </div>
-                <span>Shifts & Batches</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("communication")}
-                className="p-3.5 rounded-2xl bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 text-cyan-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400">
-                  <MessageSquare size={20} />
-                </div>
-                <span>Message Logs</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("reports")}
-                className="p-3.5 rounded-2xl bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-300 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400">
-                  <FileText size={20} />
-                </div>
-                <span>Export Reports</span>
-              </button>
-
-              <button
-                onClick={() => onTabChange("settings")}
-                className="p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700/80 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-sm"
-              >
-                <div className="p-2 rounded-xl bg-slate-700/60 text-slate-300">
-                  <SettingsIcon size={20} />
-                </div>
-                <span>Settings</span>
-              </button>
+            <div className="pt-3 border-t border-slate-800/60 text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Quick access to key dashboard functions</span>
+              <span className="text-slate-400 font-semibold">Bhagwat Library</span>
             </div>
           </SaaSCard>
         </div>
