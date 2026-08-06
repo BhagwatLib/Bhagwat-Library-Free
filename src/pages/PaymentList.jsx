@@ -144,6 +144,31 @@ export const PaymentList = () => {
 
       {/* TOP DASHBOARD CARD FILTERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Enrolled Card */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            setFilterStatus("All");
+            setCurrentPage(1);
+          }}
+          className={clsx(
+            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            filterStatus === "All"
+              ? "bg-blue-950/80 border-blue-500 shadow-blue-500/10"
+              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+          )}
+        >
+          <div className="flex items-center justify-between z-10">
+            <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          </div>
+          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+            {metrics.totalStudents}
+          </h3>
+          <p className="text-[10px] text-blue-400 mt-2 font-medium z-10">Click to show all</p>
+        </motion.div>
+
         {/* Paid Card */}
         <motion.div
           whileHover={{ scale: 1.02 }}
@@ -217,31 +242,6 @@ export const PaymentList = () => {
             {metrics.unpaidCount}
           </h3>
           <p className="text-[10px] text-rose-400 mt-2 font-medium z-10">Click to filter list</p>
-        </motion.div>
-
-        {/* Total Enrolled Card */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            setFilterStatus("All");
-            setCurrentPage(1);
-          }}
-          className={clsx(
-            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
-            filterStatus === "All"
-              ? "bg-blue-950/80 border-blue-500 shadow-blue-500/10"
-              : "bg-slate-900 border-slate-800 hover:border-slate-700"
-          )}
-        >
-          <div className="flex items-center justify-between z-10">
-            <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-          </div>
-          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
-            {metrics.totalStudents}
-          </h3>
-          <p className="text-[10px] text-blue-400 mt-2 font-medium z-10">Click to show all</p>
         </motion.div>
       </div>
 
