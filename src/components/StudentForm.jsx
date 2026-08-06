@@ -438,7 +438,7 @@ export const StudentForm = ({
                       isChecked
                         ? "bg-blue-500/10 border-blue-500/40 text-blue-300 font-semibold"
                         : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400",
-                      isDisabled && !isAllThis && "opacity-60 cursor-not-allowed"
+                      isDisabled && "opacity-60 cursor-not-allowed"
                     )}
                   >
                     <input
@@ -481,12 +481,14 @@ export const StudentForm = ({
 
               <button
                 type="button"
+                disabled={mode === "payment"}
                 onClick={() => setShowAvailableOnly(!showAvailableOnly)}
                 className={clsx(
                   "px-2.5 py-1 rounded-xl text-[11px] font-semibold border flex items-center gap-1 transition-all active:scale-95",
                   showAvailableOnly
                     ? "bg-emerald-600/20 border-emerald-500/40 text-emerald-300"
-                    : "bg-slate-900 border-slate-800 text-slate-400"
+                    : "bg-slate-900 border-slate-800 text-slate-400",
+                  mode === "payment" && "opacity-60 cursor-not-allowed"
                 )}
               >
                 <Filter size={12} />
@@ -497,16 +499,20 @@ export const StudentForm = ({
             {/* Dropdown Selector */}
             <div>
               <select
+                disabled={mode === "payment"}
                 value={formData.seatNumber}
                 onChange={(e) => setFormData({ ...formData, seatNumber: Number(e.target.value) })}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className={clsx(
+                  "w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+                  mode === "payment" && "opacity-60 cursor-not-allowed"
+                )}
               >
                 <option value={0}>-- No Seat Assigned --</option>
                 {Object.values(seatOccupancyMap).map((seat) => {
                   const isCurrentSeat = seat.seatNumber === student?.seatNumber;
                   const isOccupied = seat.isOccupied && !isCurrentSeat;
                   return (
-                    <option
+                     <option
                       key={seat.seatNumber}
                       value={seat.seatNumber}
                       disabled={isOccupied}
@@ -522,12 +528,14 @@ export const StudentForm = ({
             <div className="overflow-x-auto custom-scrollbar-hidden py-1 flex gap-2 snap-x">
               <button
                 type="button"
+                disabled={mode === "payment"}
                 onClick={() => setFormData({ ...formData, seatNumber: 0 })}
                 className={clsx(
                   "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex items-center justify-center",
                   formData.seatNumber === 0
                     ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30 scale-105"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700",
+                  mode === "payment" && "opacity-60 cursor-not-allowed"
                 )}
               >
                 None
@@ -543,14 +551,14 @@ export const StudentForm = ({
                   <button
                     key={seat.seatNumber}
                     type="button"
-                    disabled={isOccupied}
+                    disabled={isOccupied || mode === "payment"}
                     onClick={() => setFormData({ ...formData, seatNumber: seat.seatNumber })}
                     title={isOccupied ? `Occupied by ${seat.conflictingStudent?.name} (${seat.conflictingSlots.join(", ")})` : seat.statusText}
                     className={clsx(
                       "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex flex-col items-center justify-center relative",
                       isSelected
                         ? "bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-500/30 scale-105 font-bold"
-                        : isOccupied
+                        : (isOccupied || mode === "payment")
                         ? "bg-slate-950/40 border-slate-800/80 text-slate-600 cursor-not-allowed opacity-60"
                         : "bg-slate-900 border-emerald-500/30 text-slate-200 hover:border-emerald-500"
                     )}
