@@ -21,7 +21,7 @@ import {
   sendBulkReminders,
 } from "../services/whatsappService";
 
-export const MembershipAlertsWidget = ({ students = [] }) => {
+export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
   const [activeTab, setActiveTab] = useState("All");
   const [confirmModal, setConfirmModal] = useState(null); // { type: "single"|"bulk_expiring"|"bulk_expired", student?: object, count?: number }
   const [sending, setSending] = useState(false);
@@ -290,7 +290,7 @@ export const MembershipAlertsWidget = ({ students = [] }) => {
           ))}
         </div>
 
-        {/* Students Cards Grid */}
+        {/* Students Cards Grid / List */}
         {filteredStudents.length === 0 ? (
           <div className="p-8 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60 text-slate-400 space-y-2">
             <CheckCircle2 size={32} className="mx-auto text-emerald-400/80" />
@@ -300,8 +300,8 @@ export const MembershipAlertsWidget = ({ students = [] }) => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {filteredStudents.map((student) => {
+          <div className="space-y-2.5">
+            {(maxStudents ? filteredStudents.slice(0, maxStudents) : filteredStudents).map((student) => {
               const batchDisplay = Array.isArray(student.batch)
                 ? student.batch.join(", ")
                 : String(student.batch || "No Batch");
