@@ -15,8 +15,15 @@ import {
 } from "../services/paymentsService";
 import {
   assignStudentSlotsInSeat,
+  releaseStudentFromSeat,
   getSeatsFromFirestore,
+  syncExistingStudentsToSeats,
 } from "../services/seatsService";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase/firebase";
+
+// Trigger automatic seat sync on app startup
+syncExistingStudentsToSeats();
 
 // --- Dashboard Stats ---
 
@@ -132,6 +139,17 @@ export const getStudents = async () => {
 
 export const saveStudent = async (student) => {
   try {
+    let oldSeatNumber = 0;
+
+    // If editing an existing student, read their previous seat number from Firestore
+    if (student.id) {
+      const studentDocRef = doc(db, "students", student.id);
+      const snap = await getDoc(studentDocRef);
+      if (snap.exists()) {
+        oldSeatNumber = Number(snap.data().seatNumber) || 0;
+      }
+    }
+
     let savedStudent = null;
     if (student.id) {
       savedStudent = await updateStudentInFirestore(student.id, student);
@@ -139,10 +157,17 @@ export const saveStudent = async (student) => {
       savedStudent = await addStudentToFirestore(student);
     }
 
-    // Sync seat assignment in Firestore seats collection if seatNumber set
-    if (savedStudent && student.seatNumber > 0) {
-      await assignStudentSlotsInSeat(student.seatNumber, {
-        id: savedStudent.id,
+    const newSeatNumber = Number(student.seatNumber) || 0;
+
+    // Release old seat if student changed seat number
+    if (student.id && oldSeatNumber > 0 && oldSeatNumber !== newSeatNumber) {
+      await releaseStudentFromSeat(oldSeatNumber, student.id);
+    }
+
+    // Sync new seat assignment in Firestore seats collection
+    if (savedStudent && newSeatNumber > 0) {
+      await assignStudentSlotsInSeat(newSeatNumber, {
+        id: savedStudent.id || student.id,
         name: student.name,
         phone: student.phone,
         batch: student.batch,
@@ -172,6 +197,16 @@ export const saveStudent = async (student) => {
 
 export const deleteStudent = async (id) => {
   try {
+    // Release student's seat in Firestore before deleting student document
+    const studentDocRef = doc(db, "students", id);
+    const snap = await getDoc(studentDocRef);
+    if (snap.exists()) {
+      const seatNum = Number(snap.data().seatNumber) || 0;
+      if (seatNum > 0) {
+        await releaseStudentFromSeat(seatNum, id);
+      }
+    }
+
     await deleteStudentFromFirestore(id);
   } catch (err) {
     console.error("Error in deleteStudent:", err);
