@@ -18,14 +18,12 @@ export const StudentForm = ({
   const [conflictWarning, setConflictWarning] = useState("");
   const [showAvailableOnly, setShowAvailableOnly] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      const bList = await getBatches();
-      const sList = await getStudents();
-      setBatches(bList);
-      setAllStudents(sList);
-    };
-    loadData();
+  // Compute today's date and default 1-month validity to-date
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const defaultToDateStr = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split("T")[0];
   }, []);
 
   const [formData, setFormData] = useState({
@@ -37,30 +35,76 @@ export const StudentForm = ({
       : [],
     phone: student?.phone || "",
     address: student?.address || "",
-    admissionDate:
-      student?.admissionDate || new Date().toISOString().split("T")[0],
+    admissionDate: student?.admissionDate || todayStr,
     paidAmount: student?.paidAmount || "",
     totalAmount: student?.totalAmount || "",
     status: student?.status || "Unpaid",
     photo: student?.photo || "",
-    validityFrom: student?.validityFrom || "",
-    validityTo: student?.validityTo || "",
+    validityFrom: student?.validityFrom || todayStr,
+    validityTo: student?.validityTo || defaultToDateStr,
     seatNumber: student?.seatNumber || 0,
   });
 
+  useEffect(() => {
+    const loadData = async () => {
+      const bList = await getBatches();
+      const sList = await getStudents();
+      setBatches(bList);
+      setAllStudents(sList);
+    };
+    loadData();
+  }, []);
+
+  // Standard 5 Batches configuration
+  const STANDARD_5_BATCHES = useMemo(() => [
+    { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", price: 500, slotKey: "morning" },
+    { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", price: 500, slotKey: "noon" },
+    { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", price: 500, slotKey: "afternoon" },
+    { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", price: 500, slotKey: "evening" },
+    { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", price: 1500, slotKey: "all" },
+  ], []);
+
+  // Use loaded batches or fallback to standard 5
+  const displayBatches = useMemo(() => {
+    if (batches.length > 0) {
+      // Ensure only standard 5 or mapped batches
+      const map = {};
+      batches.forEach((b) => {
+        const str = (b.name || b.time || "").toLowerCase();
+        if (str.includes("all")) map["all"] = b;
+        else if (str.includes("a batch") || str.includes("6:00 am - 10:00 am")) map["a"] = b;
+        else if (str.includes("b batch") || str.includes("10:00 am - 2:00 pm")) map["b"] = b;
+        else if (str.includes("c batch") || str.includes("2:00 pm - 6:00 pm")) map["c"] = b;
+        else if (str.includes("d batch") || str.includes("6:00 pm - 10:00 pm")) map["d"] = b;
+      });
+
+      return [
+        map["a"] || STANDARD_5_BATCHES[0],
+        map["b"] || STANDARD_5_BATCHES[1],
+        map["c"] || STANDARD_5_BATCHES[2],
+        map["d"] || STANDARD_5_BATCHES[3],
+        map["all"] || STANDARD_5_BATCHES[4],
+      ];
+    }
+    return STANDARD_5_BATCHES;
+  }, [batches, STANDARD_5_BATCHES]);
+
   // Calculate total fee based on selected batches
   useEffect(() => {
-    if (batches.length > 0) {
-      const selectedBatches = batches.filter((b) =>
-        formData.batch.includes(b.time) || formData.batch.includes(b.name)
-      );
-      const total = selectedBatches.reduce(
-        (sum, b) => sum + Number(b.price),
-        0
-      );
-      setFormData((prev) => ({ ...prev, totalAmount: total }));
+    if (displayBatches.length > 0) {
+      const isAll = formData.batch.includes("All Batch") || formData.batch.includes("6:00 AM - 10:00 PM");
+      if (isAll) {
+        const allB = displayBatches.find((b) => b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM");
+        setFormData((prev) => ({ ...prev, totalAmount: Number(allB?.price || 1500) }));
+      } else {
+        const selected = displayBatches.filter(
+          (b) => formData.batch.includes(b.time) || formData.batch.includes(b.name)
+        );
+        const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
+        setFormData((prev) => ({ ...prev, totalAmount: total }));
+      }
     }
-  }, [formData.batch, batches]);
+  }, [formData.batch, displayBatches]);
 
   // Compute selected batch slots ("morning", "noon", "afternoon", "evening")
   const targetSlots = useMemo(() => {
@@ -150,70 +194,66 @@ export const StudentForm = ({
       if (prev.status !== status) {
         updates.status = status;
       }
-
-      if (status === "Paid" && (!prev.validityFrom || !prev.validityTo)) {
-        const today = new Date();
-        const nextMonth = new Date(today);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-        if (!prev.validityFrom)
-          updates.validityFrom = today.toISOString().split("T")[0];
-        if (!prev.validityTo)
-          updates.validityTo = nextMonth.toISOString().split("T")[0];
-      }
-
       return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
     });
   }, [formData.paidAmount, formData.totalAmount]);
 
-  // Auto validity date sync
+  // Sync validityTo automatically whenever validityFrom is changed by user
   useEffect(() => {
     if (formData.validityFrom) {
       const fromDate = new Date(formData.validityFrom);
-      const toDate = new Date(fromDate);
-      toDate.setMonth(toDate.getMonth() + 1);
-
-      const newToDate = toDate.toISOString().split("T")[0];
-      if (formData.validityTo !== newToDate) {
-        setFormData((prev) => ({ ...prev, validityTo: newToDate }));
+      if (!isNaN(fromDate.getTime())) {
+        const toDate = new Date(fromDate);
+        toDate.setMonth(toDate.getMonth() + 1);
+        const newToDateStr = toDate.toISOString().split("T")[0];
+        if (formData.validityTo !== newToDateStr) {
+          setFormData((prev) => ({ ...prev, validityTo: newToDateStr }));
+        }
       }
     }
   }, [formData.validityFrom]);
 
-  // Handle batch selection & "All Batch" rule
+  // Handle batch selection & "All Batch" auto-checking rule
   const handleBatchToggle = (batchObj) => {
-    const bKey = batchObj.time;
-    const isAllBatch = batchObj.name === "All Batch" || bKey === "6:00 AM - 10:00 PM";
+    const bName = batchObj.name;
+    const bTime = batchObj.time;
+    const isAllBatch = bName === "All Batch" || bTime === "6:00 AM - 10:00 PM";
 
     setFormData((prev) => {
       let currentBatches = [...prev.batch];
 
       if (isAllBatch) {
         if (currentBatches.includes("All Batch") || currentBatches.includes("6:00 AM - 10:00 PM")) {
-          // Deselect All Batch -> clear all
+          // Deselect All Batch -> Clear selection
           return { ...prev, batch: [] };
         } else {
           // Select All Batch -> Auto assign A, B, C, D and All Batch
-          const allShiftTimes = [
-            "6:00 AM - 10:00 AM",
-            "10:00 AM - 2:00 PM",
-            "2:00 PM - 6:00 PM",
-            "6:00 PM - 10:00 PM",
-            "6:00 AM - 10:00 PM",
-            "A Batch",
-            "B Batch",
-            "C Batch",
-            "D Batch",
-            "All Batch",
-          ];
-          return { ...prev, batch: allShiftTimes };
+          return {
+            ...prev,
+            batch: [
+              "A Batch",
+              "B Batch",
+              "C Batch",
+              "D Batch",
+              "All Batch",
+              "6:00 AM - 10:00 AM",
+              "10:00 AM - 2:00 PM",
+              "2:00 PM - 6:00 PM",
+              "6:00 PM - 10:00 PM",
+              "6:00 AM - 10:00 PM",
+            ],
+          };
         }
       } else {
-        // Individual batch toggle
-        if (currentBatches.includes(bKey) || currentBatches.includes(batchObj.name)) {
-          currentBatches = currentBatches.filter((b) => b !== bKey && b !== batchObj.name && b !== "All Batch" && b !== "6:00 AM - 10:00 PM");
+        // Individual batch checkbox toggle
+        const exists = currentBatches.includes(bName) || currentBatches.includes(bTime);
+        if (exists) {
+          currentBatches = currentBatches.filter(
+            (b) => b !== bName && b !== bTime && b !== "All Batch" && b !== "6:00 AM - 10:00 PM"
+          );
         } else {
-          currentBatches.push(bKey);
+          currentBatches.push(bName);
+          currentBatches.push(bTime);
         }
         return { ...prev, batch: currentBatches };
       }
@@ -408,11 +448,11 @@ export const StudentForm = ({
             </>
           )}
 
-          {/* Batches Selection (5 Standard Batches) */}
+          {/* Batches Selection (Strictly 5 Standard Batches) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-400">
-                Select Batch Shift(s)
+                Select Batch Shift(s) <span className="text-[11px] text-slate-500">(Check multiple if needed)</span>
               </label>
               {isAllBatchSelected && (
                 <span className="text-[10px] text-amber-400 font-bold">
@@ -422,7 +462,7 @@ export const StudentForm = ({
             </div>
 
             <div className="space-y-1.5">
-              {batches.map((b) => {
+              {displayBatches.map((b) => {
                 const isAllThis = b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM";
                 const isChecked =
                   formData.batch.includes(b.time) ||
@@ -433,7 +473,7 @@ export const StudentForm = ({
 
                 return (
                   <label
-                    key={b.id}
+                    key={b.id || b.name}
                     className={clsx(
                       "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
                       isChecked
@@ -473,7 +513,7 @@ export const StudentForm = ({
                 </label>
                 <p className="text-[10px] text-slate-400">
                   {targetSlots.length > 0
-                    ? `Selected slots: ${targetSlots.map((s) => s.toUpperCase()).join(", ")}`
+                    ? `Checking slots for: ${targetSlots.map((s) => s.toUpperCase()).join(", ")}`
                     : "Choose a batch first"}
                 </p>
               </div>
@@ -568,7 +608,7 @@ export const StudentForm = ({
             )}
           </div>
 
-          {/* Financials & Validity */}
+          {/* Financials & Dates with Automatic Today / 1-Month Defaults */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -597,11 +637,13 @@ export const StudentForm = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">
-                Validity From
+              <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
+                <span>Validity From</span>
+                <span className="text-[9px] text-emerald-400 font-normal">Auto Today</span>
               </label>
               <input
                 type="date"
+                required
                 value={formData.validityFrom}
                 onChange={(e) =>
                   setFormData({ ...formData, validityFrom: e.target.value })
@@ -610,11 +652,13 @@ export const StudentForm = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">
-                Validity To
+              <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
+                <span>Validity To</span>
+                <span className="text-[9px] text-emerald-400 font-normal">+1 Month</span>
               </label>
               <input
                 type="date"
+                required
                 value={formData.validityTo}
                 onChange={(e) =>
                   setFormData({ ...formData, validityTo: e.target.value })
