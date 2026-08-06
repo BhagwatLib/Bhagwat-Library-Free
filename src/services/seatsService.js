@@ -7,6 +7,7 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 
@@ -106,21 +107,32 @@ export const syncExistingStudentsToSeats = async () => {
       };
     }
 
+    const migrationBatch = writeBatch(db);
+    let batchHasOperations = false;
+
     for (const student of students) {
       // Map batch string/array to normalized codes "A", "B", "C", "D"
-      const targetSlots = getSlotsFromBatchInput(student.batch);
-      const cleanBatches = targetSlots.map((sCode) => sCode.toUpperCase() + " Batch");
+      const targetSlots = getSlotsFromBatchInput(student.assignedBatches || student.batch);
+      const cleanCodes = targetSlots.map((sCode) => sCode.toUpperCase()); // ["A", "B", "C", "D"]
+      const cleanBatches = cleanCodes.map((c) => `${c} Batch`);
 
-      // Update student batch list in Firestore if it contains old labels
-      const hasOldLabels = Array.isArray(student.batch)
-        ? student.batch.some((b) => /morning|noon|afternoon|evening/i.test(String(b)))
-        : /morning|noon|afternoon|evening/i.test(String(student.batch || ""));
+      // Migration check: If assignedBatches is missing or batch contains old labels/"All Batch"
+      const rawBatchStr = JSON.stringify(student.batch || "");
+      const needsUpdate =
+        !student.assignedBatches ||
+        /all|morning|noon|afternoon|evening/i.test(rawBatchStr);
 
-      if (hasOldLabels) {
+      if (needsUpdate) {
         const studentDocRef = doc(db, STUDENTS_COLLECTION, student.id);
-        await updateDoc(studentDocRef, {
-          batch: cleanBatches,
-        });
+        migrationBatch.set(
+          studentDocRef,
+          {
+            assignedBatches: cleanCodes,
+            batch: cleanBatches,
+          },
+          { merge: true }
+        );
+        batchHasOperations = true;
       }
 
       const seatNum = Number(student.seatNumber);
@@ -142,7 +154,11 @@ export const syncExistingStudentsToSeats = async () => {
       }
     }
 
-    // Write all seat allocations back to Firestore
+    if (batchHasOperations) {
+      await migrationBatch.commit();
+    }
+
+    // Write all seat allocations back to Firestore to rebuild seat occupancy
     const promises = [];
     for (let i = 1; i <= 100; i++) {
       const seatDocRef = doc(db, COLLECTION_NAME, String(i));
@@ -154,9 +170,9 @@ export const syncExistingStudentsToSeats = async () => {
       );
     }
     await Promise.all(promises);
-    console.log("Firestore A, B, C, D batch slot migration complete.");
+    console.log("Rebuilt 100 seat documents and normalized assignedBatches successfully.");
   } catch (error) {
-    console.error("Error during Firestore migration:", error);
+    console.error("Error during Firestore seat sync & rebuild:", error);
   }
 };
 

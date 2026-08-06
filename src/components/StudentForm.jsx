@@ -26,13 +26,26 @@ export const StudentForm = ({
     return d.toISOString().split("T")[0];
   }, []);
 
+  const initialBatches = useMemo(() => {
+    const raw = student?.assignedBatches || student?.batch || [];
+    const arr = Array.isArray(raw) ? raw : [raw];
+    const clean = arr.map((b) => {
+      const s = String(b).toUpperCase().trim();
+      if (s === "A" || s === "A BATCH") return "A Batch";
+      if (s === "B" || s === "B BATCH") return "B Batch";
+      if (s === "C" || s === "C BATCH") return "C Batch";
+      if (s === "D" || s === "D BATCH") return "D Batch";
+      return b;
+    });
+    if (clean.length === 4) {
+      return [...clean, "All Batch"];
+    }
+    return clean;
+  }, [student]);
+
   const [formData, setFormData] = useState({
     name: student?.name || "",
-    batch: Array.isArray(student?.batch)
-      ? student.batch
-      : student?.batch
-      ? [student.batch]
-      : [],
+    batch: initialBatches,
     phone: student?.phone || "",
     address: student?.address || "",
     admissionDate: student?.admissionDate || todayStr,
