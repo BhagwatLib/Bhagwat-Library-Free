@@ -104,20 +104,20 @@ export const Dashboard = ({ onTabChange }) => {
   ];
 
   const batchOccupancyData = useMemo(() => {
-    const batches = { Morning: 0, Noon: 0, Afternoon: 0, Evening: 0 };
+    const batches = { ABatch: 0, BBatch: 0, CBatch: 0, DBatch: 0 };
     students.forEach((s) => {
       const bStr = Array.isArray(s.batch) ? s.batch.join(" ") : String(s.batch || "");
-      if (bStr.toLowerCase().includes("morning") || bStr.includes("6AM-10AM")) batches.Morning++;
-      if (bStr.toLowerCase().includes("noon") || bStr.includes("10AM-2PM")) batches.Noon++;
-      if (bStr.toLowerCase().includes("afternoon") || bStr.includes("2PM-6PM")) batches.Afternoon++;
-      if (bStr.toLowerCase().includes("evening") || bStr.includes("6PM-10PM")) batches.Evening++;
+      if (bStr.toLowerCase().includes("a batch") || bStr.includes("6:00 AM - 10:00 AM") || bStr.toLowerCase().includes("morning")) batches.ABatch++;
+      if (bStr.toLowerCase().includes("b batch") || bStr.includes("10:00 AM - 2:00 PM") || bStr.toLowerCase().includes("noon")) batches.BBatch++;
+      if (bStr.toLowerCase().includes("c batch") || bStr.includes("2:00 PM - 6:00 PM") || bStr.toLowerCase().includes("afternoon")) batches.CBatch++;
+      if (bStr.toLowerCase().includes("d batch") || bStr.includes("6:00 PM - 10:00 PM") || bStr.toLowerCase().includes("evening")) batches.DBatch++;
     });
 
     return [
-      { name: "Morning", students: batches.Morning },
-      { name: "Noon", students: batches.Noon },
-      { name: "Afternoon", students: batches.Afternoon },
-      { name: "Evening", students: batches.Evening },
+      { name: "A Batch", students: batches.ABatch },
+      { name: "B Batch", students: batches.BBatch },
+      { name: "C Batch", students: batches.CBatch },
+      { name: "D Batch", students: batches.DBatch },
     ];
   }, [students]);
 

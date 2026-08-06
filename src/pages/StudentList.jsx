@@ -146,7 +146,7 @@ export const StudentList = () => {
           <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
             <Filter size={14} /> Filter:
           </span>
-          {["All", "Morning", "Noon", "Afternoon", "Evening"].map((b) => (
+          {["All", "A Batch", "B Batch", "C Batch", "D Batch", "All Batch"].map((b) => (
             <button
               key={b}
               onClick={() => {
