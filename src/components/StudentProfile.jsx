@@ -93,7 +93,6 @@ export const StudentProfile = ({ student, onClose, onUpdate, onEdit }) => {
         {[
           { id: "overview", label: "Overview", icon: User },
           { id: "payments", label: "Payments", icon: CreditCard },
-          { id: "attendance", label: "Attendance", icon: CalendarCheck },
           { id: "history", label: "History", icon: History },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -207,16 +206,7 @@ export const StudentProfile = ({ student, onClose, onUpdate, onEdit }) => {
         </div>
       )}
 
-      {/* TAB CONTENT: Attendance */}
-      {activeMobileTab === "attendance" && (
-        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-2 pt-2">
-          <CalendarCheck size={28} className="text-emerald-400 mx-auto" />
-          <h4 className="font-bold text-white text-sm">Attendance Summary</h4>
-          <p className="text-xs text-slate-400">
-            Attendance logging is active for current membership period.
-          </p>
-        </div>
-      )}
+ 
 
       {/* TAB CONTENT: History */}
       {activeMobileTab === "history" && (

@@ -29,7 +29,6 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "communication", label: "Communication History", icon: MessageSquare },
     { id: "batches", label: "Batches & Shifts", icon: School },
-    { id: "attendance", label: "Attendance Log", icon: CalendarCheck },
     { id: "reports", label: "Reports & Export", icon: FileText },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
@@ -44,7 +43,6 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
 
   const moreMenuItems = [
     { id: "communication", label: "Communication History", icon: MessageSquare, desc: "Message dispatch logs" },
-    { id: "attendance", label: "Attendance Log", icon: CalendarCheck, desc: "Track daily check-ins" },
     { id: "batches", label: "Batches & Shifts", icon: School, desc: "Manage shift timings & pricing" },
     { id: "reports", label: "Reports & Export", icon: FileText, desc: "Generate PDF/Excel reports" },
     { id: "settings", label: "Admin Settings", icon: SettingsIcon, desc: "Library profile & preferences" },
@@ -58,80 +56,76 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 flex">
       {/* DESKTOP SIDEBAR (1024px and above) */}
-      <aside className="hidden lg:flex w-64 bg-slate-900 border-r border-slate-800 flex-col fixed inset-y-0 left-0 z-30 shadow-2xl">
-        {/* Brand Header */}
-        <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center shadow-lg flex-shrink-0">
-            <img
-              src="/logo.jpg"
-              alt="Logo"
-              className="w-full h-full object-cover"
-            />
+      <aside className="hidden lg:flex w-64 flex-col border-r border-slate-800/80 bg-slate-900/90 backdrop-blur-xl shrink-0 h-screen sticky top-0 z-30">
+        {/* Sidebar Header */}
+        <div className="p-5 border-b border-slate-800/80 flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+            <Armchair className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-extrabold text-base text-white tracking-tight flex items-center gap-1">
-              Bhagwat Library <Sparkles className="text-amber-400" size={14} />
+            <h1 className="font-bold text-white tracking-tight leading-none text-base">
+              Library Pro
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium">SaaS Admin Dashboard</p>
+            <span className="text-[11px] text-slate-400 font-medium tracking-wide uppercase">
+              SaaS Dashboard
+            </span>
           </div>
         </div>
 
-        {/* Navigation Items */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-1.5">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-            Main Menu
-          </p>
+        {/* Navigation Links */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
           {desktopNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
-
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={clsx(
-                  "w-full px-3.5 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between transition-all duration-200 group",
+                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                   isActive
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
-                )}
+                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon size={18} className={clsx(isActive ? "text-white" : "text-slate-400 group-hover:text-blue-400")} />
-                  <span>{item.label}</span>
-                </div>
-                {isActive && <ChevronRight size={14} className="text-white/80" />}
+                <Icon
+                  className={`w-4 h-4 ${
+                    isActive ? "text-blue-400" : "text-slate-400"
+                  }`}
+                />
+                <span>{item.label}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Admin Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/60">
+        {/* Sidebar Footer / User Profile */}
+        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center text-sm font-semibold text-slate-300">
                 A
               </div>
-              <div>
-                <p className="text-xs font-bold text-white">Library Admin</p>
-                <p className="text-[10px] text-slate-400">Online</p>
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-white leading-tight">
+                  Admin Workspace
+                </span>
+                <span className="text-[10px] text-slate-400">Owner</span>
               </div>
             </div>
+
             <button
               onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
+              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
               title="Logout"
             >
-              <LogOut size={16} />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* MAIN CONTAINER */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
-        {/* COMPACT MOBILE HEADER (< 1024px) */}
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 min-w-0 pb-20 lg:pb-0 overflow-y-auto">
         <header className="lg:hidden px-4 py-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center shadow-md">
@@ -187,7 +181,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
           const Icon = tab.icon;
           const isActive =
             tab.id === "more"
-              ? isMoreSheetOpen || ["attendance", "batches", "reports", "settings"].includes(activeTab)
+              ? isMoreSheetOpen || ["batches", "reports", "settings"].includes(activeTab)
               : activeTab === tab.id;
 
           return (

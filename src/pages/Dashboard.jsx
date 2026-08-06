@@ -75,10 +75,6 @@ export const Dashboard = ({ onTabChange }) => {
     return students.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
   }, [students]);
 
-  const todayAttendance = useMemo(() => {
-    return Math.round(activeStudents * 0.85);
-  }, [activeStudents]);
-
   const revenueChartData = [
     { month: "Jan", revenue: Math.round(monthlyCollection * 0.6) },
     { month: "Feb", revenue: Math.round(monthlyCollection * 0.7) },

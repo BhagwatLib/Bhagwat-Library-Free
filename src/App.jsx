@@ -5,7 +5,6 @@ import { StudentList } from "./pages/StudentList";
 import { BatchList } from "./pages/BatchList";
 import { PaymentList } from "./pages/PaymentList";
 import { SeatGrid } from "./pages/SeatGrid";
-import { Attendance } from "./pages/Attendance";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
@@ -50,8 +49,6 @@ const App = () => {
         return <CommunicationHistory />;
       case "seats":
         return <SeatGrid />;
-      case "attendance":
-        return <Attendance />;
       case "reports":
         return <Reports />;
       case "settings":

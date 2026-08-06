@@ -123,7 +123,7 @@ export const Reports = () => {
             <FileText className="text-emerald-400" size={26} /> Comprehensive Reports & Analytics
           </h1>
           <p className="text-xs text-slate-400">
-            Generate and export library financial reports, attendance insights, seat occupancy, and batch performance
+            Generate and export library financial reports, seat occupancy, and batch performance
           </p>
         </div>
 
