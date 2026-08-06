@@ -10,13 +10,6 @@ import {
   Edit2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-} from "recharts";
 import { clsx } from "clsx";
 import { subscribeStudents } from "../services/studentsService";
 import { SaaSCard } from "../components/SaaSCard";
@@ -42,6 +35,7 @@ export const PaymentList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // Realtime subscription to students collection
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeStudents((data) => {
@@ -51,60 +45,41 @@ export const PaymentList = () => {
     return () => unsubscribe();
   }, []);
 
-  // Summary Metrics
+  // Summary Metrics calculated in realtime from Firestore data
   const metrics = useMemo(() => {
-    let totalExpected = 0;
-    let totalCollected = 0;
     let paidCount = 0;
     let partialCount = 0;
     let unpaidCount = 0;
+    let totalPending = 0;
 
     students.forEach((s) => {
       const total = Number(s.totalAmount) || 0;
       const paid = Number(s.paidAmount) || 0;
-      totalExpected += total;
-      totalCollected += paid;
+      totalPending += Math.max(0, total - paid);
 
-      if (paid >= total && total > 0) paidCount++;
-      else if (paid > 0) partialCount++;
+      const status =
+        s.status ||
+        (paid >= total && total > 0
+          ? "Paid"
+          : paid > 0
+          ? "Partial"
+          : "Unpaid");
+
+      if (status === "Paid") paidCount++;
+      else if (status === "Partial") partialCount++;
       else unpaidCount++;
     });
 
-    const totalPending = Math.max(0, totalExpected - totalCollected);
-
     return {
-      totalExpected,
-      totalCollected,
-      totalPending,
       paidCount,
       partialCount,
       unpaidCount,
+      totalPending,
       totalStudents: students.length,
     };
   }, [students]);
 
-  // Payment Status Donut Data
-  const pieData = [
-    { name: "Paid", value: metrics.paidCount || 1, color: "#10b981" },
-    { name: "Partial", value: metrics.partialCount || 0, color: "#f59e0b" },
-    { name: "Unpaid", value: metrics.unpaidCount || 0, color: "#f43f5e" },
-  ];
-
-  // Students Due This Week
-  const dueThisWeekStudents = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return students.filter((s) => {
-      const balance = Math.max(0, (s.totalAmount || 0) - (s.paidAmount || 0));
-      if (balance <= 0) return false;
-      if (!s.validityTo) return true;
-      const expiry = new Date(s.validityTo);
-      const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-      return diffDays >= 0 && diffDays <= 7;
-    });
-  }, [students]);
-
-  // Filtered Students
+  // Filtered Students matching active filter status and search term
   const filteredStudents = useMemo(() => {
     return students.filter((s) => {
       const matchesSearch =
@@ -145,7 +120,7 @@ export const PaymentList = () => {
             <DollarSign className="text-emerald-400" size={26} /> Payments & Invoicing
           </h1>
           <p className="text-xs text-slate-400">
-            Track student fee collection, pending dues, and automated payment reminders
+            Realtime Firestore synchronized card filters & billing summaries
           </p>
         </div>
 
@@ -167,44 +142,110 @@ export const PaymentList = () => {
         </button>
       </div>
 
-      {/* TOP SUMMARY CARDS */}
+      {/* TOP DASHBOARD CARD FILTERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SaaSCard className="p-5 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 border-blue-500/30">
-          <p className="text-xs font-semibold text-slate-400">Total Expected</p>
-          <h3 className="text-2xl font-extrabold text-white mt-1">
-            ₹{metrics.totalExpected.toLocaleString("en-IN")}
+        {/* Paid Card */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            setFilterStatus("Paid");
+            setCurrentPage(1);
+          }}
+          className={clsx(
+            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            filterStatus === "Paid"
+              ? "bg-emerald-950/80 border-emerald-500 shadow-emerald-500/10"
+              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+          )}
+        >
+          <div className="flex items-center justify-between z-10">
+            <p className="text-xs font-semibold text-slate-400">Paid Students</p>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          </div>
+          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+            {metrics.paidCount}
           </h3>
-          <p className="text-[10px] text-blue-400 mt-2 font-medium">Across all enrolled students</p>
-        </SaaSCard>
+          <p className="text-[10px] text-emerald-400 mt-2 font-medium z-10">Click to filter list</p>
+        </motion.div>
 
-        <SaaSCard className="p-5 bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-emerald-500/30">
-          <p className="text-xs font-semibold text-slate-400">Total Collected</p>
-          <h3 className="text-2xl font-extrabold text-emerald-400 mt-1">
-            ₹{metrics.totalCollected.toLocaleString("en-IN")}
+        {/* Partially Paid Card */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            setFilterStatus("Partial");
+            setCurrentPage(1);
+          }}
+          className={clsx(
+            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            filterStatus === "Partial"
+              ? "bg-amber-950/80 border-amber-500 shadow-amber-500/10"
+              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+          )}
+        >
+          <div className="flex items-center justify-between z-10">
+            <p className="text-xs font-semibold text-slate-400">Partially Paid</p>
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          </div>
+          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+            {metrics.partialCount}
           </h3>
-          <p className="text-[10px] text-emerald-400 mt-2 font-medium">Secured revenue</p>
-        </SaaSCard>
+          <p className="text-[10px] text-amber-400 mt-2 font-medium z-10">Click to filter list</p>
+        </motion.div>
 
-        <SaaSCard className="p-5 bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 border-rose-500/30">
-          <p className="text-xs font-semibold text-slate-400">Total Pending Dues</p>
-          <h3 className="text-2xl font-extrabold text-rose-400 mt-1">
-            ₹{metrics.totalPending.toLocaleString("en-IN")}
+        {/* Unpaid Card */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            setFilterStatus("Unpaid");
+            setCurrentPage(1);
+          }}
+          className={clsx(
+            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            filterStatus === "Unpaid"
+              ? "bg-rose-950/80 border-rose-500 shadow-rose-500/10"
+              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+          )}
+        >
+          <div className="flex items-center justify-between z-10">
+            <p className="text-xs font-semibold text-slate-400">Unpaid Students</p>
+            <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+          </div>
+          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+            {metrics.unpaidCount}
           </h3>
-          <p className="text-[10px] text-rose-400 mt-2 font-medium">Action required</p>
-        </SaaSCard>
+          <p className="text-[10px] text-rose-400 mt-2 font-medium z-10">Click to filter list</p>
+        </motion.div>
 
-        <SaaSCard className="p-5 bg-gradient-to-br from-purple-950 via-slate-900 to-slate-950 border-purple-500/30">
-          <p className="text-xs font-semibold text-slate-400">Payment Clearance</p>
-          <h3 className="text-2xl font-extrabold text-purple-300 mt-1">
-            {metrics.paidCount} / {metrics.totalStudents}
+        {/* Total Enrolled Card */}
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            setFilterStatus("All");
+            setCurrentPage(1);
+          }}
+          className={clsx(
+            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            filterStatus === "All"
+              ? "bg-blue-950/80 border-blue-500 shadow-blue-500/10"
+              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+          )}
+        >
+          <div className="flex items-center justify-between z-10">
+            <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          </div>
+          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+            {metrics.totalStudents}
           </h3>
-          <p className="text-[10px] text-purple-400 mt-2 font-medium">
-            {Math.round((metrics.paidCount / (metrics.totalStudents || 1)) * 100)}% Clearance rate
-          </p>
-        </SaaSCard>
+          <p className="text-[10px] text-blue-400 mt-2 font-medium z-10">Click to show all</p>
+        </motion.div>
       </div>
 
-      {/* SEARCH & FILTERS */}
+      {/* SEARCH CONTROL */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -235,7 +276,7 @@ export const PaymentList = () => {
                   : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
               )}
             >
-              {status}
+              {status === "Partial" ? "Partially Paid" : status}
             </button>
           ))}
         </div>
@@ -243,6 +284,25 @@ export const PaymentList = () => {
 
       {/* DESKTOP TABLE VIEW (1024px and above) */}
       <div className="hidden lg:block">
+        {/* Realtime Match Active Filter Badge */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-300">
+              {filterStatus === "All"
+                ? `Showing ${filteredStudents.length} Total Students`
+                : filterStatus === "Paid"
+                ? `Showing ${filteredStudents.length} Paid Students`
+                : filterStatus === "Partial"
+                ? `Showing ${filteredStudents.length} Partially Paid Students`
+                : `Showing ${filteredStudents.length} Unpaid Students`
+              }
+            </span>
+            <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20 font-bold">
+              {filteredStudents.length}
+            </span>
+          </div>
+        </div>
+
         <SaaSCard className="overflow-hidden">
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-xs">
@@ -407,6 +467,23 @@ export const PaymentList = () => {
 
       {/* MOBILE CARDS LIST (< 1024px) */}
       <div className="block lg:hidden space-y-3">
+        {/* Mobile Filter Badge */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-300">
+            {filterStatus === "All"
+              ? `Showing ${filteredStudents.length} Total Students`
+              : filterStatus === "Paid"
+              ? `Showing ${filteredStudents.length} Paid Students`
+              : filterStatus === "Partial"
+              ? `Showing ${filteredStudents.length} Partially Paid Students`
+              : `Showing ${filteredStudents.length} Unpaid Students`
+            }
+          </span>
+          <span className="bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/20 font-bold">
+            {filteredStudents.length}
+          </span>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {paginatedStudents.map((student) => (
             <PaymentMobileCard
