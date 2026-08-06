@@ -9,6 +9,7 @@ import { Attendance } from "./pages/Attendance";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
+import { CommunicationHistory } from "./pages/CommunicationHistory";
 
 const App = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -45,6 +46,8 @@ const App = () => {
         return <BatchList />;
       case "payments":
         return <PaymentList />;
+      case "communication":
+        return <CommunicationHistory />;
       case "seats":
         return <SeatGrid />;
       case "attendance":

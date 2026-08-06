@@ -8,6 +8,9 @@ import {
   XCircle,
   Users,
   Edit2,
+  FileText,
+  Loader2,
+  MessageSquare,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
@@ -32,6 +35,7 @@ export const PaymentList = () => {
   const [notificationSent, setNotificationSent] = useState(null);
   const [historyModalStudent, setHistoryModalStudent] = useState(null);
   const [sendingMap, setSendingMap] = useState({});
+  const [confirmMessage, setConfirmMessage] = useState(null); // { student, type, title, message }
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -436,50 +440,58 @@ export const PaymentList = () => {
                       </td>
 
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           {status === "Paid" ? (
                             <button
                               disabled={sendingMap[student.id]}
-                              onClick={() => handleSendWhatsApp(student, "invoice")}
+                              onClick={() => setConfirmMessage({
+                                student,
+                                type: "invoice",
+                                title: "Send Invoice",
+                                message: "Are you sure you want to send the payment invoice to this student?"
+                              })}
                               className={clsx(
-                                "px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border flex items-center gap-1 active:scale-95 disabled:opacity-50",
+                                "p-2 rounded-lg border transition-all active:scale-95 disabled:opacity-50",
                                 student.lastMessageSent?.type === "invoice"
                                   ? "bg-slate-800 border-slate-700 text-slate-400"
-                                  : "bg-emerald-600 border-emerald-500 hover:bg-emerald-500 text-white shadow-md"
+                                  : "bg-emerald-600/20 border-emerald-500/30 hover:bg-emerald-600 text-emerald-400 hover:text-white"
                               )}
+                              title="Send Invoice"
                             >
                               {sendingMap[student.id] ? (
-                                <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
-                              ) : student.lastMessageSent?.type === "invoice" ? (
-                                "✓ Invoice Sent"
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                "Send Invoice"
+                                <FileText size={15} />
                               )}
                             </button>
                           ) : (
                             <button
                               disabled={sendingMap[student.id]}
-                              onClick={() => handleSendWhatsApp(student, "reminder")}
+                              onClick={() => setConfirmMessage({
+                                student,
+                                type: "reminder",
+                                title: "Send Payment Reminder",
+                                message: "Are you sure you want to send a payment reminder to this student?"
+                              })}
                               className={clsx(
-                                "px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all border flex items-center gap-1 active:scale-95 disabled:opacity-50",
+                                "p-2 rounded-lg border transition-all active:scale-95 disabled:opacity-50",
                                 student.lastMessageSent?.type === "reminder"
                                   ? "bg-slate-800 border-slate-700 text-slate-400"
-                                  : "bg-amber-600 border-amber-500 hover:bg-amber-500 text-white shadow-md"
+                                  : "bg-amber-600/20 border-amber-500/30 hover:bg-amber-600 text-amber-400 hover:text-white"
                               )}
+                              title="Send Payment Reminder"
                             >
                               {sendingMap[student.id] ? (
-                                <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
-                              ) : student.lastMessageSent?.type === "reminder" ? (
-                                "✓ Reminder Sent"
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                "Send Reminder"
+                                <Bell size={15} />
                               )}
                             </button>
                           )}
 
                           <button
                             onClick={() => setEditingStudent(student)}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800/80 rounded-lg transition-colors"
                             title="Edit Payment"
                           >
                             <Edit2 size={15} />
@@ -487,7 +499,7 @@ export const PaymentList = () => {
 
                           <button
                             onClick={() => setHistoryModalStudent(student)}
-                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 border border-slate-800/80 rounded-lg transition-colors"
                             title="Payment History"
                           >
                             <History size={15} />
@@ -548,7 +560,17 @@ export const PaymentList = () => {
               onView={() => setViewingStudent(student)}
               onEdit={() => setEditingStudent(student)}
               isSending={sendingMap[student.id]}
-              onSendWhatsApp={(type) => handleSendWhatsApp(student, type)}
+              onSendWhatsApp={(type) => {
+                const isInv = type === "invoice";
+                setConfirmMessage({
+                  student,
+                  type,
+                  title: isInv ? "Send Invoice" : "Send Payment Reminder",
+                  message: isInv
+                    ? "Are you sure you want to send the payment invoice to this student?"
+                    : "Are you sure you want to send a payment reminder to this student?"
+                });
+              }}
             />
           ))}
 
@@ -593,6 +615,25 @@ export const PaymentList = () => {
           onUpdate={() => {}}
         />
       )}
+
+      {/* Send WhatsApp Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!confirmMessage}
+        onClose={() => setConfirmMessage(null)}
+        title={confirmMessage?.title || "Confirm Message Dispatch"}
+        message={confirmMessage?.message || ""}
+        confirmText="Send"
+        cancelText="Cancel"
+        variant="primary"
+        showCancel={true}
+        onConfirm={async () => {
+          if (confirmMessage) {
+            const { student, type } = confirmMessage;
+            setConfirmMessage(null);
+            await handleSendWhatsApp(student, type);
+          }
+        }}
+      />
 
       {/* Notification Confirmation Sheet */}
       <ConfirmModal

@@ -13,6 +13,7 @@ import {
   Sparkles,
   LogOut,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { BottomSheet } from "./BottomSheet";
@@ -26,6 +27,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     { id: "students", label: "Students", icon: Users },
     { id: "seats", label: "Seats & Matrix", icon: Armchair },
     { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "communication", label: "Communication History", icon: MessageSquare },
     { id: "batches", label: "Batches & Shifts", icon: School },
     { id: "attendance", label: "Attendance Log", icon: CalendarCheck },
     { id: "reports", label: "Reports & Export", icon: FileText },
@@ -41,6 +43,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
   ];
 
   const moreMenuItems = [
+    { id: "communication", label: "Communication History", icon: MessageSquare, desc: "Message dispatch logs" },
     { id: "attendance", label: "Attendance Log", icon: CalendarCheck, desc: "Track daily check-ins" },
     { id: "batches", label: "Batches & Shifts", icon: School, desc: "Manage shift timings & pricing" },
     { id: "reports", label: "Reports & Export", icon: FileText, desc: "Generate PDF/Excel reports" },
