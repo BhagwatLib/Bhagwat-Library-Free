@@ -2,42 +2,57 @@ import {
   collection,
   doc,
   getDocs,
-  addDoc,
+  getDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
 } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 
-const COLLECTION_NAME = "batches";
-const batchesRef = collection(db, COLLECTION_NAME);
+const BATCHES_COLLECTION = "batches";
 
-const DEFAULT_BATCHES = [
-  { name: "Morning Shift", time: "6:00 AM - 10:00 AM", price: "250", fee: 250, startTime: "06:00", endTime: "10:00", active: true },
-  { name: "Noon Shift", time: "10:00 AM - 2:00 PM", price: "300", fee: 300, startTime: "10:00", endTime: "14:00", active: true },
-  { name: "Afternoon Shift", time: "2:00 PM - 6:00 PM", price: "300", fee: 300, startTime: "14:00", endTime: "18:00", active: true },
-  { name: "Evening Shift", time: "6:00 PM - 10:00 PM", price: "250", fee: 250, startTime: "18:00", endTime: "22:00", active: true },
-  { name: "Morning+Noon Shift", time: "6:00 AM - 2:00 PM", price: "500", fee: 500, startTime: "06:00", endTime: "14:00", active: true },
-  { name: "Noon+Afternoon Shift", time: "10:00 AM - 6:00 PM", price: "550", fee: 550, startTime: "10:00", endTime: "18:00", active: true },
-  { name: "Afternoon+Evening Shift", time: "2:00 PM - 10:00 PM", price: "500", fee: 500, startTime: "14:00", endTime: "22:00", active: true },
-  { name: "All Shift", time: "All Shift", price: "800", fee: 800, startTime: "06:00", endTime: "22:00", active: true },
+export const DEFAULT_BATCHES = [
+  { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", slotKey: "morning", price: 500, seatsUsed: 0 },
+  { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", slotKey: "noon", price: 500, seatsUsed: 0 },
+  { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", slotKey: "afternoon", price: 500, seatsUsed: 0 },
+  { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", slotKey: "evening", price: 500, seatsUsed: 0 },
+  { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", slotKey: "all", price: 1500, seatsUsed: 0 },
 ];
 
 /**
- * Seeds default batches in Firestore if empty
+ * Seed default 5 batches in Firestore
  */
-export const initializeBatchesInFirestore = async () => {
+export const seedDefaultBatchesInFirestore = async () => {
   try {
-    const snapshot = await getDocs(batchesRef);
-    if (snapshot.empty) {
-      console.log("Seeding default batches in Firestore...");
-      const promises = DEFAULT_BATCHES.map((b) => addDoc(batchesRef, b));
-      await Promise.all(promises);
-      console.log("Default batches initialized.");
+    for (const batch of DEFAULT_BATCHES) {
+      const docRef = doc(db, BATCHES_COLLECTION, batch.id);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) {
+        await setDoc(docRef, batch);
+      }
     }
   } catch (error) {
-    console.error("Error initializing batches in Firestore:", error);
+    console.error("Error seeding default batches:", error);
   }
+};
+
+/**
+ * Realtime Subscription for Batches
+ */
+export const subscribeBatches = (callback) => {
+  const colRef = collection(db, BATCHES_COLLECTION);
+  return onSnapshot(colRef, (snapshot) => {
+    if (snapshot.empty) {
+      seedDefaultBatchesInFirestore().then(() => callback(DEFAULT_BATCHES));
+    } else {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(list);
+    }
+  }, (err) => {
+    console.error("Batches subscription error:", err);
+    callback(DEFAULT_BATCHES);
+  });
 };
 
 /**
@@ -45,60 +60,28 @@ export const initializeBatchesInFirestore = async () => {
  */
 export const getBatchesFromFirestore = async () => {
   try {
-    await initializeBatchesInFirestore();
-    const snapshot = await getDocs(batchesRef);
-    return snapshot.docs.map((docSnap) => ({
-      id: docSnap.id,
-      ...docSnap.data(),
-    }));
+    const colRef = collection(db, BATCHES_COLLECTION);
+    const snap = await getDocs(colRef);
+    if (snap.empty) {
+      await seedDefaultBatchesInFirestore();
+      return DEFAULT_BATCHES;
+    }
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (error) {
-    console.error("Error fetching batches from Firestore:", error);
-    return [];
+    console.error("Error fetching batches:", error);
+    return DEFAULT_BATCHES;
   }
 };
 
 /**
- * Subscribe to realtime batches updates
- */
-export const subscribeBatches = (callback) => {
-  try {
-    return onSnapshot(batchesRef, (snapshot) => {
-      const batches = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      callback(batches);
-    });
-  } catch (err) {
-    console.error("Error subscribing to batches:", err);
-    return () => {};
-  }
-};
-
-/**
- * Create or update batch
+ * Save / Update a batch in Firestore
  */
 export const saveBatchInFirestore = async (batchData) => {
   try {
-    if (batchData.id) {
-      const docRef = doc(db, COLLECTION_NAME, batchData.id);
-      const updates = { ...batchData };
-      delete updates.id;
-      await updateDoc(docRef, updates);
-      return { id: batchData.id, ...updates };
-    } else {
-      const newDoc = {
-        name: batchData.name || batchData.time || "Custom Batch",
-        time: batchData.time || "",
-        price: String(batchData.price || "0"),
-        fee: Number(batchData.price) || 0,
-        startTime: batchData.startTime || "",
-        endTime: batchData.endTime || "",
-        active: true,
-      };
-      const docRef = await addDoc(batchesRef, newDoc);
-      return { id: docRef.id, ...newDoc };
-    }
+    const docId = batchData.id || `batch_${Date.now()}`;
+    const docRef = doc(db, BATCHES_COLLECTION, docId);
+    await setDoc(docRef, { ...batchData, id: docId }, { merge: true });
+    return { id: docId, ...batchData };
   } catch (error) {
     console.error("Error saving batch in Firestore:", error);
     throw error;
@@ -106,11 +89,11 @@ export const saveBatchInFirestore = async (batchData) => {
 };
 
 /**
- * Delete batch
+ * Delete a batch from Firestore
  */
-export const deleteBatchFromFirestore = async (id) => {
+export const deleteBatchFromFirestore = async (batchId) => {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
+    const docRef = doc(db, BATCHES_COLLECTION, batchId);
     await deleteDoc(docRef);
     return true;
   } catch (error) {

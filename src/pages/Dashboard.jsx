@@ -14,10 +14,7 @@ import {
   Sparkles,
   ShieldAlert,
   Zap,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -40,7 +37,6 @@ import { SkeletonLoader } from "../components/SkeletonLoader";
 export const Dashboard = ({ onTabChange }) => {
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState([]);
-  const [isActivityOpen, setIsActivityOpen] = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -141,188 +137,236 @@ export const Dashboard = ({ onTabChange }) => {
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Mobile Top Header Banner */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 pb-12">
+      {/* Welcome Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-1.5">
-            Dashboard <Sparkles className="text-amber-400" size={18} />
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            Bhagwat Library Overview <Sparkles className="text-amber-400" size={20} />
           </h1>
           <p className="text-xs text-slate-400">
-            Realtime Library Statistics & Controls
+            Real-time occupancy, revenue analytics, and admin controls
           </p>
         </div>
 
-        <button
-          onClick={() => onTabChange("seats")}
-          className="h-10 px-3 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
-        >
-          <Armchair size={15} /> 100 Seats
-        </button>
-      </div>
-
-      {/* QUICK ACTIONS HORIZONTAL SCROLL SECTION */}
-      <div className="space-y-2">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-          <Zap size={14} className="text-amber-400" /> Quick Actions
-        </h3>
-        <div className="flex items-center gap-2.5 overflow-x-auto custom-scrollbar-hidden pb-1">
-          <button
-            onClick={() => onTabChange("students")}
-            className="flex-shrink-0 min-w-[130px] p-3.5 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-300 text-xs font-bold flex flex-col items-center gap-2 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md">
-              <UserPlus size={18} />
-            </div>
-            <span>Add Student</span>
-          </button>
-
+        <div className="flex items-center gap-3">
           <button
             onClick={() => onTabChange("seats")}
-            className="flex-shrink-0 min-w-[130px] p-3.5 rounded-2xl bg-purple-600/15 border border-purple-500/30 text-purple-300 text-xs font-bold flex flex-col items-center gap-2 active:scale-95 transition-all"
+            className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all"
           >
-            <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-md">
-              <Armchair size={18} />
-            </div>
-            <span>Assign Seat</span>
-          </button>
-
-          <button
-            onClick={() => onTabChange("payments")}
-            className="flex-shrink-0 min-w-[130px] p-3.5 rounded-2xl bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex flex-col items-center gap-2 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md">
-              <DollarSign size={18} />
-            </div>
-            <span>Collect Fee</span>
-          </button>
-
-          <button
-            onClick={() => onTabChange("payments")}
-            className="flex-shrink-0 min-w-[130px] p-3.5 rounded-2xl bg-amber-600/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex flex-col items-center gap-2 active:scale-95 transition-all"
-          >
-            <div className="w-10 h-10 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-md">
-              <Bell size={18} />
-            </div>
-            <span>Send Reminder</span>
+            <Armchair size={16} /> View Seats Matrix (1-100)
           </button>
         </div>
       </div>
 
-      {/* VERTICALLY STACKED MOBILE METRIC CARDS */}
-      <div className="grid grid-cols-2 gap-3">
-        <SaaSCard className="p-4 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 border-blue-500/30">
-          <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
-          <h3 className="text-2xl font-extrabold text-white mt-1">{students.length}</h3>
-          <p className="text-[10px] text-blue-400 mt-1 font-semibold flex items-center gap-1">
-            <TrendingUp size={12} /> Active Students
-          </p>
-        </SaaSCard>
-
-        <SaaSCard className="p-4 bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-emerald-500/30">
-          <p className="text-xs font-semibold text-slate-400">Total Revenue</p>
-          <h3 className="text-2xl font-extrabold text-emerald-400 mt-1">₹{monthlyCollection}</h3>
-          <p className="text-[10px] text-emerald-400 mt-1 font-semibold">Collected in full</p>
-        </SaaSCard>
-
-        <SaaSCard className="p-4 bg-gradient-to-br from-amber-950 via-slate-900 to-slate-950 border-amber-500/30">
-          <p className="text-xs font-semibold text-slate-400">Seat Occupancy</p>
-          <h3 className="text-2xl font-extrabold text-white mt-1">{occupiedSeatsCount} / 100</h3>
-          <p className="text-[10px] text-amber-400 mt-1 font-semibold">{availableSeatsCount} Seats Free</p>
-        </SaaSCard>
-
-        <SaaSCard className="p-4 bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 border-rose-500/30">
-          <p className="text-xs font-semibold text-slate-400">Pending Fee</p>
-          <h3 className="text-2xl font-extrabold text-rose-400 mt-1">₹{pendingAmount}</h3>
-          <p className="text-[10px] text-rose-400 mt-1 font-semibold">Due collection</p>
-        </SaaSCard>
-      </div>
-
-      {/* HORIZONTALLY SCROLLABLE CHARTS CONTAINERS */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Analytics Charts</h3>
-
-        {/* Monthly Revenue Chart */}
-        <SaaSCard className="p-4 overflow-x-auto custom-scrollbar-hidden">
-          <h4 className="text-xs font-bold text-white mb-3">Monthly Revenue Trend</h4>
-          <div className="h-44 min-w-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueChartData}>
-                <defs>
-                  <linearGradient id="colorRevM" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" stroke="#64748b" fontSize={10} />
-                <YAxis stroke="#64748b" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
-                <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevM)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+      {/* TOP SUMMARY METRIC CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SaaSCard className="p-5 bg-gradient-to-br from-blue-900/40 via-slate-900 to-slate-950 border-blue-500/20">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
+              <h3 className="text-2xl font-extrabold text-white mt-1">{students.length}</h3>
+              <div className="flex items-center gap-1 mt-2 text-xs font-semibold text-emerald-400">
+                <TrendingUp size={14} /> <span>Active Students</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Users size={22} />
+            </div>
           </div>
         </SaaSCard>
 
-        {/* Batch Shift Occupancy Bar Chart */}
-        <SaaSCard className="p-4 overflow-x-auto custom-scrollbar-hidden">
-          <h4 className="text-xs font-bold text-white mb-3">Batch Shift Occupancy</h4>
-          <div className="h-44 min-w-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={batchOccupancyData}>
-                <XAxis dataKey="name" stroke="#64748b" fontSize={10} />
-                <YAxis stroke="#64748b" fontSize={10} />
-                <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
-                <Bar dataKey="students" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+        <SaaSCard className="p-5 bg-gradient-to-br from-emerald-900/30 via-slate-900 to-slate-950 border-emerald-500/20">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">Total Revenue</p>
+              <h3 className="text-2xl font-extrabold text-emerald-400 mt-1">₹{monthlyCollection}</h3>
+              <div className="flex items-center gap-1 mt-2 text-xs font-semibold text-emerald-400">
+                <CheckCircle2 size={14} /> <span>Secured Revenue</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <DollarSign size={22} />
+            </div>
+          </div>
+        </SaaSCard>
+
+        <SaaSCard className="p-5 bg-gradient-to-br from-amber-900/30 via-slate-900 to-slate-950 border-amber-500/20">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">Seat Occupancy</p>
+              <h3 className="text-2xl font-extrabold text-white mt-1">{occupiedSeatsCount} / 100</h3>
+              <div className="flex items-center gap-1 mt-2 text-xs font-semibold text-amber-400">
+                <Armchair size={14} /> <span>{availableSeatsCount} Seats Available</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <Armchair size={22} />
+            </div>
+          </div>
+        </SaaSCard>
+
+        <SaaSCard className="p-5 bg-gradient-to-br from-rose-900/30 via-slate-900 to-slate-950 border-rose-500/20">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-400">Pending Dues</p>
+              <h3 className="text-2xl font-extrabold text-rose-400 mt-1">₹{pendingAmount}</h3>
+              <div className="flex items-center gap-1 mt-2 text-xs font-semibold text-rose-400">
+                <AlertCircle size={14} /> <span>Action Required</span>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+              <AlertCircle size={22} />
+            </div>
           </div>
         </SaaSCard>
       </div>
 
-      {/* COLLAPSIBLE RECENT ACTIVITY STREAM */}
-      <SaaSCard className="p-4">
-        <div
-          onClick={() => setIsActivityOpen(!isActivityOpen)}
-          className="flex items-center justify-between cursor-pointer"
-        >
-          <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-            <ShieldAlert size={14} className="text-rose-400" /> Expiring Memberships ({expiringMemberships.length})
-          </h3>
-          <button className="text-slate-400 hover:text-white">
-            {isActivityOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
+      {/* CHARTS & QUICK ACTIONS GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Recharts Analytics */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SaaSCard className="p-5">
+              <h3 className="text-sm font-bold text-white mb-4">Monthly Revenue Trend</h3>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={revenueChartData}>
+                    <defs>
+                      <linearGradient id="colorRevDesk" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
+                    <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevDesk)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </SaaSCard>
+
+            <SaaSCard className="p-5">
+              <h3 className="text-sm font-bold text-white mb-4">Student Growth</h3>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={studentGrowthData}>
+                    <defs>
+                      <linearGradient id="colorGrowthDesk" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
+                    <Area type="monotone" dataKey="count" stroke="#3b82f6" fillOpacity={1} fill="url(#colorGrowthDesk)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </SaaSCard>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SaaSCard className="p-5">
+              <h3 className="text-sm font-bold text-white mb-2">Payment Breakdown</h3>
+              <div className="h-44 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={paymentBreakdownData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={5} dataKey="value">
+                      {paymentBreakdownData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </SaaSCard>
+
+            <SaaSCard className="p-5">
+              <h3 className="text-sm font-bold text-white mb-2">Batch Shift Occupancy</h3>
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={batchOccupancyData}>
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
+                    <Bar dataKey="students" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </SaaSCard>
+          </div>
         </div>
 
-        <AnimatePresence>
-          {isActivityOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="space-y-2 mt-3 overflow-hidden"
-            >
+        {/* Right Col: Quick Actions & Expiring Memberships */}
+        <div className="space-y-6">
+          <SaaSCard className="p-5 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border-slate-800">
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+              <Zap size={16} className="text-amber-400" /> Quick Admin Actions
+            </h3>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                onClick={() => onTabChange("students")}
+                className="p-3 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 text-blue-300 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all"
+              >
+                <UserPlus size={18} /> Add Student
+              </button>
+              <button
+                onClick={() => onTabChange("seats")}
+                className="p-3 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/20 text-purple-300 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all"
+              >
+                <Armchair size={18} /> Assign Seat
+              </button>
+              <button
+                onClick={() => onTabChange("payments")}
+                className="p-3 rounded-xl bg-emerald-600/10 hover:bg-emerald-600/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all"
+              >
+                <DollarSign size={18} /> Collect Payment
+              </button>
+              <button
+                onClick={() => onTabChange("payments")}
+                className="p-3 rounded-xl bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 text-amber-300 text-xs font-semibold flex flex-col items-center justify-center gap-1.5 transition-all"
+              >
+                <Bell size={18} /> Send Reminder
+              </button>
+            </div>
+          </SaaSCard>
+
+          <SaaSCard className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-bold text-white flex items-center gap-2">
+                <ShieldAlert size={14} className="text-rose-400" /> Expiring Memberships
+              </h3>
+              <span className="text-[10px] text-rose-400 font-semibold">
+                {expiringMemberships.length} due soon
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
               {expiringMemberships.map((s) => (
                 <div
                   key={s.id}
-                  className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                  className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs"
                 >
                   <div>
-                    <p className="font-bold text-white">{s.name}</p>
+                    <p className="font-semibold text-white">{s.name}</p>
                     <p className="text-[10px] text-slate-400">Seat #{s.seatNumber || "N/A"}</p>
                   </div>
                   <Badge variant="warning">Due: {s.validityTo}</Badge>
                 </div>
               ))}
-
               {expiringMemberships.length === 0 && (
-                <p className="text-xs text-slate-500 italic text-center py-2">
+                <p className="text-xs text-slate-500 italic text-center py-4">
                   No memberships expiring within 7 days.
                 </p>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </SaaSCard>
+            </div>
+          </SaaSCard>
+        </div>
+      </div>
     </div>
   );
 };

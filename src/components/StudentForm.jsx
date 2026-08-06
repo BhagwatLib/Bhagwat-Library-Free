@@ -1,8 +1,8 @@
-import React from "react";
-import { X, Save, Edit2, Camera, Loader2, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { X, Save, Camera, Loader2, AlertTriangle, Lock, Filter } from "lucide-react";
 import { clsx } from "clsx";
 import { saveStudent, getBatches, getStudents } from "../utils/store";
-import { checkSeatConflict } from "../utils/seatLogic";
+import { checkSeatConflict, getSlotsFromBatch, BASE_SLOTS } from "../utils/seatLogic";
 import { CameraCapture } from "./CameraCapture";
 
 export const StudentForm = ({
@@ -11,13 +11,14 @@ export const StudentForm = ({
   onSuccess,
   mode = "personal",
 }) => {
-  const [batches, setBatches] = React.useState([]);
-  const [allStudents, setAllStudents] = React.useState([]);
-  const [isCameraOpen, setIsCameraOpen] = React.useState(false);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  const [conflictWarning, setConflictWarning] = React.useState("");
+  const [batches, setBatches] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState("");
+  const [showAvailableOnly, setShowAvailableOnly] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const loadData = async () => {
       const bList = await getBatches();
       const sList = await getStudents();
@@ -27,7 +28,7 @@ export const StudentForm = ({
     loadData();
   }, []);
 
-  const [formData, setFormData] = React.useState({
+  const [formData, setFormData] = useState({
     name: student?.name || "",
     batch: Array.isArray(student?.batch)
       ? student.batch
@@ -48,10 +49,10 @@ export const StudentForm = ({
   });
 
   // Calculate total fee based on selected batches
-  React.useEffect(() => {
+  useEffect(() => {
     if (batches.length > 0) {
       const selectedBatches = batches.filter((b) =>
-        formData.batch.includes(b.time)
+        formData.batch.includes(b.time) || formData.batch.includes(b.name)
       );
       const total = selectedBatches.reduce(
         (sum, b) => sum + Number(b.price),
@@ -61,27 +62,84 @@ export const StudentForm = ({
     }
   }, [formData.batch, batches]);
 
-  // Conflict check whenever seatNumber or batch changes
-  React.useEffect(() => {
-    if (formData.seatNumber > 0 && formData.batch.length > 0) {
-      const res = checkSeatConflict(
-        formData.seatNumber,
-        formData.batch,
-        student?.id,
-        allStudents
+  // Compute selected batch slots ("morning", "noon", "afternoon", "evening")
+  const targetSlots = useMemo(() => {
+    return getSlotsFromBatch(formData.batch);
+  }, [formData.batch]);
+
+  // Compute availability matrix for all 100 seats based on targetSlots
+  const seatOccupancyMap = useMemo(() => {
+    const map = {};
+
+    for (let n = 1; n <= 100; n++) {
+      const seatStudents = allStudents.filter(
+        (s) => Number(s.seatNumber) === n && s.id !== student?.id
       );
-      if (res.conflict) {
-        setConflictWarning(res.message);
+
+      let isOccupied = false;
+      let conflictingStudent = null;
+      let conflictingSlots = [];
+
+      for (const st of seatStudents) {
+        const stSlots = getSlotsFromBatch(st.batch);
+        const overlapping = targetSlots.filter((slot) => stSlots.includes(slot));
+
+        if (overlapping.length > 0) {
+          isOccupied = true;
+          conflictingStudent = st;
+          overlapping.forEach((sId) => {
+            const bObj = BASE_SLOTS.find((b) => b.id === sId);
+            if (bObj && !conflictingSlots.includes(bObj.name)) {
+              conflictingSlots.push(bObj.name);
+            }
+          });
+        }
+      }
+
+      map[n] = {
+        seatNumber: n,
+        isOccupied,
+        conflictingStudent,
+        conflictingSlots,
+        statusText: isOccupied
+          ? `🔒 Occupied in ${conflictingSlots.join(", ")} by ${conflictingStudent?.name}`
+          : "✅ Available",
+      };
+    }
+
+    return map;
+  }, [allStudents, targetSlots, student?.id]);
+
+  // Filtered seats list based on showAvailableOnly toggle
+  const visibleSeats = useMemo(() => {
+    const list = [];
+    for (let n = 1; n <= 100; n++) {
+      const data = seatOccupancyMap[n];
+      if (!showAvailableOnly || !data.isOccupied || n === formData.seatNumber) {
+        list.push(data);
+      }
+    }
+    return list;
+  }, [seatOccupancyMap, showAvailableOnly, formData.seatNumber]);
+
+  // Conflict warning check for currently selected seat
+  useEffect(() => {
+    if (formData.seatNumber > 0 && formData.batch.length > 0) {
+      const seatInfo = seatOccupancyMap[formData.seatNumber];
+      if (seatInfo && seatInfo.isOccupied) {
+        setConflictWarning(
+          `Seat ${formData.seatNumber} is occupied in ${seatInfo.conflictingSlots.join(", ")} by ${seatInfo.conflictingStudent?.name}. Please choose another seat.`
+        );
       } else {
         setConflictWarning("");
       }
     } else {
       setConflictWarning("");
     }
-  }, [formData.seatNumber, formData.batch, allStudents, student?.id]);
+  }, [formData.seatNumber, formData.batch, seatOccupancyMap]);
 
   // Calculate status & auto validity
-  React.useEffect(() => {
+  useEffect(() => {
     const paid = Number(formData.paidAmount) || 0;
     const total = Number(formData.totalAmount) || 0;
     const status =
@@ -109,7 +167,7 @@ export const StudentForm = ({
   }, [formData.paidAmount, formData.totalAmount]);
 
   // Auto validity date sync
-  React.useEffect(() => {
+  useEffect(() => {
     if (formData.validityFrom) {
       const fromDate = new Date(formData.validityFrom);
       const toDate = new Date(fromDate);
@@ -122,19 +180,49 @@ export const StudentForm = ({
     }
   }, [formData.validityFrom]);
 
-  const handleBatchToggle = (batchTime) => {
+  // Handle batch selection & "All Batch" rule
+  const handleBatchToggle = (batchObj) => {
+    const bKey = batchObj.time;
+    const isAllBatch = batchObj.name === "All Batch" || bKey === "6:00 AM - 10:00 PM";
+
     setFormData((prev) => {
-      const currentBatches = prev.batch;
-      if (currentBatches.includes(batchTime)) {
-        return {
-          ...prev,
-          batch: currentBatches.filter((b) => b !== batchTime),
-        };
+      let currentBatches = [...prev.batch];
+
+      if (isAllBatch) {
+        if (currentBatches.includes("All Batch") || currentBatches.includes("6:00 AM - 10:00 PM")) {
+          // Deselect All Batch -> clear all
+          return { ...prev, batch: [] };
+        } else {
+          // Select All Batch -> Auto assign A, B, C, D and All Batch
+          const allShiftTimes = [
+            "6:00 AM - 10:00 AM",
+            "10:00 AM - 2:00 PM",
+            "2:00 PM - 6:00 PM",
+            "6:00 PM - 10:00 PM",
+            "6:00 AM - 10:00 PM",
+            "A Batch",
+            "B Batch",
+            "C Batch",
+            "D Batch",
+            "All Batch",
+          ];
+          return { ...prev, batch: allShiftTimes };
+        }
       } else {
-        return { ...prev, batch: [...currentBatches, batchTime] };
+        // Individual batch toggle
+        if (currentBatches.includes(bKey) || currentBatches.includes(batchObj.name)) {
+          currentBatches = currentBatches.filter((b) => b !== bKey && b !== batchObj.name && b !== "All Batch" && b !== "6:00 AM - 10:00 PM");
+        } else {
+          currentBatches.push(bKey);
+        }
+        return { ...prev, batch: currentBatches };
       }
     });
   };
+
+  const isAllBatchSelected = useMemo(() => {
+    return formData.batch.includes("All Batch") || formData.batch.includes("6:00 AM - 10:00 PM");
+  }, [formData.batch]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -153,9 +241,21 @@ export const StudentForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (conflictWarning) {
-      alert(conflictWarning);
-      return;
+
+    // Re-validate against fresh Firestore state before saving
+    if (formData.seatNumber > 0 && formData.batch.length > 0) {
+      const freshStudents = await getStudents();
+      const res = checkSeatConflict(
+        formData.seatNumber,
+        formData.batch,
+        student?.id,
+        freshStudents
+      );
+      if (res.conflict) {
+        setConflictWarning("This seat has just been assigned to another student. Please choose another seat.");
+        alert("This seat has just been assigned to another student. Please choose another seat.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -185,9 +285,9 @@ export const StudentForm = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 w-full max-w-md rounded-3xl border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <div className="flex items-center justify-between p-6 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
-          <h2 className="text-lg font-bold text-white">
+      <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div className="flex items-center justify-between p-5 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
+          <h2 className="text-base font-bold text-white">
             {mode === "payment"
               ? "Edit Payment Details"
               : student
@@ -202,13 +302,13 @@ export const StudentForm = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* Photo Section */}
           <div className="flex justify-center mb-2">
             <div className="relative group">
               <div
                 className={clsx(
-                  "w-24 h-24 rounded-full overflow-hidden bg-slate-800 border-2 border-slate-700 flex items-center justify-center transition-all",
+                  "w-20 h-20 rounded-full overflow-hidden bg-slate-800 border-2 border-slate-700 flex items-center justify-center transition-all",
                   mode === "personal" && "group-hover:border-blue-500"
                 )}
               >
@@ -248,7 +348,7 @@ export const StudentForm = ({
           </div>
 
           {conflictWarning && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
+            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
               <AlertTriangle size={16} className="text-rose-400 flex-shrink-0 mt-0.5" />
               <span>{conflictWarning}</span>
             </div>
@@ -270,7 +370,7 @@ export const StudentForm = ({
                 "w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all",
                 mode === "payment" && "opacity-60 cursor-not-allowed"
               )}
-              placeholder="e.g. John Doe"
+              placeholder="e.g. Ranu Sharma"
             />
           </div>
 
@@ -301,99 +401,171 @@ export const StudentForm = ({
                   onChange={(e) =>
                     setFormData({ ...formData, address: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none h-20"
-                  placeholder="e.g. Street Address"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Admission Date
-                </label>
-                <input
-                  type="date"
-                  required
-                  value={formData.admissionDate}
-                  onChange={(e) =>
-                    setFormData({ ...formData, admissionDate: e.target.value })
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none h-16"
+                  placeholder="e.g. Main Road, City"
                 />
               </div>
             </>
           )}
 
-          {/* Seat Picker Dial */}
+          {/* Batches Selection (5 Standard Batches) */}
           <div>
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="text-xs font-semibold text-slate-400">
-                Seat Number (1 to 100)
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-400">
+                Select Batch Shift(s)
               </label>
-              <span className="px-2.5 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-xs font-bold">
-                Seat: {formData.seatNumber > 0 ? formData.seatNumber : "None"}
-              </span>
+              {isAllBatchSelected && (
+                <span className="text-[10px] text-amber-400 font-bold">
+                  ⚡ All Batches (A, B, C, D) Auto-Selected
+                </span>
+              )}
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar-hidden py-2 flex gap-2 snap-x">
+            <div className="space-y-1.5">
+              {batches.map((b) => {
+                const isAllThis = b.name === "All Batch" || b.time === "6:00 AM - 10:00 PM";
+                const isChecked =
+                  formData.batch.includes(b.time) ||
+                  formData.batch.includes(b.name) ||
+                  (isAllBatchSelected && !isAllThis);
+                
+                const isDisabled = mode === "payment" || (isAllBatchSelected && !isAllThis);
+
+                return (
+                  <label
+                    key={b.id}
+                    className={clsx(
+                      "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
+                      isChecked
+                        ? "bg-blue-500/10 border-blue-500/40 text-blue-300 font-semibold"
+                        : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400",
+                      isDisabled && !isAllThis && "opacity-60 cursor-not-allowed"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={isDisabled}
+                      checked={isChecked}
+                      onChange={() => handleBatchToggle(b)}
+                      className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
+                    />
+                    <div className="flex-1 flex items-center justify-between text-xs">
+                      <span className="font-bold">{b.name} <span className="font-normal text-slate-400">({b.time})</span></span>
+                      <span className="font-semibold text-emerald-400">₹{b.price}</span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* BATCH-AWARE SEAT SELECTOR */}
+          <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                  Seat Allocation
+                  {formData.seatNumber > 0 && (
+                    <span className="text-emerald-400 font-semibold text-[11px]">
+                      (#Seat {formData.seatNumber})
+                    </span>
+                  )}
+                </label>
+                <p className="text-[10px] text-slate-400">
+                  {targetSlots.length > 0
+                    ? `Selected slots: ${targetSlots.map((s) => s.toUpperCase()).join(", ")}`
+                    : "Choose a batch first"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAvailableOnly(!showAvailableOnly)}
+                className={clsx(
+                  "px-2.5 py-1 rounded-xl text-[11px] font-semibold border flex items-center gap-1 transition-all active:scale-95",
+                  showAvailableOnly
+                    ? "bg-emerald-600/20 border-emerald-500/40 text-emerald-300"
+                    : "bg-slate-900 border-slate-800 text-slate-400"
+                )}
+              >
+                <Filter size={12} />
+                <span>{showAvailableOnly ? "Available Only" : "Show All (100)"}</span>
+              </button>
+            </div>
+
+            {/* Dropdown Selector */}
+            <div>
+              <select
+                value={formData.seatNumber}
+                onChange={(e) => setFormData({ ...formData, seatNumber: Number(e.target.value) })}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value={0}>-- No Seat Assigned --</option>
+                {Object.values(seatOccupancyMap).map((seat) => (
+                  <option
+                    key={seat.seatNumber}
+                    value={seat.seatNumber}
+                    disabled={seat.isOccupied && seat.seatNumber !== formData.seatNumber}
+                  >
+                    Seat #{seat.seatNumber} - {seat.statusText}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Scrollable Visual Seat Cards */}
+            <div className="overflow-x-auto custom-scrollbar-hidden py-1 flex gap-2 snap-x">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, seatNumber: 0 })}
                 className={clsx(
-                  "flex-shrink-0 w-11 h-11 rounded-xl border text-xs font-medium transition-all snap-center flex items-center justify-center",
+                  "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex items-center justify-center",
                   formData.seatNumber === 0
-                    ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20 scale-105"
-                    : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                    ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30 scale-105"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
                 )}
               >
                 None
               </button>
-              {Array.from({ length: 100 }, (_, i) => i + 1).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, seatNumber: n })}
-                  className={clsx(
-                    "flex-shrink-0 w-11 h-11 rounded-xl border text-xs font-medium transition-all snap-center flex items-center justify-center",
-                    formData.seatNumber === n
-                      ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20 scale-105 font-bold"
-                      : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Batches Selection */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-              Select Batch(es)
-            </label>
-            <div className="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
-              {batches.map((b) => (
-                <label
-                  key={b.id}
-                  className={clsx(
-                    "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
-                    formData.batch.includes(b.time)
-                      ? "bg-blue-500/10 border-blue-500/40 text-blue-300"
-                      : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    disabled={mode === "payment"}
-                    checked={formData.batch.includes(b.time)}
-                    onChange={() => handleBatchToggle(b.time)}
-                    className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
-                  />
-                  <div className="flex-1 flex items-center justify-between text-xs">
-                    <span className="font-medium">{b.time}</span>
-                    <span className="font-semibold text-emerald-400">₹{b.price}</span>
-                  </div>
-                </label>
-              ))}
+              {visibleSeats.map((seat) => {
+                const isSelected = formData.seatNumber === seat.seatNumber;
+                const isOccupied = seat.isOccupied && !isSelected;
+
+                return (
+                  <button
+                    key={seat.seatNumber}
+                    type="button"
+                    disabled={isOccupied}
+                    onClick={() => setFormData({ ...formData, seatNumber: seat.seatNumber })}
+                    title={seat.statusText}
+                    className={clsx(
+                      "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex flex-col items-center justify-center relative",
+                      isSelected
+                        ? "bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-500/30 scale-105 font-bold"
+                        : isOccupied
+                        ? "bg-slate-950/40 border-slate-800/80 text-slate-600 cursor-not-allowed opacity-60"
+                        : "bg-slate-900 border-emerald-500/30 text-slate-200 hover:border-emerald-500"
+                    )}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      {isOccupied && <Lock size={10} className="text-slate-500" />}
+                      {seat.seatNumber}
+                    </span>
+                    <span className="text-[8px] opacity-80">
+                      {isSelected ? "Selected" : isOccupied ? "Occupied" : "Free"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Hint Line */}
+            {formData.seatNumber > 0 && seatOccupancyMap[formData.seatNumber] && (
+              <p className="text-[10px] text-slate-400 italic">
+                {seatOccupancyMap[formData.seatNumber].statusText}
+              </p>
+            )}
           </div>
 
           {/* Financials & Validity */}
@@ -406,7 +578,7 @@ export const StudentForm = ({
                 type="number"
                 readOnly
                 value={formData.totalAmount}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-slate-400 text-xs cursor-not-allowed"
+                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-slate-400 text-xs cursor-not-allowed font-semibold"
               />
             </div>
             <div>
@@ -474,7 +646,7 @@ export const StudentForm = ({
             <button
               type="submit"
               disabled={isSubmitting || !!conflictWarning}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all text-sm"
+              className="w-full h-12 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all text-sm"
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
