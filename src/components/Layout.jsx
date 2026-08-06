@@ -1,176 +1,172 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   LayoutDashboard,
   Users,
   CreditCard,
-  Settings,
-  Menu,
-  X,
+  Armchair,
+  MoreHorizontal,
   School,
-  Sun,
-  Moon,
+  FileText,
+  Settings as SettingsIcon,
+  CalendarCheck,
+  Bell,
+  Sparkles,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { BottomSheet } from "./BottomSheet";
+import { FloatingActionButton } from "./FloatingActionButton";
 
-const SidebarItem = ({ icon, label, active, onClick, theme }) => {
-  const Icon = icon;
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        "flex items-center w-full gap-3 px-4 py-3 rounded-lg transition-all duration-200 group",
-        active
-          ? "bg-primary/10 text-primary border-r-2 border-primary"
-          : theme === "dark"
-          ? "text-gray-400 hover:bg-white/5 hover:text-white"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      )}
-    >
-      <Icon
-        size={20}
-        className={clsx(
-          active
-            ? "text-primary"
-            : theme === "dark"
-            ? "text-gray-400 group-hover:text-white"
-            : "text-slate-500 group-hover:text-slate-900"
-        )}
-      />
-      <span className="font-medium">{label}</span>
-    </button>
-  );
-};
+export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) => {
+  const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
 
-export const Layout = ({
-  children,
-  activeTab,
-  onTabChange,
-  theme,
-  toggleTheme,
-}) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-
-  const menuItems = [
+  const mainBottomTabs = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "students", label: "Students", icon: Users },
-    { id: "batches", label: "Batches", icon: School },
+    { id: "seats", label: "Seats", icon: Armchair },
     { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "more", label: "More", icon: MoreHorizontal },
+  ];
+
+  const moreMenuItems = [
+    { id: "attendance", label: "Attendance Log", icon: CalendarCheck, desc: "Track daily check-ins" },
+    { id: "batches", label: "Batches & Shifts", icon: School, desc: "Manage shift timings & pricing" },
+    { id: "reports", label: "Reports & Export", icon: FileText, desc: "Generate PDF/Excel reports" },
+    { id: "settings", label: "Admin Settings", icon: SettingsIcon, desc: "Library profile & preferences" },
   ];
 
   return (
-    <div className="h-screen flex bg-slate-50 dark:bg-darker text-slate-900 dark:text-gray-100 font-sans selection:bg-primary/30 transition-colors duration-300 overflow-hidden">
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={clsx(
-          "fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-card border-r border-slate-200 dark:border-white/5 transition-all duration-300 transform",
-          isMobileMenuOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        )}
-      >
-        <div className="h-full flex flex-col">
-          {/* Logo */}
-          <div className="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-white/5">
-            <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 dark:border-white/10 shadow-sm">
-              <img
-                src="/logo.jpg"
-                alt="Logo"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div>
-              <h1 className="font-bold text-lg leading-tight">
-                Bhagwat Library
-              </h1>
-              <p className="text-xs text-gray-500">Admin </p>
-            </div>
+    <div className="h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 overflow-hidden">
+      {/* Sticky Compact Mobile Top Header */}
+      <header className="px-4 py-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center shadow-md">
+            <img
+              src="/logo.jpg"
+              alt="Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            {menuItems.map((item) => (
-              <SidebarItem
-                key={item.id}
-                icon={item.icon}
-                label={item.label}
-                active={activeTab === item.id}
-                theme={theme}
-                onClick={() => {
-                  onTabChange(item.id);
-                  setIsMobileMenuOpen(false);
-                }}
-              />
-            ))}
-          </nav>
-
-          {/* User Profile */}
-          <div className="p-4 border-t border-slate-200 dark:border-white/5">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
-              <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-center">
-                <img
-                  src="/logo.jpg"
-                  alt="Admin"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">Admin User</p>
-                <p className="text-xs text-gray-500 truncate">
-                  bhagwatlibrary0@gmail.com
-                </p>
-              </div>
-              <button className="text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white">
-                <Settings size={18} />
-              </button>
-            </div>
+          <div>
+            <h1 className="font-extrabold text-base text-white tracking-tight flex items-center gap-1">
+              Bhagwat Library <Sparkles className="text-amber-400" size={14} />
+            </h1>
+            <p className="text-[10px] text-slate-400 font-medium">Native Android Admin</p>
           </div>
         </div>
-      </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header (Desktop & Mobile) */}
-        <header className="p-4 border-b border-slate-200 dark:border-white/5 flex items-center justify-between bg-white/50 dark:bg-card/50 backdrop-blur-md sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 -ml-2 text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white"
-            >
-              <Menu size={24} />
-            </button>
-            <h1 className="text-xl lg:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-              {menuItems.find((i) => i.id === activeTab)?.label}
-            </h1>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTabChange("payments")}
+            className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white flex items-center justify-center transition-colors relative"
+            title="Notifications"
+          >
+            <Bell size={18} />
+            <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-2 right-2 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-2 right-2" />
+          </button>
+        </div>
+      </header>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-all duration-200"
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-          </div>
-        </header>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-auto p-4 lg:p-8 custom-scrollbar">
-          <div className="max-w-6xl mx-auto space-y-8">
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {children}
-            </div>
-          </div>
+      {/* Main Viewport Content Area (Safe Bottom Area pb-24) */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-6 pb-28">
+        <div className="max-w-4xl mx-auto">
+          {children}
         </div>
       </main>
+
+      {/* Fixed Android Floating Action Button (FAB) */}
+      <FloatingActionButton
+        onAction={(actionId) => {
+          if (actionId === "add_student") onTabChange("students");
+          else if (actionId === "assign_seat") onTabChange("seats");
+          else if (actionId === "collect_payment") onTabChange("payments");
+          if (onOpenQuickAction) onOpenQuickAction(actionId);
+        }}
+      />
+
+      {/* Fixed Android Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
+        {mainBottomTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive =
+            tab.id === "more"
+              ? isMoreSheetOpen || ["attendance", "batches", "reports", "settings"].includes(activeTab)
+              : activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                if (tab.id === "more") {
+                  setIsMoreSheetOpen(true);
+                } else {
+                  setIsMoreSheetOpen(false);
+                  onTabChange(tab.id);
+                }
+              }}
+              className={clsx(
+                "flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-200 active:scale-95",
+                isActive
+                  ? "text-blue-400 font-bold"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              <div
+                className={clsx(
+                  "p-1.5 rounded-full transition-all",
+                  isActive ? "bg-blue-600/20 text-blue-400 scale-110" : ""
+                )}
+              >
+                <Icon size={20} />
+              </div>
+              <span className="text-[11px] font-medium tracking-tight mt-0.5">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* "More Options" Native Android Slide-Up Bottom Sheet */}
+      <BottomSheet
+        isOpen={isMoreSheetOpen}
+        onClose={() => setIsMoreSheetOpen(false)}
+        title="More Admin Features"
+      >
+        <div className="grid grid-cols-1 gap-2.5">
+          {moreMenuItems.map((item) => {
+            const Icon = item.icon;
+            const isSelected = activeTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setIsMoreSheetOpen(false);
+                  onTabChange(item.id);
+                }}
+                className={clsx(
+                  "p-4 rounded-2xl border text-left flex items-center gap-4 transition-all active:scale-98",
+                  isSelected
+                    ? "bg-blue-600/20 border-blue-500/40 text-white shadow-lg"
+                    : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                )}
+              >
+                <div
+                  className={clsx(
+                    "w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0",
+                    isSelected ? "bg-blue-600 text-white" : "bg-slate-800 text-blue-400"
+                  )}
+                >
+                  <Icon size={22} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-white">{item.label}</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </BottomSheet>
     </div>
   );
 };

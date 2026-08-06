@@ -9,11 +9,14 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['logo.jpeg'],
+      workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5 MB
+      },
       manifest: {
         name: 'Bhagwat Library',
         short_name: 'BhagwatLib',
         description: 'Admin Portal for Bhagwat Library',
-        theme_color: '#ffffff',
+        theme_color: '#0f172a',
         icons: [
           {
             src: 'logo.jpeg',
@@ -32,10 +35,5 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: ['.ngrok-free.app'],
-    // hmr: {
-    //   clientPort: 443,
-    //   protocol: 'wss'
-    // }
   }
-}
-)
+})

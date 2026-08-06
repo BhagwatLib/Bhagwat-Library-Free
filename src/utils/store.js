@@ -1,181 +1,231 @@
-const isLocal = window.location.hostname === 'localhost' ||
-    window.location.hostname.match(/^192\.168\./) ||
-    window.location.hostname.match(/^10\./) ||
-    window.location.hostname.match(/^127\./);
+import {
+  getStudentsFromFirestore,
+  addStudentToFirestore,
+  updateStudentInFirestore,
+  deleteStudentFromFirestore,
+} from "../services/studentsService";
+import {
+  getBatchesFromFirestore,
+  saveBatchInFirestore,
+  deleteBatchFromFirestore,
+} from "../services/batchesService";
+import {
+  getPaymentsFromFirestore,
+  recordPaymentInFirestore,
+} from "../services/paymentsService";
+import {
+  assignStudentSlotsInSeat,
+  getSeatsFromFirestore,
+} from "../services/seatsService";
 
-const API_URL = isLocal
-    ? `http://${window.location.hostname}:5000/api`
-    : 'https://bhagwat-library.onrender.com/api';
-
-// --- Dashboard ---
+// --- Dashboard Stats ---
 
 export const getDashboardStats = async () => {
-    try {
-        const res = await fetch(`${API_URL}/dashboard`);
-        if (!res.ok) throw new Error('Failed to fetch dashboard stats');
-        return await res.json();
-    } catch (err) {
-        console.error(err);
-        return { stats: { totalStudents: 0, paidStudents: 0, unpaidStudents: 0, partialStudents: 0, totalRevenue: 0 }, recentStudents: [] };
-    }
+  try {
+    const students = await getStudentsFromFirestore();
+
+    let paidStudents = 0;
+    let unpaidStudents = 0;
+    let partialStudents = 0;
+    let totalRevenue = 0;
+
+    students.forEach((s) => {
+      const paid = Number(s.paidAmount) || 0;
+      const total = Number(s.totalAmount) || 0;
+      totalRevenue += paid;
+
+      const status =
+        s.status ||
+        (paid >= total && total > 0 ? "Paid" : paid > 0 ? "Partial" : "Unpaid");
+
+      if (status === "Paid") paidStudents++;
+      else if (status === "Partial") partialStudents++;
+      else unpaidStudents++;
+    });
+
+    const recentStudents = students.slice(0, 5).map((s) => ({
+      id: s.id,
+      name: s.name,
+      batch: Array.isArray(s.batch) ? s.batch.join(", ") : s.batch,
+      status: s.status || "Unpaid",
+      createdAt: s.createdAt,
+    }));
+
+    return {
+      stats: {
+        totalStudents: students.length,
+        paidStudents,
+        unpaidStudents,
+        partialStudents,
+        totalRevenue,
+      },
+      recentStudents,
+    };
+  } catch (err) {
+    console.error("Error in getDashboardStats:", err);
+    return {
+      stats: {
+        totalStudents: 0,
+        paidStudents: 0,
+        unpaidStudents: 0,
+        partialStudents: 0,
+        totalRevenue: 0,
+      },
+      recentStudents: [],
+    };
+  }
 };
 
-export const getPayments = async (status = 'All') => {
-    try {
-        const res = await fetch(`${API_URL}/payments?status=${status}`);
-        if (!res.ok) throw new Error('Failed to fetch payments');
-        return await res.json();
-    } catch (err) {
-        console.error(err);
-        return [];
+// --- Payments ---
+
+export const getPayments = async (status = "All") => {
+  try {
+    const students = await getStudentsFromFirestore();
+    if (status && status !== "All") {
+      return students.filter((s) => s.status === status);
     }
+    return students;
+  } catch (err) {
+    console.error("Error in getPayments:", err);
+    return [];
+  }
 };
 
 // --- Batches ---
 
 export const getBatches = async () => {
-    try {
-        const res = await fetch(`${API_URL}/batches`);
-        if (!res.ok) throw new Error('Failed to fetch batches');
-        return await res.json();
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
+  try {
+    return await getBatchesFromFirestore();
+  } catch (err) {
+    console.error("Error in getBatches:", err);
+    return [];
+  }
 };
 
 export const saveBatch = async (batch) => {
-    try {
-        const method = batch.id ? 'PUT' : 'POST';
-        const url = batch.id ? `${API_URL}/batches/${batch.id}` : `${API_URL}/batches`;
-
-        const res = await fetch(url, {
-            method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(batch)
-        });
-        if (!res.ok) throw new Error('Failed to save batch');
-        return await res.json();
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+  try {
+    return await saveBatchInFirestore(batch);
+  } catch (err) {
+    console.error("Error in saveBatch:", err);
+    return null;
+  }
 };
 
 export const deleteBatch = async (id) => {
-    try {
-        await fetch(`${API_URL}/batches/${id}`, { method: 'DELETE' });
-    } catch (err) {
-        console.error(err);
-    }
+  try {
+    await deleteBatchFromFirestore(id);
+  } catch (err) {
+    console.error("Error in deleteBatch:", err);
+  }
 };
 
 // --- Students ---
 
 export const getStudents = async () => {
-    try {
-        const res = await fetch(`${API_URL}/students`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to fetch students');
-        return await res.json();
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
+  try {
+    return await getStudentsFromFirestore();
+  } catch (err) {
+    console.error("Error in getStudents:", err);
+    return [];
+  }
 };
 
 export const saveStudent = async (student) => {
-    try {
-        if (student.id) {
-            // Update
-            const res = await fetch(`${API_URL}/students/${student.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(student)
-            });
-            if (!res.ok) throw new Error('Failed to update student');
-            return await res.json();
-        } else {
-            // Create
-            const res = await fetch(`${API_URL}/students`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(student)
-            });
-            if (!res.ok) throw new Error('Failed to create student');
-            return await res.json();
-        }
-    } catch (err) {
-        console.error(err);
-        return null;
+  try {
+    let savedStudent = null;
+    if (student.id) {
+      savedStudent = await updateStudentInFirestore(student.id, student);
+    } else {
+      savedStudent = await addStudentToFirestore(student);
     }
+
+    // Sync seat assignment in Firestore seats collection if seatNumber set
+    if (savedStudent && student.seatNumber > 0) {
+      await assignStudentSlotsInSeat(student.seatNumber, {
+        id: savedStudent.id,
+        name: student.name,
+        phone: student.phone,
+        batch: student.batch,
+        status: student.status,
+        validityTo: student.validityTo || student.validityEnd,
+      });
+    }
+
+    // Record payment log if payment was made
+    if (student.paidAmount > 0) {
+      await recordPaymentInFirestore({
+        studentId: savedStudent ? savedStudent.id : student.id,
+        studentName: student.name,
+        amount: student.paidAmount,
+        status: student.status || "Paid",
+        method: "Cash / Online",
+        date: new Date().toISOString().split("T")[0],
+      });
+    }
+
+    return savedStudent;
+  } catch (err) {
+    console.error("Error in saveStudent:", err);
+    return null;
+  }
 };
 
 export const deleteStudent = async (id) => {
-    try {
-        await fetch(`${API_URL}/students/${id}`, { method: 'DELETE' });
-    } catch (err) {
-        console.error(err);
-    }
+  try {
+    await deleteStudentFromFirestore(id);
+  } catch (err) {
+    console.error("Error in deleteStudent:", err);
+  }
 };
 
 export const updateStudentPayment = async (id, paidAmount) => {
-    try {
-        // We need to fetch the student first to get totalAmount for status calculation, 
-        // OR let the backend handle it.
-        // But our backend PUT blindly updates.
-        // It's better to fetch-update-save or send partial update.
-        // Let's modify the student object locally and send PUT.
-        // Wait, 'updateStudentPayment' in store.js handled status logic.
-        // We should move that logic to the caller or replicate it here by fetching first.
+  try {
+    const students = await getStudentsFromFirestore();
+    const student = students.find((s) => s.id === id);
 
-        // Fetch current student to get totalAmount
-        // Note: This is an extra round trip. 
-        // Optimization: Backend could handle status update logic in PUT or a specific endpoint.
-        // For now, let's keep logic here to match frontend app structure.
+    if (student) {
+      const amount = Number(paidAmount) || 0;
+      student.paidAmount = amount;
+      const total = Number(student.totalAmount) || 0;
 
-        // Actually, we can just send the paidAmount and status (calculated here or frontend).
-        // BUT we need totalAmount to calculate status.
-        // We can fetch student list or single student.
-        // Let's assuming we just call saveStudent with the full object if we have it?
-        // The original store.js `updateStudentPayment` took (id, paidAmount).
+      let status = "Unpaid";
+      if (amount >= total && total > 0) status = "Paid";
+      else if (amount > 0) status = "Partial";
 
-        // Let's implement specific logic:
-        // 1. Get all students (cached or fresh) - expensive?
-        // 2. Find student.
-        // 3. Update.
-        // 4. PUT.
+      student.status = status;
+      student.paymentStatus = status;
 
-        const students = await getStudents();
-        const student = students.find(s => s.id === id);
+      const updated = await updateStudentInFirestore(id, {
+        paidAmount: amount,
+        status,
+        paymentStatus: status,
+      });
 
-        if (student) {
-            student.paidAmount = paidAmount;
-            if (paidAmount >= student.totalAmount) {
-                student.status = 'Paid';
-            } else if (paidAmount > 0) {
-                student.status = 'Partial';
-            } else {
-                student.status = 'Unpaid';
-            }
-            // Send update
-            return await saveStudent(student);
-        }
-        return null;
-    } catch (err) {
-        console.error(err);
-        return null;
+      await recordPaymentInFirestore({
+        studentId: id,
+        studentName: student.name,
+        amount,
+        status,
+        method: "Payment Update",
+        date: new Date().toISOString().split("T")[0],
+      });
+
+      return updated;
     }
+    return null;
+  } catch (err) {
+    console.error("Error in updateStudentPayment:", err);
+    return null;
+  }
 };
 
-// --- Utils ---
+// --- Validity Helper ---
 
 export const calculateValidity = (admissionDate) => {
-    if (!admissionDate) return 'N/A';
-    const date = new Date(admissionDate);
-    if (isNaN(date.getTime())) return 'Invalid Date';
+  if (!admissionDate) return "N/A";
+  const date = new Date(admissionDate);
+  if (isNaN(date.getTime())) return "Invalid Date";
 
-    // Add 1 month
-    date.setMonth(date.getMonth() + 1);
-
-    return date.toISOString().split('T')[0];
+  date.setMonth(date.getMonth() + 1);
+  return date.toISOString().split("T")[0];
 };

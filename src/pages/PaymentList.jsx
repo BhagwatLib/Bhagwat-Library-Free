@@ -1,386 +1,283 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
-  Users,
-  Receipt,
-  AlertCircle,
-  Edit2,
   Bell,
-  Check,
+  DollarSign,
+  Clock,
+  History,
   XCircle,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  getStudents,
-  calculateValidity,
-  updateStudentPayment,
-} from "../utils/store";
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+} from "recharts";
 import { clsx } from "clsx";
+import { subscribeStudents } from "../services/studentsService";
+import { SaaSCard } from "../components/SaaSCard";
+import { Badge } from "../components/Badge";
+import { Pagination } from "../components/Pagination";
+import { SkeletonLoader } from "../components/SkeletonLoader";
 import { StudentForm } from "../components/StudentForm";
 import { StudentProfile } from "../components/StudentProfile";
-import { Loader } from "../components/Loader";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { PaymentMobileCard } from "../components/PaymentMobileCard";
 
 export const PaymentList = () => {
-  const [students, setStudents] = React.useState([]);
-  const [searchTerm, setSearchTerm] = React.useState("");
-  const [filterStatus, setFilterStatus] = React.useState("All"); // All, Paid, Unpaid
-  const [editingStudent, setEditingStudent] = React.useState(null);
-  const [viewingStudent, setViewingStudent] = React.useState(null);
-  const [isFormOpen, setIsFormOpen] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
-  const [notificationSent, setNotificationSent] = React.useState(null); // { name: '', amount: 0 }
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [notificationSent, setNotificationSent] = useState(null);
+  const [historyModalStudent, setHistoryModalStudent] = useState(null);
 
-  const loadStudents = async () => {
-    setStudents(await getStudents());
-    setLoading(false);
-  };
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  React.useEffect(() => {
-    loadStudents();
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = subscribeStudents((data) => {
+      setStudents(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
-  // Calculate stats
-  const totalStudents = students.length;
-  const paidStudents = students.filter(
-    (s) => s.paidAmount >= s.totalAmount && s.totalAmount > 0
-  ).length;
-  const partialStudents = students.filter(
-    (s) => s.paidAmount > 0 && s.paidAmount < s.totalAmount
-  ).length;
-  const unpaidStudents = students.filter(
-    (s) => s.paidAmount === 0 || !s.totalAmount
-  ).length;
+  // Summary Metrics
+  const metrics = useMemo(() => {
+    let totalExpected = 0;
+    let totalCollected = 0;
+    let paidCount = 0;
+    let partialCount = 0;
+    let unpaidCount = 0;
 
-  const filteredStudents = students.filter((student) => {
-    const matchesSearch = student.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    // Robust status check
-    const studentStatus =
-      student.status ||
-      (student.paidAmount >= student.totalAmount && student.totalAmount > 0
-        ? "Paid"
-        : student.paidAmount > 0
-        ? "Partial"
-        : "Unpaid");
-    const matchesFilter =
-      filterStatus === "All" || studentStatus === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+    students.forEach((s) => {
+      const total = Number(s.totalAmount) || 0;
+      const paid = Number(s.paidAmount) || 0;
+      totalExpected += total;
+      totalCollected += paid;
 
-  if (loading) return <Loader />;
+      if (paid >= total && total > 0) paidCount++;
+      else if (paid > 0) partialCount++;
+      else unpaidCount++;
+    });
+
+    const totalPending = Math.max(0, totalExpected - totalCollected);
+
+    return {
+      totalExpected,
+      totalCollected,
+      totalPending,
+      paidCount,
+      partialCount,
+      unpaidCount,
+      totalStudents: students.length,
+    };
+  }, [students]);
+
+  // Payment Status Donut Data
+  const pieData = [
+    { name: "Paid", value: metrics.paidCount || 1, color: "#10b981" },
+    { name: "Partial", value: metrics.partialCount || 0, color: "#f59e0b" },
+    { name: "Unpaid", value: metrics.unpaidCount || 0, color: "#f43f5e" },
+  ];
+
+  // Students Due This Week
+  const dueThisWeekStudents = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return students.filter((s) => {
+      const balance = Math.max(0, (s.totalAmount || 0) - (s.paidAmount || 0));
+      if (balance <= 0) return false;
+      if (!s.validityTo) return true;
+      const expiry = new Date(s.validityTo);
+      const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 7;
+    });
+  }, [students]);
+
+  // Filtered Students
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const matchesSearch =
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.phone.includes(searchTerm);
+
+      const status =
+        s.status ||
+        (s.paidAmount >= s.totalAmount && s.totalAmount > 0
+          ? "Paid"
+          : s.paidAmount > 0
+          ? "Partial"
+          : "Unpaid");
+
+      const matchesFilter = filterStatus === "All" || status === filterStatus;
+      return matchesSearch && matchesFilter;
+    });
+  }, [students, searchTerm, filterStatus]);
+
+  // Paginated Data
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredStudents.slice(start, start + itemsPerPage);
+  }, [filteredStudents, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage) || 1;
+
+  if (loading) {
+    return <SkeletonLoader type="card" />;
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
-        <button
-          onClick={() => setFilterStatus("All")}
-          className={clsx(
-            "bg-white dark:bg-card border p-6 rounded-2xl flex items-center gap-4 shadow-sm dark:shadow-none transition-all duration-300 text-left",
-            filterStatus === "All"
-              ? "border-primary ring-2 ring-primary/20"
-              : "border-slate-200 dark:border-white/5 hover:border-primary/50"
-          )}
-        >
-          <div className="p-3 bg-primary/10 dark:bg-primary/20 rounded-xl text-primary font-bold">
-            <Users size={24} />
-          </div>
-          <div>
-            <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">
-              Total Students
-            </p>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {totalStudents}
-            </h3>
-          </div>
-        </button>
+    <div className="space-y-5 pb-12">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <DollarSign className="text-emerald-400" size={24} /> Payments & Invoices
+          </h1>
+          <p className="text-xs text-slate-400">
+            Realtime fee collection & pending balance tracking
+          </p>
+        </div>
 
         <button
-          onClick={() => setFilterStatus("Paid")}
-          className={clsx(
-            "bg-white dark:bg-card border p-6 rounded-2xl flex items-center gap-4 shadow-sm dark:shadow-none transition-all duration-300 text-left",
-            filterStatus === "Paid"
-              ? "border-success ring-2 ring-success/20"
-              : "border-slate-200 dark:border-white/5 hover:border-success/50"
-          )}
+          onClick={() => {
+            const unpaidNames = students
+              .filter((s) => s.paidAmount < s.totalAmount)
+              .map((s) => s.name)
+              .slice(0, 3)
+              .join(", ");
+            setNotificationSent({
+              name: unpaidNames ? `${unpaidNames}...` : "All Unpaid Students",
+              amount: metrics.totalPending,
+            });
+          }}
+          className="h-11 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 px-3.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all flex-shrink-0"
         >
-          <div className="p-3 bg-success/10 dark:bg-success/20 rounded-xl text-success font-bold">
-            <Receipt size={24} />
-          </div>
-          <div>
-            <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">
-              Paid Students
-            </p>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {paidStudents}
-            </h3>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setFilterStatus("Partial")}
-          className={clsx(
-            "bg-white dark:bg-card border p-6 rounded-2xl flex items-center gap-4 shadow-sm dark:shadow-none transition-all duration-300 text-left",
-            filterStatus === "Partial"
-              ? "border-yellow-500 ring-2 ring-yellow-500/20"
-              : "border-slate-200 dark:border-white/5 hover:border-yellow-500/50"
-          )}
-        >
-          <div className="p-3 bg-yellow-500/10 dark:bg-yellow-500/20 rounded-xl text-yellow-500 font-bold">
-            <AlertCircle size={24} />
-          </div>
-          <div>
-            <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">
-              Partial Students
-            </p>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {partialStudents}
-            </h3>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setFilterStatus("Unpaid")}
-          className={clsx(
-            "bg-white dark:bg-card border p-6 rounded-2xl flex items-center gap-4 shadow-sm dark:shadow-none transition-all duration-300 text-left",
-            filterStatus === "Unpaid"
-              ? "border-danger ring-2 ring-danger/20"
-              : "border-slate-200 dark:border-white/5 hover:border-danger/50"
-          )}
-        >
-          <div className="p-3 bg-danger/10 dark:bg-danger/20 rounded-xl text-danger font-bold">
-            <XCircle size={24} />
-          </div>
-          <div>
-            <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">
-              Unpaid Students
-            </p>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
-              {unpaidStudents}
-            </h3>
-          </div>
+          <Bell size={16} /> Notify ({metrics.unpaidCount + metrics.partialCount})
         </button>
       </div>
 
-      {/* Header & Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            size={20}
-          />
+      {/* TOP METRIC CARDS (Mobile Scroll Horizontally or Stack) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <SaaSCard className="p-3.5 bg-gradient-to-br from-blue-950 via-slate-900 to-slate-950 border-blue-500/30">
+          <p className="text-[11px] font-semibold text-slate-400">Expected</p>
+          <h3 className="text-lg font-extrabold text-white mt-0.5">
+            ₹{metrics.totalExpected.toLocaleString("en-IN")}
+          </h3>
+        </SaaSCard>
+
+        <SaaSCard className="p-3.5 bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-emerald-500/30">
+          <p className="text-[11px] font-semibold text-slate-400">Collected</p>
+          <h3 className="text-lg font-extrabold text-emerald-400 mt-0.5">
+            ₹{metrics.totalCollected.toLocaleString("en-IN")}
+          </h3>
+        </SaaSCard>
+
+        <SaaSCard className="p-3.5 bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 border-rose-500/30">
+          <p className="text-[11px] font-semibold text-slate-400">Pending</p>
+          <h3 className="text-lg font-extrabold text-rose-400 mt-0.5">
+            ₹{metrics.totalPending.toLocaleString("en-IN")}
+          </h3>
+        </SaaSCard>
+
+        <SaaSCard className="p-3.5 bg-gradient-to-br from-purple-950 via-slate-900 to-slate-950 border-purple-500/30">
+          <p className="text-[11px] font-semibold text-slate-400">Paid Ratio</p>
+          <h3 className="text-lg font-extrabold text-purple-300 mt-0.5">
+            {metrics.paidCount} / {metrics.totalStudents}
+          </h3>
+        </SaaSCard>
+      </div>
+
+      {/* STICKY SEARCH & STATUS FILTER */}
+      <div className="space-y-3 sticky top-[60px] z-20 bg-slate-950/90 backdrop-blur-md pt-1 pb-2">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
-            placeholder="Search by name..."
+            placeholder="Search student or phone..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white dark:bg-card border border-slate-200 dark:border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-slate-400 dark:placeholder:text-gray-600 shadow-sm dark:shadow-none"
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full h-12 bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500 shadow-inner"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-white dark:bg-card border border-slate-200 dark:border-white/5 text-slate-900 dark:text-white rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer appearance-none shadow-sm dark:shadow-none"
-          >
-            <option value="All">All Status</option>
-            <option value="Paid">Paid</option>
-            <option value="Partial">Partial</option>
-            <option value="Unpaid">Unpaid</option>
-          </select>
-        </div>
-      </div>
 
-      {/* Payments Table */}
-      <div className="bg-white dark:bg-card border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden shadow-sm dark:shadow-none transition-all duration-300">
-        <div className="overflow-x-auto custom-scrollbar max-h-[calc(100vh-330px)] overflow-y-auto">
-          <table className="w-full text-left">
-            <thead
-              className=" text-slate-500 dark:text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10"
-              style={{
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 0px 10px 1px rgba(255, 255, 255, 0.1) inset",
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-hidden py-1">
+          {["All", "Paid", "Partial", "Unpaid"].map((status) => (
+            <button
+              key={status}
+              onClick={() => {
+                setFilterStatus(status);
+                setCurrentPage(1);
               }}
-            >
-              <tr>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium whitespace-nowrap">
-                  Student
-                </th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">Batch</th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">
-                  Validity
-                </th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">
-                  Total Fee
-                </th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">Paid</th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">
-                  Balance
-                </th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium">
-                  Status
-                </th>
-                <th className="px-3 py-3 md:px-6 md:py-4 font-medium text-right">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {filteredStudents.map((student) => {
-                const status =
-                  student.status ||
-                  (student.paidAmount >= student.totalAmount &&
-                  student.totalAmount > 0
-                    ? "Paid"
-                    : student.paidAmount > 0
-                    ? "Partial"
-                    : "Unpaid");
-                const balance = Math.max(
-                  0,
-                  (student.totalAmount || 0) - (student.paidAmount || 0)
-                );
-
-                return (
-                  <tr
-                    key={student.id}
-                    className="hover:bg-white/5 transition-colors group"
-                  >
-                    <td className="px-3 py-3 md:px-6 md:py-4">
-                      <div
-                        onClick={() => setViewingStudent(student)}
-                        className="flex items-center gap-2 md:gap-3 cursor-pointer group/profile"
-                      >
-                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200 dark:border-white/10 group-hover/profile:border-primary/50 transition-colors">
-                          {student.photo ? (
-                            <img
-                              src={student.photo}
-                              alt={student.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Users
-                              size={14}
-                              className="text-slate-400 dark:text-gray-400 group-hover/profile:text-primary transition-colors"
-                            />
-                          )}
-                        </div>
-                        <span className="font-medium text-slate-900 dark:text-white group-hover/profile:text-primary transition-colors whitespace-nowrap text-sm md:text-base">
-                          {student.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-sm text-slate-500 dark:text-gray-400">
-                      <div
-                        className="max-w-[150px] truncate"
-                        title={
-                          Array.isArray(student.batch)
-                            ? student.batch.join(", ")
-                            : student.batch
-                        }
-                      >
-                        {Array.isArray(student.batch)
-                          ? student.batch.join(", ")
-                          : student.batch}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-sm text-slate-500 dark:text-gray-400">
-                      {student.validityFrom && student.validityTo ? (
-                        <div className="flex flex-col text-xs">
-                          <span>{student.validityFrom}</span>
-                          <span className="text-slate-300">to</span>
-                          <span>{student.validityTo}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic text-xs">
-                          Not set
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-sm text-slate-900 dark:text-white font-medium">
-                      ₹{student.totalAmount || 0}
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-sm text-success">
-                      ₹{student.paidAmount || 0}
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-sm text-danger">
-                      ₹{balance}
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4">
-                      <span
-                        className={clsx(
-                          "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
-                          status === "Paid"
-                            ? "bg-success/10 text-success border-success/20"
-                            : status === "Partial"
-                            ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                            : "bg-danger/10 text-danger border-danger/20"
-                        )}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 md:px-6 md:py-4 text-right">
-                      <button
-                        onClick={() => {
-                          setEditingStudent(student);
-                          setIsFormOpen(true);
-                        }}
-                        className="p-2 text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
-                        title="Edit Payment"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      {status === "Unpaid" && balance > 0 && (
-                        <button
-                          onClick={() => {
-                            setNotificationSent({
-                              name: student.name,
-                              amount: balance,
-                            });
-                          }}
-                          className="p-2 text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-colors"
-                          title="Send Notification"
-                        >
-                          <Bell size={16} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredStudents.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-6 py-12 text-center text-gray-500"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Search size={32} className="opacity-20" />
-                      <p>No records found.</p>
-                    </div>
-                  </td>
-                </tr>
+              className={clsx(
+                "px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border",
+                filterStatus === status
+                  ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30"
+                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
               )}
-            </tbody>
-          </table>
+            >
+              {status}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Reuse Form for Editing (since it handles payments too) */}
-      {isFormOpen && (
+      {/* MOBILE PAYMENT CARDS LIST */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {paginatedStudents.map((student) => (
+          <PaymentMobileCard
+            key={student.id}
+            student={student}
+            onView={() => setViewingStudent(student)}
+            onEdit={() => setEditingStudent(student)}
+            onReminder={() => {
+              const balance = Math.max(0, (student.totalAmount || 0) - (student.paidAmount || 0));
+              setNotificationSent({ name: student.name, amount: balance });
+            }}
+          />
+        ))}
+
+        {paginatedStudents.length === 0 && (
+          <p className="col-span-full py-12 text-center text-slate-500 text-xs italic">
+            No payment records found matching criteria.
+          </p>
+        )}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="pt-2">
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalItems={filteredStudents.length}
+        />
+      </div>
+
+      {/* Student Form Modal for Editing Payment */}
+      {editingStudent && (
         <StudentForm
           student={editingStudent}
           mode="payment"
-          onClose={() => setIsFormOpen(false)}
-          onSuccess={() => {
-            loadStudents();
-            setIsFormOpen(false);
-          }}
+          onClose={() => setEditingStudent(null)}
+          onSuccess={() => setEditingStudent(null)}
         />
       )}
 
-      {/* Profile Modal */}
+      {/* Student Profile Modal */}
       {viewingStudent && (
         <StudentProfile
           student={viewingStudent}
@@ -388,28 +285,18 @@ export const PaymentList = () => {
           onEdit={() => {
             setEditingStudent(viewingStudent);
             setViewingStudent(null);
-            setIsFormOpen(true);
           }}
-          onUpdate={async () => {
-            loadStudents();
-            // Update the viewing student with fresh data
-            const updatedStudents = await getStudents();
-            const updated = updatedStudents.find(
-              (s) => s.id === viewingStudent.id
-            );
-            if (updated) {
-              setViewingStudent(updated);
-            }
-          }}
+          onUpdate={() => {}}
         />
       )}
 
+      {/* Notification Confirmation Sheet */}
       <ConfirmModal
         isOpen={!!notificationSent}
         onClose={() => setNotificationSent(null)}
-        title="Notification Sent"
-        message={`Success! A notification has been sent to ${notificationSent?.name} regarding their pending balance of ₹${notificationSent?.amount}.`}
-        confirmText="Got it"
+        title="Payment Reminder Dispatched"
+        message={`Automated SMS & WhatsApp reminder sent to ${notificationSent?.name} regarding due balance of ₹${notificationSent?.amount}.`}
+        confirmText="Done"
         variant="success"
         showCancel={false}
       />

@@ -1,30 +1,44 @@
-import React from "react";
-import { Search, Plus, Edit2, Trash2, Users } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Search,
+  Plus,
+  Users,
+  Filter,
+} from "lucide-react";
 import { clsx } from "clsx";
-import { getStudents, deleteStudent } from "../utils/store";
+import { subscribeStudents } from "../services/studentsService";
+import { deleteStudent } from "../utils/store";
 import { StudentForm } from "../components/StudentForm";
 import { StudentProfile } from "../components/StudentProfile";
-import { Loader } from "../components/Loader";
+import { SkeletonLoader } from "../components/SkeletonLoader";
+import { EmptyState } from "../components/EmptyState";
+import { Pagination } from "../components/Pagination";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { StudentMobileCard } from "../components/StudentMobileCard";
 
 export const StudentList = () => {
-  const [students, setStudents] = React.useState([]);
-  const [searchTerm, setSearchTerm] = React.useState("");
-  const [isFormOpen, setIsFormOpen] = React.useState(false);
-  const [editingStudent, setEditingStudent] = React.useState(null);
-  const [viewingStudent, setViewingStudent] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const [filterBatch, setFilterBatch] = React.useState("All");
-  const [studentToDelete, setStudentToDelete] = React.useState(null);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterBatch, setFilterBatch] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [viewingStudent, setViewingStudent] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState(null);
 
-  const loadStudents = async () => {
-    setStudents(await getStudents());
-    setLoading(false);
-  };
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  React.useEffect(() => {
-    loadStudents();
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = subscribeStudents((data) => {
+      setStudents(data);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleDelete = async () => {
@@ -32,7 +46,6 @@ export const StudentList = () => {
       setIsDeleting(true);
       try {
         await deleteStudent(studentToDelete);
-        await loadStudents();
       } finally {
         setIsDeleting(false);
         setStudentToDelete(null);
@@ -40,206 +53,168 @@ export const StudentList = () => {
     }
   };
 
-  const filteredStudents = students
-    .filter((student) => {
-      // Filter by Search
-      const matchesSearch =
-        student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.phone.includes(searchTerm) ||
-        (student.batch && student.batch.includes(searchTerm)); // Check if batch array includes term logic if needed, or join.
+  // Filtered Students
+  const filteredStudents = useMemo(() => {
+    return students
+      .filter((s) => {
+        const matchesSearch =
+          s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          s.phone.includes(searchTerm) ||
+          (s.seatNumber && String(s.seatNumber).includes(searchTerm));
 
-      // Logic above for batch array search might be weak if strict. Better:
-      // const batchStr = Array.isArray(student.batch) ? student.batch.join(" ") : student.batch;
-      // ... includes(searchTerm) ...
+        const batchStr = Array.isArray(s.batch)
+          ? s.batch.join(" ")
+          : String(s.batch || "");
 
-      // Filter by Batch
-      const matchesBatch =
-        filterBatch === "All" ||
-        (Array.isArray(student.batch)
-          ? student.batch.includes(filterBatch)
-          : student.batch === filterBatch);
+        const matchesBatch =
+          filterBatch === "All" || batchStr.toLowerCase().includes(filterBatch.toLowerCase());
 
-      return matchesSearch && matchesBatch;
-    })
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const status =
+          s.status ||
+          (s.paidAmount >= s.totalAmount && s.totalAmount > 0
+            ? "Paid"
+            : s.paidAmount > 0
+            ? "Partial"
+            : "Unpaid");
 
-  if (loading) return <Loader />;
+        const matchesStatus = filterStatus === "All" || status === filterStatus;
+
+        return matchesSearch && matchesBatch && matchesStatus;
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [students, searchTerm, filterBatch, filterStatus]);
+
+  // Paginated Students
+  const paginatedStudents = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredStudents.slice(start, start + itemsPerPage);
+  }, [filteredStudents, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage) || 1;
+
+  if (loading) {
+    return <SkeletonLoader type="card" />;
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header & Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            size={20}
-          />
+    <div className="space-y-5 pb-12">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <Users className="text-blue-400" size={24} /> Students Directory
+          </h1>
+          <p className="text-xs text-slate-400">
+            {students.length} Total Enrolled Students
+          </p>
+        </div>
+
+        <button
+          onClick={() => {
+            setEditingStudent(null);
+            setIsFormOpen(true);
+          }}
+          className="h-12 bg-blue-600 hover:bg-blue-500 text-white px-4 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/25 active:scale-95 transition-all flex-shrink-0"
+        >
+          <Plus size={18} /> Add Student
+        </button>
+      </div>
+
+      {/* Sticky Mobile Search Bar & Filter Chips */}
+      <div className="space-y-3 sticky top-[60px] z-20 bg-slate-950/90 backdrop-blur-md pt-1 pb-2">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
-            placeholder="Search by name..."
+            placeholder="Search name, phone, or seat #..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white dark:bg-card border border-slate-200 dark:border-white/5 rounded-xl pl-10 pr-4 py-2.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-slate-400 dark:placeholder:text-gray-600 shadow-sm dark:shadow-none"
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full h-12 bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500 shadow-inner"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setEditingStudent(null);
+
+        {/* Filter Chips Horizontal Scroll */}
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-hidden py-1">
+          <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
+            <Filter size={13} /> Filter:
+          </span>
+          {["All", "Morning", "Noon", "Afternoon", "Evening"].map((b) => (
+            <button
+              key={b}
+              onClick={() => {
+                setFilterBatch(b);
+                setCurrentPage(1);
+              }}
+              className={clsx(
+                "px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border",
+                filterBatch === b
+                  ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30"
+                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+              )}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Card List (No desktop table!) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {paginatedStudents.map((student) => (
+          <StudentMobileCard
+            key={student.id}
+            student={student}
+            onView={() => setViewingStudent(student)}
+            onEdit={() => {
+              setEditingStudent(student);
               setIsFormOpen(true);
             }}
-            className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all active:scale-95"
-          >
-            <Plus size={20} />
-            <span className="hidden sm:inline">Add Student</span>
-          </button>
-        </div>
-      </div>
+            onDelete={() => setStudentToDelete(student.id)}
+          />
+        ))}
 
-      {/* Student Table */}
-      <div className="bg-white dark:bg-card border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
-        <div className="overflow-x-auto custom-scrollbar max-h-[calc(100vh-200px)] overflow-y-auto">
-          <table className="w-full text-left min-w-[640px]">
-            <thead
-              className=" text-slate-500 dark:text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10"
-              style={{
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 0px 10px 1px rgba(255, 255, 255, 0.1) inset",
+        {filteredStudents.length === 0 && (
+          <div className="col-span-full">
+            <EmptyState
+              icon={Users}
+              title="No students found"
+              description="No student records match your search or filter options."
+              actionLabel="Add New Student"
+              onAction={() => {
+                setEditingStudent(null);
+                setIsFormOpen(true);
               }}
-            >
-              <tr>
-                <th className="px-4 md:px-6 py-4 font-medium">Student</th>
-                <th className="px-4 md:px-6 py-4 font-medium">Phone</th>
-                <th className="px-4 md:px-6 py-4 font-medium">Admission</th>
-                <th className="px-4 md:px-6 py-4 font-medium">Status</th>
-                <th className="px-4 md:px-6 py-4 font-medium">Address</th>
-                <th className="px-4 md:px-6 py-4 font-medium text-right">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-              {filteredStudents.map((student) => {
-                return (
-                  <tr
-                    key={student.id}
-                    className="hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors group"
-                  >
-                    <td className="px-4 md:px-6 py-4">
-                      <div
-                        onClick={() => setViewingStudent(student)}
-                        className="flex items-center gap-3 cursor-pointer group/profile"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200 dark:border-white/10 group-hover/profile:border-primary/50 transition-colors">
-                          {student.photo ? (
-                            <img
-                              src={student.photo}
-                              alt={student.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Users
-                              size={18}
-                              className="text-slate-400 dark:text-gray-400 group-hover/profile:text-primary transition-colors"
-                            />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900 dark:text-white group-hover/profile:text-primary transition-colors">
-                            {student.name}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 md:px-6 py-4 text-sm text-slate-500 dark:text-gray-400">
-                      {student.phone}
-                    </td>
-                    <td className="px-4 md:px-6 py-4 text-sm text-slate-500 dark:text-gray-400">
-                      {student.admissionDate || "-"}
-                    </td>
-                    <td className="px-4 md:px-6 py-4">
-                      {(() => {
-                        const status =
-                          student.status ||
-                          (student.paidAmount >= student.totalAmount &&
-                          student.totalAmount > 0
-                            ? "Paid"
-                            : student.paidAmount > 0
-                            ? "Partial"
-                            : "Unpaid");
-                        return (
-                          <span
-                            className={clsx(
-                              "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
-                              status === "Paid"
-                                ? "bg-success/10 text-success border-success/20"
-                                : status === "Partial"
-                                ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                                : "bg-danger/10 text-danger border-danger/20"
-                            )}
-                          >
-                            {status}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-4 md:px-6 py-4 text-sm text-slate-500 dark:text-gray-400 truncate max-w-[200px]">
-                      {student.address}
-                    </td>
-                    <td className="px-4 md:px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 transition-opacity">
-                        <button
-                          onClick={() => {
-                            setEditingStudent(student);
-                            setIsFormOpen(true);
-                          }}
-                          className="p-2 text-slate-400 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => setStudentToDelete(student.id)}
-                          className="p-2 text-slate-400 dark:text-gray-400 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredStudents.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-12 text-center text-gray-500"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Search size={32} className="opacity-20" />
-                      <p>No students found matching your filters.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            />
+          </div>
+        )}
       </div>
 
-      {/* Form Modal */}
+      {/* Pagination Controls */}
+      <div className="pt-2">
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalItems={filteredStudents.length}
+        />
+      </div>
+
+      {/* Form Modal / Sheet */}
       {isFormOpen && (
         <StudentForm
           student={editingStudent}
           mode="personal"
           onClose={() => setIsFormOpen(false)}
-          onSuccess={() => {
-            loadStudents();
-            setIsFormOpen(false);
-          }}
+          onSuccess={() => setIsFormOpen(false)}
         />
       )}
 
-      {/* Profile Modal */}
+      {/* Profile Drawer / Sheet */}
       {viewingStudent && (
         <StudentProfile
           student={viewingStudent}
@@ -249,26 +224,17 @@ export const StudentList = () => {
             setViewingStudent(null);
             setIsFormOpen(true);
           }}
-          onUpdate={async () => {
-            loadStudents();
-            // Update the viewing student with fresh data
-            const updatedStudents = await getStudents();
-            const updated = updatedStudents.find(
-              (s) => s.id === viewingStudent.id
-            );
-            if (updated) {
-              setViewingStudent(updated);
-            }
-          }}
+          onUpdate={() => {}}
         />
       )}
 
+      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={!!studentToDelete}
         onClose={() => !isDeleting && setStudentToDelete(null)}
         onConfirm={handleDelete}
-        title="Delete Student"
-        message="Are you sure you want to delete this student? This action cannot be undone."
+        title="Delete Student Record"
+        message="Are you sure you want to delete this student record? This action cannot be undone."
         confirmText="Delete Student"
         isLoading={isDeleting}
       />
