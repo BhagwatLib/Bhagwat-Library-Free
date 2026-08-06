@@ -94,13 +94,13 @@ export const SeatGrid = () => {
       } else if (activeFilter === "Full") {
         matchesFilter = seat.occupiedSlotsCount === 4;
       } else if (activeFilter === "A Batch") {
-        matchesFilter = seat.slots["morning"]?.occupied;
+        matchesFilter = seat.slots["a"]?.occupied;
       } else if (activeFilter === "B Batch") {
-        matchesFilter = seat.slots["noon"]?.occupied;
+        matchesFilter = seat.slots["b"]?.occupied;
       } else if (activeFilter === "C Batch") {
-        matchesFilter = seat.slots["afternoon"]?.occupied;
+        matchesFilter = seat.slots["c"]?.occupied;
       } else if (activeFilter === "D Batch") {
-        matchesFilter = seat.slots["evening"]?.occupied;
+        matchesFilter = seat.slots["d"]?.occupied;
       }
 
       if (!matchesFilter) return false;

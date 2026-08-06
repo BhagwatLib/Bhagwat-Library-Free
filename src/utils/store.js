@@ -166,10 +166,10 @@ export const saveStudent = async (student) => {
           const seatData = seatSnap.data();
           const currentSlots = seatData.slots || { a: null, b: null, c: null, d: null };
 
-          // Filter other students' occupied slots
+          // Filter other students' occupied slots safely
           const occupiedSlotVals = Object.keys(currentSlots)
             .map(k => currentSlots[k])
-            .filter(val => val !== null && val.studentId && val.studentId !== studentId);
+            .filter(val => val && val.studentId && val.studentId !== studentId);
 
           // Rule 1: Check if seat is fully occupied by All Batch (owns all 4 slots)
           const isFullyOccupiedByAllBatch = Object.keys(currentSlots).every(k => {
@@ -290,11 +290,11 @@ export const saveStudent = async (student) => {
 
     return savedStudent;
   } catch (err) {
-    console.error("Error in saveStudent transaction:", err);
-    if (err.message.startsWith("SEAT_CONFLICT:")) {
-      alert(err.message.substring(14)); // Show alert with conflict message
+    console.error("Error in saveStudent transaction details:", err);
+    if (err.message && err.message.startsWith("SEAT_CONFLICT:")) {
+      alert(err.message.substring(14));
     } else {
-      alert("Failed to save student details. A database conflict occurred.");
+      alert(`Failed to save student details: ${err.message || err}`);
     }
     throw err;
   }

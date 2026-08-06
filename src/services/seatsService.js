@@ -38,13 +38,13 @@ export const getSlotsFromBatchInput = (batchInput) => {
       slotsSet.add("b");
       slotsSet.add("c");
       slotsSet.add("d");
-    } else if (str === "A" || str.includes("A BATCH") || str.includes("6:00 AM - 10:00 AM") || str.includes("6AM-10AM") || str.includes("MORNING")) {
+    } else if (str === "A" || str.includes("A BATCH") || str.includes("6:00 AM - 10:00 AM") || str.includes("6AM-10AM")) {
       slotsSet.add("a");
-    } else if (str === "B" || str.includes("B BATCH") || str.includes("10:00 AM - 2:00 PM") || str.includes("10AM-2PM") || str.includes("NOON")) {
+    } else if (str === "B" || str.includes("B BATCH") || str.includes("10:00 AM - 2:00 PM") || str.includes("10AM-2PM")) {
       slotsSet.add("b");
-    } else if (str === "C" || str.includes("C BATCH") || str.includes("2:00 PM - 6:00 PM") || str.includes("2PM-6PM") || str.includes("AFTERNOON")) {
+    } else if (str === "C" || str.includes("C BATCH") || str.includes("2:00 PM - 6:00 PM") || str.includes("2PM-6PM")) {
       slotsSet.add("c");
-    } else if (str === "D" || str.includes("D BATCH") || str.includes("6:00 PM - 10:00 PM") || str.includes("6PM-10PM") || str.includes("EVENING")) {
+    } else if (str === "D" || str.includes("D BATCH") || str.includes("6:00 PM - 10:00 PM") || str.includes("6PM-10PM")) {
       slotsSet.add("d");
     }
   });
