@@ -9,6 +9,10 @@ import {
   AlertTriangle,
   Phone,
   X,
+  CheckCircle2,
+  Calendar,
+  CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
@@ -30,6 +34,7 @@ export const SeatGrid = () => {
   const [assignStudentId, setAssignStudentId] = useState("");
   const [conflictError, setConflictError] = useState("");
 
+  // Realtime Firestore Subscription for instant seat occupancy updates
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeStudents((data) => {
@@ -39,10 +44,12 @@ export const SeatGrid = () => {
     return () => unsubscribe();
   }, []);
 
+  // Compute live seat matrix from Firestore students data
   const seatMatrix = useMemo(() => {
     return getSeatMatrix(students, 100);
   }, [students]);
 
+  // Keep selectedSeat in sync when students state updates
   useEffect(() => {
     if (selectedSeat) {
       const updatedSeat = seatMatrix.find((s) => s.seatNumber === selectedSeat.seatNumber);
@@ -52,22 +59,24 @@ export const SeatGrid = () => {
 
   const stats = useMemo(() => {
     let totalOccupiedSlots = 0;
-    let fullyOccupiedSeats = 0;
+    let fullSeats = 0;
+    let partialSeats = 0;
     let availableSeats = 0;
 
     seatMatrix.forEach((s) => {
       totalOccupiedSlots += s.occupiedSlotsCount;
-      if (s.occupiedSlotsCount === 4) fullyOccupiedSeats++;
-      if (s.occupiedSlotsCount === 0) availableSeats++;
+      if (s.seatState === "Full") fullSeats++;
+      else if (s.seatState === "Partial") partialSeats++;
+      else availableSeats++;
     });
 
     return {
       totalSeats: 100,
       totalSlots: 400,
       totalOccupiedSlots,
-      fullyOccupiedSeats,
+      fullSeats,
+      partialSeats,
       availableSeats,
-      partiallyOccupied: 100 - fullyOccupiedSeats - availableSeats,
       occupancyRate: Math.round((totalOccupiedSlots / 400) * 100),
     };
   }, [seatMatrix]);
@@ -77,8 +86,10 @@ export const SeatGrid = () => {
       let matchesFilter = true;
       if (activeFilter === "Available") {
         matchesFilter = seat.occupiedSlotsCount === 0;
-      } else if (activeFilter === "Occupied") {
+      } else if (activeFilter === "Occupied" || activeFilter === "Partial") {
         matchesFilter = seat.occupiedSlotsCount > 0;
+      } else if (activeFilter === "Full") {
+        matchesFilter = seat.occupiedSlotsCount === 4;
       } else if (activeFilter === "A Batch") {
         matchesFilter = seat.slots["morning"]?.occupied;
       } else if (activeFilter === "B Batch") {
@@ -154,21 +165,25 @@ export const SeatGrid = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Armchair className="text-blue-500" size={26} /> Seats & Slot Matrix (1 - 100)
+            <Armchair className="text-blue-500" size={26} /> Seats Dashboard (1 - 100)
           </h1>
           <p className="text-xs text-slate-400">
-            Batch-wise seat allocation (A Batch, B Batch, C Batch, D Batch, All Batch)
+            Realtime Firestore synchronized batch slot allocation (A, B, C, D)
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs">
-            <span className="text-slate-400">Occupancy: </span>
-            <span className="font-bold text-emerald-400">{stats.occupancyRate}%</span>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
+            <span className="text-slate-400">Overall Fill Rate: </span>
+            <span className="font-extrabold text-emerald-400">{stats.occupancyRate}%</span>
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs">
-            <span className="text-slate-400">Available Seats: </span>
-            <span className="font-bold text-blue-400">{stats.availableSeats}</span>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
+            <span className="text-slate-400">Available: </span>
+            <span className="font-extrabold text-blue-400">{stats.availableSeats}</span>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
+            <span className="text-slate-400">Full (4/4): </span>
+            <span className="font-extrabold text-purple-400">{stats.fullSeats}</span>
           </div>
         </div>
       </div>
@@ -187,7 +202,7 @@ export const SeatGrid = () => {
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-          {["All", "Available", "Occupied", "A Batch", "B Batch", "C Batch", "D Batch"].map((filter) => (
+          {["All", "Available", "Partial", "Full", "A Batch", "B Batch", "C Batch", "D Batch"].map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
@@ -204,57 +219,83 @@ export const SeatGrid = () => {
         </div>
       </div>
 
-      {/* 100 Seats Grid */}
+      {/* 100 SEATS REALTIME GRID */}
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-10 gap-3">
-        {filteredSeats.map((seat) => (
-          <motion.div
-            key={seat.seatNumber}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => setSelectedSeat(seat)}
-            className={clsx(
-              "rounded-2xl border p-3 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[95px] relative group",
-              seat.occupiedSlotsCount > 0
-                ? "bg-slate-900/90 border-slate-700 hover:border-blue-500 shadow-md"
-                : "bg-slate-950/60 border-slate-800/80 hover:border-slate-600 opacity-80"
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1">
-                Seat {seat.seatNumber}
-              </span>
-              <span className="text-[10px] text-slate-500 font-semibold">
-                {seat.occupiedSlotsCount}/4
-              </span>
-            </div>
+        {filteredSeats.map((seat) => {
+          const isFull = seat.occupiedSlotsCount === 4;
+          const isPartial = seat.occupiedSlotsCount > 0 && seat.occupiedSlotsCount < 4;
+          const isAvailable = seat.occupiedSlotsCount === 0;
 
-            <div className="grid grid-cols-4 gap-1 mt-2">
-              {BASE_SLOTS.map((slot) => {
-                const sData = seat.slots[slot.id];
-                let bgClass = "bg-slate-800";
-                if (sData.occupied) {
-                  if (sData.status === "expired") bgClass = "bg-rose-500";
-                  else if (sData.status === "reserved") bgClass = "bg-amber-500";
-                  else bgClass = "bg-emerald-500";
-                }
+          return (
+            <motion.div
+              key={seat.seatNumber}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => setSelectedSeat(seat)}
+              className={clsx(
+                "rounded-2xl border p-3 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[105px] relative group shadow-md",
+                isFull
+                  ? "bg-slate-900/95 border-purple-500/40 hover:border-purple-400 shadow-purple-500/5"
+                  : isPartial
+                  ? "bg-slate-900/90 border-blue-500/40 hover:border-blue-400 shadow-blue-500/5"
+                  : "bg-slate-950/60 border-slate-800/80 hover:border-emerald-500/60 opacity-80"
+              )}
+            >
+              {/* Header: Seat Number & Count */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1">
+                  Seat {seat.seatNumber}
+                </span>
+                <span
+                  className={clsx(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded-md border",
+                    isFull
+                      ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                      : isPartial
+                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                      : "bg-slate-800 border-slate-700 text-slate-400"
+                  )}
+                >
+                  {seat.occupiedSlotsCount}/4
+                </span>
+              </div>
 
-                return (
-                  <div
-                    key={slot.id}
-                    className={clsx("h-2 rounded-full transition-all", bgClass)}
-                    title={`${slot.name}: ${sData.occupied ? sData.student.name : "Available"}`}
-                  />
-                );
-              })}
-            </div>
+              {/* Realtime Batch Status Indicators (A 🟢, B 🟢, C ⚪, D 🟢) */}
+              <div className="grid grid-cols-4 gap-1 my-2">
+                {BASE_SLOTS.map((slot) => {
+                  const sData = seat.slots[slot.id];
+                  const isOcc = sData.occupied;
 
-            <div className="text-[10px] text-slate-400 mt-2 truncate font-medium">
-              {seat.assignedStudents.length > 0
-                ? seat.assignedStudents.map((s) => s.name.split(" ")[0]).join(", ")
-                : "Available"}
-            </div>
-          </motion.div>
-        ))}
+                  return (
+                    <div
+                      key={slot.id}
+                      className={clsx(
+                        "h-5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all border",
+                        isOcc
+                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                          : "bg-slate-950/80 border-slate-800 text-slate-600"
+                      )}
+                      title={`${slot.name}: ${isOcc ? sData.student?.name : "Available"}`}
+                    >
+                      {slot.slotCode} {isOcc ? "🟢" : "⚪"}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer: Status or Student Names */}
+              <div className="text-[10px] truncate font-medium">
+                {seat.assignedStudents.length > 0 ? (
+                  <span className="text-slate-300">
+                    {seat.assignedStudents.map((s) => s.name.split(" ")[0]).join(", ")}
+                  </span>
+                ) : (
+                  <span className="text-emerald-400/80 italic font-semibold">Available</span>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* DESKTOP SIDE DRAWER (1024px and above) */}
@@ -269,17 +310,24 @@ export const SeatGrid = () => {
               className="bg-slate-900 border-l border-slate-800 w-full max-w-lg h-full overflow-y-auto custom-scrollbar p-6 space-y-6 shadow-2xl flex flex-col justify-between"
             >
               <div className="space-y-6">
+                {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold text-lg">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-extrabold text-xl shadow-lg">
                       #{selectedSeat.seatNumber}
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white">
-                        Seat Details #{selectedSeat.seatNumber}
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        Seat #{selectedSeat.seatNumber} Details
                       </h2>
-                      <p className="text-xs text-slate-400">
-                        {selectedSeat.occupiedSlotsCount} of 4 Batches Occupied
+                      <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                        <span className="font-semibold text-blue-400">
+                          {selectedSeat.occupiedSlotsCount}/4 Occupied
+                        </span>
+                        <span>•</span>
+                        <span className="text-emerald-400 font-semibold">
+                          {selectedSeat.availableSlotsCount} Available Slot(s)
+                        </span>
                       </p>
                     </div>
                   </div>
@@ -291,21 +339,42 @@ export const SeatGrid = () => {
                   </button>
                 </div>
 
+                {/* Seat Summary Statistics */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+                    <p className="text-slate-400 text-[11px] font-medium">Total Students Assigned</p>
+                    <p className="text-lg font-bold text-white mt-0.5 flex items-center gap-1.5">
+                      <User size={16} className="text-blue-400" />
+                      <span>{selectedSeat.assignedStudents.length} Students</span>
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
+                    <p className="text-slate-400 text-[11px] font-medium">Available Batches</p>
+                    <p className="text-lg font-bold text-emerald-400 mt-0.5 flex items-center gap-1.5">
+                      <CheckCircle2 size={16} />
+                      <span>{selectedSeat.availableSlotsCount} Free</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Batch Slots Breakdown & Student Cards */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Batch Allocation Breakdown
+                    Batch Allocation Details (A, B, C, D)
                   </h3>
                   {BASE_SLOTS.map((slot) => {
                     const slotData = selectedSeat.slots[slot.id];
                     const student = slotData.student;
+                    const isOcc = slotData.occupied;
 
                     return (
                       <div
                         key={slot.id}
                         className={clsx(
                           "rounded-2xl border p-4 transition-all space-y-3",
-                          slotData.occupied
-                            ? "bg-slate-950/80 border-slate-800"
+                          isOcc
+                            ? "bg-slate-950/90 border-slate-800"
                             : "bg-slate-950/30 border-slate-800/40"
                         )}
                       >
@@ -313,45 +382,67 @@ export const SeatGrid = () => {
                           <div className="flex items-center gap-2">
                             <Clock size={16} className="text-blue-400" />
                             <span className="text-sm font-bold text-white">
-                              {slot.name} ({slot.time})
+                              {slot.name} <span className="text-slate-400 font-normal text-xs">({slot.time})</span>
                             </span>
                           </div>
-                          {slotData.occupied ? (
+                          {isOcc ? (
                             <Badge variant={slotData.status === "expired" ? "danger" : slotData.status === "reserved" ? "warning" : "success"}>
-                              Occupied
+                              Occupied 🟢
                             </Badge>
                           ) : (
-                            <Badge variant="default">Available</Badge>
+                            <Badge variant="default">Available ⚪</Badge>
                           )}
                         </div>
 
-                        {slotData.occupied && student ? (
-                          <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-700">
-                                {student.photo ? (
-                                  <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <User size={18} className="text-slate-400" />
-                                )}
+                        {isOcc && student ? (
+                          <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-700">
+                                  {student.photo ? (
+                                    <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <User size={18} className="text-slate-400" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-white">{student.name}</p>
+                                  <p className="text-xs text-slate-400 flex items-center gap-1">
+                                    <Phone size={12} /> {student.phone}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-bold text-white">{student.name}</p>
-                                <p className="text-xs text-slate-400 flex items-center gap-1">
-                                  <Phone size={12} /> {student.phone}
-                                </p>
+
+                              <button
+                                onClick={() => handleRemoveSeat(student.id)}
+                                className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
+                                title="Remove seat assignment"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+
+                            {/* Payment Status & Validity */}
+                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                              <div className="flex items-center gap-1.5">
+                                <CreditCard size={14} className="text-emerald-400" />
+                                <span className="text-slate-400">Payment:</span>
+                                <span className={clsx("font-bold ml-1", student.paidAmount >= student.totalAmount && student.totalAmount > 0 ? "text-emerald-400" : "text-amber-400")}>
+                                  {student.status || "Paid"}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Calendar size={14} className="text-blue-400" />
+                                <span className="text-slate-400">Validity:</span>
+                                <span className="font-semibold text-white truncate">
+                                  {student.validityTo || "N/A"}
+                                </span>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleRemoveSeat(student.id)}
-                              className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
                           </div>
                         ) : (
                           <div className="pt-2 border-t border-slate-800/50 flex justify-between items-center text-xs">
-                            <span className="text-slate-500">No student assigned</span>
+                            <span className="text-slate-500">No student assigned to this slot</span>
                             <button
                               onClick={() => setAssignModal({ seatNumber: selectedSeat.seatNumber, targetSlot: slot.name })}
                               className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
@@ -366,12 +457,12 @@ export const SeatGrid = () => {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex gap-3">
+              <div className="pt-4 border-t border-slate-800">
                 <button
                   onClick={() => setAssignModal({ seatNumber: selectedSeat.seatNumber, targetSlot: "Any" })}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-xs"
+                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-xs"
                 >
-                  <UserPlus size={16} /> Assign Student to Seat
+                  <UserPlus size={16} /> Assign Student to Seat #{selectedSeat.seatNumber}
                 </button>
               </div>
             </motion.div>
@@ -388,15 +479,15 @@ export const SeatGrid = () => {
         >
           {selectedSeat && (
             <div className="space-y-4">
-              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-bold text-lg">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-extrabold text-xl">
                     #{selectedSeat.seatNumber}
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-base">Seat #{selectedSeat.seatNumber}</h4>
                     <p className="text-xs text-slate-400">
-                      {selectedSeat.occupiedSlotsCount} of 4 Batches Occupied
+                      {selectedSeat.occupiedSlotsCount}/4 Occupied • {selectedSeat.availableSlotsCount} Free
                     </p>
                   </div>
                 </div>
@@ -413,20 +504,28 @@ export const SeatGrid = () => {
                 {BASE_SLOTS.map((slot) => {
                   const slotData = selectedSeat.slots[slot.id];
                   const student = slotData.student;
+                  const isOcc = slotData.occupied;
 
                   return (
-                    <div key={slot.id} className="p-3.5 rounded-2xl border bg-slate-950 border-slate-800 space-y-2">
+                    <div key={slot.id} className="p-3.5 rounded-2xl border bg-slate-950 border-slate-800 space-y-2.5">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-white">{slot.name} ({slot.time})</span>
-                        <Badge variant={slotData.occupied ? "success" : "default"}>{slotData.occupied ? "Occupied" : "Available"}</Badge>
+                        <Badge variant={isOcc ? "success" : "default"}>{isOcc ? "Occupied 🟢" : "Available ⚪"}</Badge>
                       </div>
 
-                      {slotData.occupied && student && (
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
-                          <span className="font-bold text-white">{student.name}</span>
-                          <button onClick={() => handleRemoveSeat(student.id)} className="p-1.5 text-rose-400">
-                            <Trash2 size={16} />
-                          </button>
+                      {isOcc && student && (
+                        <div className="space-y-2 pt-2 border-t border-slate-800 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-white">{student.name}</span>
+                            <button onClick={() => handleRemoveSeat(student.id)} className="p-1 text-rose-400">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                            <p>Phone: <span className="text-white">{student.phone}</span></p>
+                            <p>Status: <span className="text-emerald-400">{student.status || "Paid"}</span></p>
+                            <p className="col-span-2">Validity: <span className="text-white">{student.validityTo || "N/A"}</span></p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -445,7 +544,7 @@ export const SeatGrid = () => {
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl"
             >
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">

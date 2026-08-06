@@ -1,10 +1,10 @@
-// Seat & Batch Business Logic Utility (5 Standard Batches: A, B, C, D, All Batch)
+// Realtime Seat & Batch Business Logic Utility (A, B, C, D & All Batch)
 
 export const BASE_SLOTS = [
-  { id: "morning", name: "A Batch", time: "6:00 AM - 10:00 AM", label: "A Batch (6:00 AM - 10:00 AM)", key: "slot1" },
-  { id: "noon", name: "B Batch", time: "10:00 AM - 2:00 PM", label: "B Batch (10:00 AM - 2:00 PM)", key: "slot2" },
-  { id: "afternoon", name: "C Batch", time: "2:00 PM - 6:00 PM", label: "C Batch (2:00 PM - 6:00 PM)", key: "slot3" },
-  { id: "evening", name: "D Batch", time: "6:00 PM - 10:00 PM", label: "D Batch (6:00 PM - 10:00 PM)", key: "slot4" },
+  { id: "morning", slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", label: "A Batch (6:00 AM - 10:00 AM)", key: "slot1" },
+  { id: "noon", slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", label: "B Batch (10:00 AM - 2:00 PM)", key: "slot2" },
+  { id: "afternoon", slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", label: "C Batch (2:00 PM - 6:00 PM)", key: "slot3" },
+  { id: "evening", slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", label: "D Batch (6:00 PM - 10:00 PM)", key: "slot4" },
 ];
 
 /**
@@ -20,7 +20,7 @@ export const getSlotsFromBatch = (batchInput) => {
     if (!b) return;
     const str = b.toString().toLowerCase().trim();
 
-    if (str.includes("all batch") || str.includes("allshift") || str.includes("6:00 am - 10:00 pm") || str.includes("6am-10pm")) {
+    if (str.includes("all batch") || str.includes("allshift") || str.includes("6:00 am - 10:00 pm") || str.includes("6am-10pm") || str === "all") {
       slotsSet.add("morning");
       slotsSet.add("noon");
       slotsSet.add("afternoon");
@@ -34,7 +34,7 @@ export const getSlotsFromBatch = (batchInput) => {
     } else if (str.includes("d batch") || str.includes("6:00 pm - 10:00 pm") || str.includes("6pm-10pm") || str === "d") {
       slotsSet.add("evening");
     } else {
-      // Fallback matching by keyword / time
+      // Fallback keyword matching
       if (str.includes("morning") || str.includes("6am") || str.includes("6:00am")) slotsSet.add("morning");
       if (str.includes("noon") || str.includes("10am") || str.includes("10:00am")) slotsSet.add("noon");
       if (str.includes("afternoon") || str.includes("2pm") || str.includes("2:00pm")) slotsSet.add("afternoon");
@@ -57,21 +57,22 @@ export const isSlotExpired = (student) => {
 };
 
 /**
- * Generates seat breakdown for seats 1 to capacity (default 100)
+ * Generates seat matrix calculation for seats 1 to capacity (default 100) directly from live students list
  */
 export const getSeatMatrix = (studentsList = [], capacity = 100) => {
   const matrix = [];
 
   for (let seatNum = 1; seatNum <= capacity; seatNum++) {
+    // Find all students assigned to seatNum
     const seatStudents = studentsList.filter(
       (s) => Number(s.seatNumber) === seatNum
     );
 
     const slotsStatus = {
-      morning: { occupied: false, student: null, status: "available" },
-      noon: { occupied: false, student: null, status: "available" },
-      afternoon: { occupied: false, student: null, status: "available" },
-      evening: { occupied: false, student: null, status: "available" },
+      morning: { slotCode: "A", name: "A Batch", time: "6:00 AM - 10:00 AM", occupied: false, student: null, status: "available" },
+      noon: { slotCode: "B", name: "B Batch", time: "10:00 AM - 2:00 PM", occupied: false, student: null, status: "available" },
+      afternoon: { slotCode: "C", name: "C Batch", time: "2:00 PM - 6:00 PM", occupied: false, student: null, status: "available" },
+      evening: { slotCode: "D", name: "D Batch", time: "6:00 PM - 10:00 PM", occupied: false, student: null, status: "available" },
     };
 
     seatStudents.forEach((student) => {
@@ -94,14 +95,15 @@ export const getSeatMatrix = (studentsList = [], capacity = 100) => {
     });
 
     const occupiedCount = Object.values(slotsStatus).filter((s) => s.occupied).length;
-    let seatState = "available";
-    if (occupiedCount === 4) seatState = "occupied";
-    else if (occupiedCount > 0) seatState = "partially_occupied";
+    let seatState = "Available"; // "Full", "Partial", "Available"
+    if (occupiedCount === 4) seatState = "Full";
+    else if (occupiedCount > 0) seatState = "Partial";
 
     matrix.push({
       seatNumber: seatNum,
       slots: slotsStatus,
       occupiedSlotsCount: occupiedCount,
+      availableSlotsCount: 4 - occupiedCount,
       seatState,
       assignedStudents: seatStudents,
     });
