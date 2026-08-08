@@ -17,7 +17,12 @@ import {
   FileText,
   Activity,
 } from "lucide-react";
-import { subscribeBatches, saveBatchInFirestore, deleteBatchFromFirestore } from "../services/batchesService";
+import {
+  subscribeBatches,
+  saveBatchInFirestore,
+  deleteBatchFromFirestore,
+  resetToDefaultABCDShifts,
+} from "../services/batchesService";
 import { subscribeStudents } from "../services/studentsService";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
@@ -29,6 +34,7 @@ export const BatchList = () => {
   const [batches, setBatches] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isResetting, setIsResetting] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState(null);
   const [formData, setFormData] = useState({
@@ -40,6 +46,7 @@ export const BatchList = () => {
     status: "Active",
   });
   const [batchToDelete, setBatchToDelete] = useState(null);
+
 
   // Realtime subscription for Universal Batches & Students Data
   useEffect(() => {
@@ -150,6 +157,19 @@ export const BatchList = () => {
     }
   };
 
+  const handleResetToABCD = async () => {
+    if (window.confirm("Standardize all shifts to A Shift, B Shift, C Shift, D Shift, and All Shift in database?")) {
+      setIsResetting(true);
+      try {
+        await resetToDefaultABCDShifts();
+      } catch (err) {
+        alert("Reset failed: " + err.message);
+      } finally {
+        setIsResetting(false);
+      }
+    }
+  };
+
   if (loading) {
     return <SkeletonLoader type="card" />;
   }
@@ -167,24 +187,38 @@ export const BatchList = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingBatch(null);
-            setFormData({
-              name: "",
-              time: "",
-              price: "",
-              duration: "4 Hours",
-              description: "",
-              status: "Active",
-            });
-            setIsFormOpen(true);
-          }}
-          className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-purple-500/20 active:scale-95 transition-all"
-        >
-          <Plus size={16} /> Add New Batch
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            disabled={isResetting}
+            onClick={handleResetToABCD}
+            className="bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 px-3.5 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all active:scale-95"
+            title="Reset shifts to standard ABCD format in database"
+          >
+            <Sparkles size={15} className="text-amber-400" />
+            <span>{isResetting ? "Updating..." : "Reset to ABCD Shifts"}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingBatch(null);
+              setFormData({
+                name: "",
+                time: "",
+                price: "",
+                duration: "4 Hours",
+                description: "",
+                status: "Active",
+              });
+              setIsFormOpen(true);
+            }}
+            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-purple-500/20 active:scale-95 transition-all"
+          >
+            <Plus size={16} /> Add New Batch
+          </button>
+        </div>
       </div>
+
 
       {/* Batch Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

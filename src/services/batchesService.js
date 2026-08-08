@@ -68,19 +68,92 @@ export const DEFAULT_BATCHES = [
 
 
 /**
- * Seed default batches in Firestore if collection is empty
+ * Normalizes batch data and converts any legacy names to ABCD Shift
+ */
+export const normalizeBatchData = (dId, data) => {
+  let name = data.name || data.time || "Batch";
+  let slotKey = data.slotKey || "custom";
+  const time = data.time || "";
+  const nameLower = name.toLowerCase().trim();
+
+  // Detect and migrate old names
+  if (nameLower.includes("morning") || time.includes("6:00 AM - 10:00 AM") || dId === "batch_a") {
+    name = "A Shift";
+    slotKey = "a";
+  } else if (nameLower.includes("noon") || time.includes("10:00 AM - 2:00 PM") || dId === "batch_b") {
+    name = "B Shift";
+    slotKey = "b";
+  } else if (nameLower.includes("afternoon") || time.includes("2:00 PM - 6:00 PM") || dId === "batch_c") {
+    name = "C Shift";
+    slotKey = "c";
+  } else if (nameLower.includes("evening") || time.includes("6:00 PM - 10:00 PM") || dId === "batch_d") {
+    name = "D Shift";
+    slotKey = "d";
+  } else if (nameLower.includes("all") || time.includes("6:00 AM - 10:00 PM") || dId === "batch_all") {
+    name = "All Shift";
+    slotKey = "all";
+  }
+
+  const needsFirestoreUpdate =
+    data.name !== name ||
+    data.slotKey !== slotKey ||
+    /morning|noon|afternoon|evening/i.test(data.name || "");
+
+  return {
+    item: {
+      id: dId,
+      name,
+      time,
+      price: Number(data.price) || 0,
+      duration: data.duration || "4 Hours",
+      description: data.description || "",
+      status: data.status || "Active",
+      slotKey,
+      ...data,
+      name, // Enforce normalized name
+      slotKey,
+    },
+    needsFirestoreUpdate,
+  };
+};
+
+const sortOrder = { a: 1, b: 2, c: 3, d: 4, all: 5 };
+const sortBatches = (list) => {
+  return [...list].sort((x, y) => {
+    const ox = sortOrder[x.slotKey] || 99;
+    const oy = sortOrder[y.slotKey] || 99;
+    if (ox !== oy) return ox - oy;
+    return x.name.localeCompare(y.name);
+  });
+};
+
+/**
+ * Seed default batches in Firestore if collection is empty or reset
  */
 export const seedDefaultBatchesInFirestore = async () => {
   try {
     for (const batch of DEFAULT_BATCHES) {
       const docRef = doc(db, BATCHES_COLLECTION, batch.id);
-      const snap = await getDoc(docRef);
-      if (!snap.exists()) {
-        await setDoc(docRef, batch);
-      }
+      await setDoc(docRef, batch, { merge: true });
     }
   } catch (error) {
     console.error("Error seeding default batches:", error);
+  }
+};
+
+/**
+ * Force reset all batches in Firestore to standard ABCD Shifts
+ */
+export const resetToDefaultABCDShifts = async () => {
+  try {
+    for (const batch of DEFAULT_BATCHES) {
+      const docRef = doc(db, BATCHES_COLLECTION, batch.id);
+      await setDoc(docRef, batch);
+    }
+    return true;
+  } catch (error) {
+    console.error("Error resetting batches:", error);
+    throw error;
   }
 };
 
@@ -95,21 +168,19 @@ export const subscribeBatches = (callback) => {
       if (snapshot.empty) {
         seedDefaultBatchesInFirestore().then(() => callback(DEFAULT_BATCHES));
       } else {
-        const list = snapshot.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: data.name || data.time || "Batch",
-            time: data.time || "",
-            price: Number(data.price) || 0,
-            duration: data.duration || "4 Hours",
-            description: data.description || "",
-            status: data.status || "Active",
-            slotKey: data.slotKey || "custom",
-            ...data,
-          };
+        const list = [];
+        snapshot.docs.forEach((d) => {
+          const { item, needsFirestoreUpdate } = normalizeBatchData(d.id, d.data());
+          list.push(item);
+
+          // Permanently fix and update Firestore if old names exist
+          if (needsFirestoreUpdate) {
+            setDoc(doc(db, BATCHES_COLLECTION, d.id), item, { merge: true }).catch((e) =>
+              console.error("Migration error for batch:", e)
+            );
+          }
         });
-        callback(list);
+        callback(sortBatches(list));
       }
     },
     (err) => {
@@ -130,25 +201,21 @@ export const getBatchesFromFirestore = async () => {
       await seedDefaultBatchesInFirestore();
       return DEFAULT_BATCHES;
     }
-    return snap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        name: data.name || data.time || "Batch",
-        time: data.time || "",
-        price: Number(data.price) || 0,
-        duration: data.duration || "4 Hours",
-        description: data.description || "",
-        status: data.status || "Active",
-        slotKey: data.slotKey || "custom",
-        ...data,
-      };
+    const list = [];
+    snap.docs.forEach((d) => {
+      const { item, needsFirestoreUpdate } = normalizeBatchData(d.id, d.data());
+      list.push(item);
+      if (needsFirestoreUpdate) {
+        setDoc(doc(db, BATCHES_COLLECTION, d.id), item, { merge: true }).catch(() => {});
+      }
     });
+    return sortBatches(list);
   } catch (error) {
     console.error("Error fetching batches:", error);
     return DEFAULT_BATCHES;
   }
 };
+
 
 /**
  * Save / Update a batch in Firestore
