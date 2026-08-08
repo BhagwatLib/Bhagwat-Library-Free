@@ -209,7 +209,7 @@ export const StudentProfile = ({ student, onClose, onUpdate, onEdit }) => {
                       className={clsx(
                         "p-3 rounded-xl border text-xs flex items-center justify-between transition-all",
                         isOccupied
-                          ? "skeuo-dial bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold"
+                          ? "skeuo-card bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold shadow-md"
                           : "skeuo-inset text-slate-400 opacity-60"
                       )}
                     >
