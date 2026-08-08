@@ -71,12 +71,26 @@ The server starts at `http://localhost:5000` by default.
 
 ---
 
-## 🩺 Health Check
+---
 
+## 🩺 Health & Root Checks
+
+### Root URL Check
+```
+GET /
+```
+Response:
+```json
+{
+  "success": true,
+  "message": "Bhagwat Library Backend Running 🚀"
+}
+```
+
+### Health Check (for Render / Koyeb / Railway health monitor)
 ```
 GET /health
 ```
-
 Response:
 ```json
 {
@@ -88,8 +102,6 @@ Response:
   "timestamp": "2026-08-08T17:00:00.000Z"
 }
 ```
-
-Use this URL in your Koyeb / Render / Railway health-check configuration.
 
 ---
 
@@ -122,17 +134,39 @@ Use this URL in your Koyeb / Render / Railway health-check configuration.
 
 ---
 
+## ☁️ Render Deployment Guide
+
+1. In the **Render Dashboard**, click **New +** -> **Web Service**.
+2. Connect your GitHub repository.
+3. Set the **Root Directory**: `backend` (if deploying just the backend folder).
+4. Set the **Build Command**:
+   ```bash
+   npm install && npx puppeteer browsers install chrome
+   ```
+5. Set the **Start Command**:
+   ```bash
+   npm start
+   ```
+6. Set the **Health Check Path**: `/health`
+7. In **Environment Variables**, add:
+   - `NODE_ENV`: `production`
+   - `PORT`: `5000` (Render will override automatically or use default)
+   - `ALLOWED_ORIGINS`: `https://your-frontend.vercel.app` (your frontend domain)
+   - `PUPPETEER_CACHE_DIR`: `/opt/render/.cache/puppeteer` (optional, for persistent browser caching)
+8. Click **Deploy Web Service**.
+
+---
+
 ## ☁️ Koyeb Deployment
 
-1. Push this `backend/` folder to a GitHub repository (or use the monorepo root).
-2. Create a new Koyeb **Web Service** pointing to this repo.
+1. Push this repository to GitHub.
+2. Create a new Koyeb **Web Service**.
 3. Set the **Run command**: `npm start`
-4. Set the **Build command**: `npm install --omit=dev`
+4. Set the **Build command**: `npm install && npx puppeteer browsers install chrome`
 5. Set the **Health check path**: `/health`
-6. Add all required **Environment Variables** from `.env.example` in Koyeb's environment settings.
+6. Add environment variables from `.env.example`.
 7. Set `NODE_ENV=production` and `ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app`.
 
-> ⚠️ WhatsApp (`whatsapp-web.js`) requires a running Puppeteer/Chromium environment. On serverless or ephemeral platforms the session will not persist between restarts. Use a **persistent VPS** (Oracle Cloud Free Tier, DigitalOcean, etc.) for a stable WhatsApp connection.
 
 ---
 

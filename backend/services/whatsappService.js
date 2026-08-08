@@ -49,11 +49,60 @@ function cleanAuthFolder() {
   }
 }
 
+// Helper to detect executable path across local and cloud environments (Render, Koyeb, Linux, etc.)
+function getPuppeteerExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (process.env.CHROME_BIN) {
+    return process.env.CHROME_BIN;
+  }
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
+
+  // Common Linux / Debian / Ubuntu / Render paths
+  const commonLinuxPaths = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    '/usr/bin/chrome',
+  ];
+
+  for (const p of commonLinuxPaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  // If puppeteer provides computeExecutablePath or default path, attempt to check
+  try {
+    const puppeteer = require('puppeteer');
+    if (typeof puppeteer.executablePath === 'function') {
+      const pPath = puppeteer.executablePath();
+      if (pPath && fs.existsSync(pPath)) {
+        return pPath;
+      }
+    }
+  } catch (e) {
+    // Ignore and let puppeteer resolve default
+  }
+
+  return undefined;
+}
+
 // Function to setup Client instance
 function setupClient() {
   logger.info('Setting up whatsapp-web.js client instance...');
   connectionStatus = 'CONNECTING';
   whatsappEvents.emit('status_change', getStatus());
+
+  const executablePath = getPuppeteerExecutablePath();
+  if (executablePath) {
+    logger.info(`Using custom Puppeteer Chromium executable: ${executablePath}`);
+  }
 
   client = new Client({
     authStrategy: new LocalAuth({
@@ -61,11 +110,17 @@ function setupClient() {
     }),
     puppeteer: {
       headless: true,
+      ...(executablePath ? { executablePath } : {}),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
         '--disable-gpu',
+        '--disable-software-rasterizer',
         '--disable-extensions',
       ],
     },

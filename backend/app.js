@@ -74,7 +74,17 @@ app.set('trust proxy', 1);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ---------------------------------------------------------------------------
-// Health check — required by Koyeb and other platforms
+// Root status endpoint
+// ---------------------------------------------------------------------------
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Bhagwat Library Backend Running 🚀',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Health check — required by Koyeb, Render, Railway and other platforms
 // ---------------------------------------------------------------------------
 app.get('/health', (req, res) => {
   res.status(200).json({
