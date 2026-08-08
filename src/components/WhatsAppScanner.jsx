@@ -159,33 +159,35 @@ export const WhatsAppScanner = () => {
       )}
 
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800/80 p-5 rounded-2xl">
+      <div className="skeuo-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" withGrip>
         <div className="flex items-center space-x-3.5">
           <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-lg ${
+            className={clsx(
+              "skeuo-dial w-12 h-12 flex items-center justify-center",
               isConnected
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
+                ? "text-emerald-500 glow-cyan"
                 : isConnecting
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse"
-                : "bg-slate-800 border-slate-700 text-slate-400"
-            }`}
+                ? "text-amber-500 glow-amber animate-pulse"
+                : "text-slate-400"
+            )}
           >
             {isConnected ? (
-              <Wifi size={24} className="animate-pulse" />
+              <Wifi size={22} className="animate-pulse" />
             ) : isConnecting ? (
-              <RotateCcw size={24} className="animate-spin" />
+              <RotateCcw size={22} className="animate-spin" />
             ) : (
-              <WifiOff size={24} />
+              <WifiOff size={22} />
             )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white tracking-tight">
+              <h2 className="text-base font-extrabold text-slate-800 dark:text-white tracking-tight uppercase">
                 WhatsApp Web Gateway
               </h2>
               <Badge
+                dot
                 variant={isConnected ? "success" : isConnecting ? "warning" : "danger"}
-                className="text-[10px] px-2.5 py-0.5"
+                className="text-[10px]"
               >
                 {isConnected
                   ? "Connected & Active"
@@ -196,8 +198,8 @@ export const WhatsAppScanner = () => {
                   : "Disconnected"}
               </Badge>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Automated invoice dispatch, student renewal alerts & daily book reminders
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Automated invoice dispatch, student renewal alerts & daily library notices
             </p>
           </div>
         </div>
@@ -207,20 +209,20 @@ export const WhatsAppScanner = () => {
           <button
             onClick={() => handleRefreshQR(false)}
             disabled={actionLoading}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            className="skeuo-btn px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
             title="Request new QR code"
           >
-            <RefreshCw size={14} className={actionLoading ? "animate-spin" : ""} />
+            <RefreshCw size={13} className={actionLoading ? "animate-spin" : ""} />
             <span>Refresh QR</span>
           </button>
 
           <button
             onClick={handleReconnect}
             disabled={actionLoading}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-blue-600/25 transition-all active:scale-95 disabled:opacity-50"
+            className="skeuo-btn skeuo-btn-primary px-4 py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
             title="Reconnect preserving saved session"
           >
-            <RotateCcw size={14} className={actionLoading ? "animate-spin" : ""} />
+            <RotateCcw size={13} className={actionLoading ? "animate-spin" : ""} />
             <span>Reconnect</span>
           </button>
         </div>
@@ -230,24 +232,25 @@ export const WhatsAppScanner = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: QR Area or Connected Success Card */}
         <div className="lg:col-span-2 space-y-4">
-          <SaaSCard className="p-6 md:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[380px]">
+          <SaaSCard className="p-6 md:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[380px]" withGrip>
             {isConnected ? (
               /* CONNECTED STATE */
               <div className="space-y-5 max-w-md py-4 animate-in fade-in zoom-in-95 duration-300">
-                <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/20">
-                  <CheckCircle2 size={44} />
+                <div className="skeuo-dial w-20 h-20 text-emerald-500 glow-cyan mx-auto">
+                  <CheckCircle2 size={40} />
                 </div>
 
                 <div className="space-y-1.5">
-                  <h3 className="text-xl font-extrabold text-white">
+                  <h3 className="text-lg font-black text-slate-800 dark:text-white">
                     WhatsApp Connected Successfully!
                   </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Your session is actively saved with <code className="text-blue-400 font-semibold">LocalAuth</code>. You will remain connected across server restarts.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Your session is actively saved with <code className="text-blue-500 dark:text-cyan-400 font-bold">LocalAuth</code>. You will remain connected across server restarts.
                   </p>
                 </div>
 
-                <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 text-left space-y-2.5 text-xs">
+                <div className="skeuo-inset p-4 text-left space-y-2.5 text-xs">
+
                   <div className="flex items-center justify-between text-slate-400">
                     <span className="flex items-center gap-1.5">
                       <Smartphone size={14} className="text-blue-400" /> Account:

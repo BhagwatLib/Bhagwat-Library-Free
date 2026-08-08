@@ -135,11 +135,11 @@ export const CommunicationHistory = () => {
     <div className="space-y-6 pb-12">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <MessageSquare className="text-blue-500" size={26} /> Communication History
+        <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+          Communication History <span className="jewel-dot cyan" />
         </h1>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Realtime dispatch history of student payment invoices and WhatsApp due alerts
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Realtime dispatch ledger of student payment invoices and WhatsApp renewal notices
         </p>
       </div>
 
@@ -148,7 +148,7 @@ export const CommunicationHistory = () => {
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           {/* Search bar */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               placeholder="Search logs by student, phone, seat..."
@@ -157,7 +157,7 @@ export const CommunicationHistory = () => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500"
+              className="skeuo-input w-full pl-10 pr-4 py-2.5 text-xs font-medium placeholder:text-slate-400"
             />
           </div>
 
@@ -171,10 +171,10 @@ export const CommunicationHistory = () => {
                   setCurrentPage(1);
                 }}
                 className={clsx(
-                  "px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
+                  "skeuo-badge px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all rounded-xl cursor-pointer",
                   typeFilter === t
-                    ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-blue-600 dark:bg-cyan-500/20 text-blue-700 dark:text-cyan-300 border border-blue-400/40 font-extrabold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 )}
               >
                 {t}
@@ -184,8 +184,8 @@ export const CommunicationHistory = () => {
         </div>
 
         {/* Time filters */}
-        <div className="flex items-center gap-2 border-t border-slate-800/60 pt-3">
-          <span className="text-xs text-slate-400 flex items-center gap-1">
+        <div className="flex items-center gap-2 border-t border-slate-200 dark:border-slate-800/60 pt-3">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1">
             <Calendar size={13} /> Timeframe:
           </span>
           {["All", "Today", "This Week", "This Month"].map((d) => (
@@ -196,10 +196,10 @@ export const CommunicationHistory = () => {
                 setCurrentPage(1);
               }}
               className={clsx(
-                "px-2.5 py-1 rounded-lg text-xs font-medium transition-all",
+                "px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 dateFilter === d
-                  ? "bg-slate-800 text-white border border-slate-700"
-                  : "text-slate-500 hover:text-slate-300"
+                  ? "skeuo-dial text-blue-600 dark:text-cyan-400 border border-blue-500/30 px-3"
+                  : "text-slate-500 hover:text-slate-800 dark:hover:text-white"
               )}
             >
               {d}
@@ -210,75 +210,69 @@ export const CommunicationHistory = () => {
 
       {/* DESKTOP TABLE VIEW */}
       <div className="hidden lg:block">
-        <div className="mb-3 text-xs text-slate-400 font-medium">
-          Showing {filteredLogs.length} logged communication entries
+        <div className="mb-3 text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+          Ledger contains {filteredLogs.length} logged events
         </div>
 
-        <SaaSCard className="overflow-hidden">
-          <div className="overflow-x-auto custom-scrollbar">
+        <SaaSCard className="overflow-hidden p-0" withGrip>
+          <div className="overflow-x-auto custom-scrollbar p-2">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <thead className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                 <tr>
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Phone Number</th>
-                  <th className="px-6 py-4 text-center">Seat</th>
-                  <th className="px-6 py-4">Batch</th>
-                  <th className="px-6 py-4">Message Type</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Time</th>
-                  <th className="px-6 py-4 text-right">Action</th>
+                  <th className="px-5 py-3.5">Student</th>
+                  <th className="px-5 py-3.5">Phone Number</th>
+                  <th className="px-5 py-3.5 text-center">Seat</th>
+                  <th className="px-5 py-3.5">Batch</th>
+                  <th className="px-5 py-3.5">Message Type</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5">Date</th>
+                  <th className="px-5 py-3.5">Time</th>
+                  <th className="px-5 py-3.5 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
                 {paginatedLogs.map((log) => {
                   const isInv = log.messageType === "invoice";
                   const isSuccess = log.status === "sent" || log.status === "success";
                   const dt = formatDateTime(log.createdAt || log.sentAt);
 
                   return (
-                    <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="px-6 py-4 font-bold text-white">
+                    <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-slate-800 dark:text-white">
                         {log.studentName}
                       </td>
-                      <td className="px-6 py-4 text-slate-400 font-medium">
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-medium">
                         {log.phone}
                       </td>
-                      <td className="px-6 py-4 text-center font-semibold text-slate-200">
-                        {log.seatNumber ? `#${log.seatNumber}` : "N/A"}
+                      <td className="px-5 py-3.5 text-center font-bold text-slate-800 dark:text-white">
+                        {log.seatNumber ? `#${log.seatNumber}` : "None"}
                       </td>
-                      <td className="px-6 py-4 text-slate-300">
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300 font-medium">
                         {log.batch || "N/A"}
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={isInv ? "success" : "warning"}>
-                          <span className="flex items-center gap-1">
-                            {isInv ? <FileText size={10} /> : <Bell size={10} />}
-                            {isInv ? "Invoice" : "Reminder"}
-                          </span>
+                      <td className="px-5 py-3.5">
+                        <Badge dot variant={isInv ? "success" : "warning"}>
+                          {isInv ? "Invoice" : "Reminder"}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={isSuccess ? "success" : "danger"}>
-                          <span className="flex items-center gap-1">
-                            {isSuccess ? <CheckCircle size={10} /> : <XCircle size={10} />}
-                            {isSuccess ? "Sent" : "Failed"}
-                          </span>
+                      <td className="px-5 py-3.5">
+                        <Badge dot variant={isSuccess ? "success" : "danger"}>
+                          {isSuccess ? "Sent" : "Failed"}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-slate-400">
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                         {dt.date}
                       </td>
-                      <td className="px-6 py-4 text-slate-400">
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                         {dt.time}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-5 py-3.5 text-right">
                         <button
                           onClick={() => setSelectedLog(log)}
-                          className="p-1.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-colors"
+                          className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-cyan-400"
                           title="View Details"
                         >
-                          <Eye size={14} />
+                          <Eye size={13} />
                         </button>
                       </td>
                     </tr>
@@ -287,7 +281,7 @@ export const CommunicationHistory = () => {
 
                 {paginatedLogs.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-slate-500 italic">
+                    <td colSpan={9} className="px-5 py-12 text-center text-slate-500 italic">
                       No communication records found.
                     </td>
                   </tr>
@@ -296,7 +290,7 @@ export const CommunicationHistory = () => {
             </table>
           </div>
 
-          <div className="p-4 border-t border-slate-800">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -311,8 +305,8 @@ export const CommunicationHistory = () => {
 
       {/* MOBILE LIST */}
       <div className="block lg:hidden space-y-3">
-        <div className="mb-1 text-xs text-slate-400 font-medium">
-          Showing {filteredLogs.length} logged communication entries
+        <div className="mb-1 text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+          Log contains {filteredLogs.length} entries
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -322,37 +316,37 @@ export const CommunicationHistory = () => {
             const dt = formatDateTime(log.createdAt || log.sentAt);
 
             return (
-              <SaaSCard key={log.id} className="p-4 space-y-3">
+              <SaaSCard key={log.id} className="p-4 space-y-3" withGrip>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="font-bold text-white text-sm">{log.studentName}</h4>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">{log.studentName}</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5">{log.phone}</p>
                   </div>
-                  <Badge variant={isSuccess ? "success" : "danger"}>
+                  <Badge dot variant={isSuccess ? "success" : "danger"}>
                     {isSuccess ? "Sent" : "Failed"}
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center py-2 border-t border-b border-slate-800/60 bg-slate-950 p-2.5 rounded-xl text-[11px]">
+                <div className="grid grid-cols-3 gap-2 text-center py-2 bg-slate-200/50 dark:bg-slate-950 p-2.5 rounded-xl text-[11px] skeuo-inset">
                   <div>
                     <p className="text-slate-400">Seat</p>
-                    <p className="font-bold text-white mt-0.5">{log.seatNumber ? `#${log.seatNumber}` : "None"}</p>
+                    <p className="font-bold text-slate-800 dark:text-white mt-0.5">{log.seatNumber ? `#${log.seatNumber}` : "None"}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Type</p>
-                    <p className="font-bold text-blue-400 mt-0.5 capitalize">{log.messageType}</p>
+                    <p className="font-bold text-blue-600 dark:text-cyan-400 mt-0.5 capitalize">{log.messageType}</p>
                   </div>
                   <div>
                     <p className="text-slate-400">Time</p>
-                    <p className="font-semibold text-slate-300 mt-0.5">{dt.time}</p>
+                    <p className="font-semibold text-slate-600 dark:text-slate-355 mt-0.5">{dt.time}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
+                <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-1">
                   <span>{dt.date}</span>
                   <button
                     onClick={() => setSelectedLog(log)}
-                    className="text-blue-400 font-bold flex items-center gap-1"
+                    className="text-blue-600 dark:text-cyan-400 font-bold flex items-center gap-1"
                   >
                     <Eye size={12} /> View Details
                   </button>
@@ -382,54 +376,58 @@ export const CommunicationHistory = () => {
 
       {/* Log Details Modal */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="font-bold text-white text-base">Log Details</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+          <div className="skeuo-card w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-slate-800 dark:text-white text-sm uppercase tracking-wider flex items-center gap-1.5">
+                Log Entry Details <span className="jewel-dot cyan" />
+              </h3>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-slate-400 hover:text-white"
+                className="skeuo-dial w-7 h-7 text-slate-400 hover:text-white"
               >
-                <X size={18} />
+                <X size={14} />
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
+            <div className="space-y-3.5 text-xs skeuo-inset p-4">
               <div className="flex justify-between">
-                <span className="text-slate-400">Student Name:</span>
-                <span className="font-bold text-white">{selectedLog.studentName}</span>
+                <span className="text-slate-550">Student Name:</span>
+                <span className="font-bold text-slate-800 dark:text-white">{selectedLog.studentName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Phone:</span>
-                <span className="font-medium text-white">{selectedLog.phone}</span>
+                <span className="text-slate-550">Phone:</span>
+                <span className="font-semibold text-slate-800 dark:text-white">{selectedLog.phone}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Seat Number:</span>
-                <span className="font-bold text-white">{selectedLog.seatNumber ? `#${selectedLog.seatNumber}` : "None"}</span>
+                <span className="text-slate-550">Seat Number:</span>
+                <span className="font-bold text-slate-800 dark:text-white">{selectedLog.seatNumber ? `#${selectedLog.seatNumber}` : "None"}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Assigned Batch:</span>
-                <span className="font-medium text-white">{selectedLog.batch}</span>
+                <span className="text-slate-550">Assigned Batch:</span>
+                <span className="font-semibold text-slate-800 dark:text-white">{selectedLog.batch}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Type:</span>
-                <span className="font-bold text-blue-400 capitalize">{selectedLog.messageType}</span>
+                <span className="text-slate-550">Message Type:</span>
+                <Badge dot variant={selectedLog.messageType === "invoice" ? "success" : "warning"}>
+                  {selectedLog.messageType}
+                </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Delivery Status:</span>
-                <Badge variant={selectedLog.status === "sent" || selectedLog.status === "success" ? "success" : "danger"}>
+                <span className="text-slate-550">Delivery Status:</span>
+                <Badge dot variant={selectedLog.status === "sent" || selectedLog.status === "success" ? "success" : "danger"}>
                   {selectedLog.status}
                 </Badge>
               </div>
-              <div className="flex justify-between border-t border-slate-800 pt-3">
-                <span className="text-slate-400">Sent Date:</span>
-                <span className="text-white font-medium">
+              <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-3">
+                <span className="text-slate-550">Sent Date:</span>
+                <span className="text-slate-800 dark:text-white font-bold">
                   {formatDateTime(selectedLog.createdAt || selectedLog.sentAt).date}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Sent Time:</span>
-                <span className="text-white font-medium">
+                <span className="text-slate-550">Sent Time:</span>
+                <span className="text-slate-800 dark:text-white font-bold">
                   {formatDateTime(selectedLog.createdAt || selectedLog.sentAt).time}
                 </span>
               </div>
@@ -438,9 +436,9 @@ export const CommunicationHistory = () => {
             <div className="pt-2">
               <button
                 onClick={() => setSelectedLog(null)}
-                className="w-full bg-slate-850 hover:bg-slate-800 text-slate-300 font-semibold py-2.5 rounded-xl border border-slate-800"
+                className="skeuo-btn w-full py-2.5 text-xs font-bold"
               >
-                Close
+                Close details
               </button>
             </div>
           </div>

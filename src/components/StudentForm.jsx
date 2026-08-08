@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Camera, Loader2, AlertTriangle, Lock, Filter } from "lucide-react";
+import { X, Save, Camera, Loader2, AlertTriangle, Lock, Filter, Armchair, User } from "lucide-react";
 import { clsx } from "clsx";
 import { saveStudent, getStudents } from "../utils/store";
 import { subscribeBatches } from "../services/batchesService";
 import { subscribeStudents } from "../services/studentsService";
 import { checkSeatConflict, getSlotsFromBatch, BASE_SLOTS } from "../utils/seatLogic";
 import { CameraCapture } from "./CameraCapture";
-
+import { SaaSCard } from "./SaaSCard";
+import { Badge } from "./Badge";
 
 export const StudentForm = ({
   student,
@@ -248,78 +249,64 @@ export const StudentForm = ({
 
     setFormData((prev) => {
       const updates = {};
-      if (prev.status !== status) {
-        updates.status = status;
-      }
+      if (prev.status !== status) updates.status = status;
       return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
     });
   }, [formData.paidAmount, formData.totalAmount]);
 
-  // Sync validityTo automatically whenever validityFrom is changed by user
-  useEffect(() => {
-    if (formData.validityFrom) {
-      const fromDate = new Date(formData.validityFrom);
-      if (!isNaN(fromDate.getTime())) {
-        const toDate = new Date(fromDate);
-        toDate.setMonth(toDate.getMonth() + 1);
-        const newToDateStr = toDate.toISOString().split("T")[0];
-        if (formData.validityTo !== newToDateStr) {
-          setFormData((prev) => ({ ...prev, validityTo: newToDateStr }));
-        }
-      }
-    }
-  }, [formData.validityFrom]);
-
-  // Handle batch selection with "All Shift" auto-grant
+  // Toggle shift selection
   const handleBatchToggle = (batchName) => {
-    const isAll =
-      batchName === "All Shift" ||
-      batchName === "All Batch" ||
-      batchName === "All" ||
-      (allShiftBatch && batchName === allShiftBatch.name);
+    if (mode === "payment") return;
 
-    setFormData((prev) => {
-      let currentBatches = [...prev.batch];
+    // Check if clicked "All Shift"
+    const isClickingAll =
+      String(batchName).toLowerCase() === "all shift" ||
+      String(batchName).toLowerCase() === "all batch" ||
+      String(batchName).toLowerCase() === "all";
 
-      if (isAll) {
-        const alreadyHasAll = isAllShiftSelected;
-        if (alreadyHasAll) {
-          // Deselect all
-          return { ...prev, batch: [] };
-        } else {
-          // Select All Shift: includes all available individual shifts
-          const shiftNames = individualShifts.map((s) => s.name);
-          const allName = allShiftBatch ? allShiftBatch.name : "All Shift";
-          return {
-            ...prev,
-            batch: [allName, ...shiftNames],
-          };
-        }
+    if (isClickingAll) {
+      if (isAllShiftSelected) {
+        // Deselect All Shift
+        setFormData((prev) => ({ ...prev, batch: [] }));
       } else {
-        // Individual shift toggle
-        const exists = currentBatches.includes(batchName);
-        if (exists) {
-          currentBatches = currentBatches.filter(
-            (b) => b !== batchName && b !== "All Shift" && b !== "All Batch" && b !== "All"
-          );
-        } else {
-          currentBatches.push(batchName);
-        }
-        return { ...prev, batch: currentBatches };
+        // Select All Shift: include All Shift and all individual shifts
+        const allNames = individualShifts.map((b) => b.name);
+        setFormData((prev) => ({
+          ...prev,
+          batch: ["All Shift", ...allNames],
+        }));
       }
-    });
+      return;
+    }
+
+    // Clicking an individual shift
+    let nextBatches = [...formData.batch].filter(
+      (b) => b !== "All Shift" && b !== "All Batch" && b !== "All"
+    );
+
+    if (nextBatches.includes(batchName)) {
+      nextBatches = nextBatches.filter((b) => b !== batchName);
+    } else {
+      nextBatches.push(batchName);
+    }
+
+    // If user manually selected every individual shift, also activate All Shift
+    if (
+      individualShifts.length > 0 &&
+      individualShifts.every((s) => nextBatches.includes(s.name))
+    ) {
+      nextBatches.push("All Shift");
+    }
+
+    setFormData((prev) => ({ ...prev, batch: nextBatches }));
   };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 500 * 1024) {
-        alert("File size too large. Please select an image under 500KB.");
-        return;
-      }
       const reader = new FileReader();
       reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, photo: reader.result }));
+        setFormData({ ...formData, photo: reader.result });
       };
       reader.readAsDataURL(file);
     }
@@ -327,23 +314,10 @@ export const StudentForm = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Re-validate against fresh Firestore state before saving
-    if (formData.seatNumber > 0 && formData.batch.length > 0 && formData.seatNumber !== student?.seatNumber) {
-      const freshStudents = await getStudents();
-      const res = checkSeatConflict(
-        formData.seatNumber,
-        formData.batch,
-        student?.id,
-        freshStudents
-      );
-      if (res.conflict) {
-        setConflictWarning(res.message || "This seat is already occupied in the selected shift.");
-        alert(res.message || "This seat is already occupied in the selected shift.");
-        return;
-      }
+    if (conflictWarning) {
+      alert(conflictWarning);
+      return;
     }
-
     setIsSubmitting(true);
     try {
       const data = {
@@ -370,31 +344,36 @@ export const StudentForm = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto custom-scrollbar">
-        <div className="flex items-center justify-between p-5 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
-          <h2 className="text-base font-bold text-white">
-            {mode === "payment"
-              ? "Edit Payment Details"
-              : student
-              ? "Edit Student"
-              : "Add New Student"}
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="skeuo-card w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-[var(--card-bg)] sticky top-0 z-20">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">
+              {mode === "payment"
+                ? "Edit Payment Details"
+                : student
+                ? "Edit Student Record"
+                : "Add New Student"}
+            </h2>
+            <span className="jewel-dot cyan" />
+          </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white transition-colors"
+            className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           >
-            <X size={20} />
+            <X size={14} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
           {/* Photo Section */}
-          <div className="flex justify-center mb-2">
+          <div className="flex justify-center mb-1">
             <div className="relative group">
               <div
                 className={clsx(
-                  "w-20 h-20 rounded-full overflow-hidden bg-slate-800 border-2 border-slate-700 flex items-center justify-center transition-all",
+                  "skeuo-dial w-20 h-20 overflow-hidden border-2 border-slate-300 dark:border-slate-700",
                   mode === "personal" && "group-hover:border-blue-500"
                 )}
               >
@@ -402,12 +381,10 @@ export const StudentForm = ({
                   <img
                     src={formData.photo}
                     alt="Preview"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-full"
                   />
                 ) : (
-                  <div className="text-slate-500 text-xs text-center px-2">
-                    No Photo
-                  </div>
+                  <User size={30} className="text-slate-400" />
                 )}
               </div>
 
@@ -423,10 +400,10 @@ export const StudentForm = ({
                   <button
                     type="button"
                     onClick={() => setIsCameraOpen(true)}
-                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg border-2 border-slate-900 hover:scale-110 active:scale-95 transition-all z-20"
+                    className="skeuo-dial absolute -bottom-1 -right-1 w-8 h-8 bg-blue-600 text-white shadow-lg hover:scale-110 active:scale-95 z-20"
                     title="Take photo with camera"
                   >
-                    <Camera size={14} />
+                    <Camera size={13} />
                   </button>
                 </>
               )}
@@ -434,14 +411,15 @@ export const StudentForm = ({
           </div>
 
           {conflictWarning && (
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2">
-              <AlertTriangle size={16} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 dark:text-rose-300 text-xs flex items-start gap-2">
+              <AlertTriangle size={15} className="text-rose-500 flex-shrink-0 mt-0.5" />
               <span>{conflictWarning}</span>
             </div>
           )}
 
+          {/* Full Name */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">
+            <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
               Full Name
             </label>
             <input
@@ -449,11 +427,9 @@ export const StudentForm = ({
               required
               readOnly={mode === "payment"}
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className={clsx(
-                "w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all",
+                "skeuo-input w-full px-4 py-2.5 text-xs font-medium",
                 mode === "payment" && "opacity-60 cursor-not-allowed"
               )}
               placeholder="e.g. Rahul Sharma"
@@ -463,31 +439,27 @@ export const StudentForm = ({
           {mode === "personal" && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                   Phone Number
                 </label>
                 <input
                   type="tel"
                   required
                   value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                   placeholder="e.g. 9876543210"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                   Address
                 </label>
                 <textarea
                   required
                   value={formData.address}
-                  onChange={(e) =>
-                    setFormData({ ...formData, address: e.target.value })
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none h-16"
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="skeuo-input w-full px-4 py-2 text-xs font-medium resize-none h-16"
                   placeholder="e.g. Main Road, City"
                 />
               </div>
@@ -497,122 +469,110 @@ export const StudentForm = ({
           {/* DYNAMIC SHIFT SELECTION FROM BATCHES SECTION */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-xs font-semibold text-slate-400">
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Select Shift(s)
               </label>
               {isAllShiftSelected && (
-                <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
-                  ⭐ All Shift Selected (Access to All Shifts)
+                <span className="text-[10px] text-amber-500 font-extrabold flex items-center gap-1">
+                  ⭐ All Shift Selected
                 </span>
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {/* Top Option: All Shift Batch */}
               {allShiftBatch && (
-                <label
+                <div
+                  onClick={() => mode !== "payment" && handleBatchToggle(allShiftBatch.name)}
                   className={clsx(
-                    "flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer",
+                    "skeuo-card p-3 flex items-center justify-between cursor-pointer transition-all rounded-xl",
                     isAllShiftSelected
-                      ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-blue-500/50 text-white font-bold shadow-md shadow-blue-500/10"
-                      : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300",
+                      ? "ring-2 ring-blue-500 bg-blue-50/20"
+                      : "opacity-85 hover:opacity-100",
                     mode === "payment" && "opacity-60 cursor-not-allowed"
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    disabled={mode === "payment"}
-                    checked={isAllShiftSelected}
-                    onChange={() => handleBatchToggle(allShiftBatch.name)}
-                    className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
-                  />
-                  <div className="flex-1 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className={clsx("skeuo-dial w-6 h-6 text-xs font-black", isAllShiftSelected ? "text-blue-600 dark:text-cyan-400" : "text-slate-400")}>
+                      {isAllShiftSelected ? "✓" : "○"}
+                    </span>
                     <div>
-                      <span className="font-bold flex items-center gap-1.5 text-sm">
+                      <span className="font-extrabold text-xs text-slate-800 dark:text-white block">
                         ⭐ {allShiftBatch.name}
                       </span>
-                      <span className="text-[11px] text-slate-400 block mt-0.5">
-                        Full access to all library shifts ({allShiftBatch.time || "All Day"})
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        Full access to all shifts ({allShiftBatch.time || "All Day"})
                       </span>
                     </div>
-                    <span className="font-bold text-emerald-400 text-sm">₹{allShiftBatch.price}</span>
                   </div>
-                </label>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
+                    ₹{allShiftBatch.price}
+                  </span>
+                </div>
               )}
 
               {/* Individual Shifts */}
-              {individualShifts.map((b) => {
-                const isChecked =
-                  formData.batch.includes(b.name) ||
-                  formData.batch.includes(b.time) ||
-                  isAllShiftSelected;
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {individualShifts.map((b) => {
+                  const isChecked =
+                    formData.batch.includes(b.name) ||
+                    formData.batch.includes(b.time) ||
+                    isAllShiftSelected;
 
-                const isDisabled = mode === "payment" || isAllShiftSelected;
-
-                return (
-                  <label
-                    key={b.id || b.name}
-                    className={clsx(
-                      "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
-                      isChecked
-                        ? "bg-blue-500/10 border-blue-500/40 text-blue-300 font-semibold"
-                        : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-400",
-                      isDisabled && "opacity-60 cursor-not-allowed"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      disabled={isDisabled}
-                      checked={isChecked}
-                      onChange={() => handleBatchToggle(b.name)}
-                      className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
-                    />
-                    <div className="flex-1 flex items-center justify-between text-xs">
-                      <span className="font-bold">
-                        {b.name} <span className="font-normal text-slate-400">({b.time})</span>
+                  return (
+                    <div
+                      key={b.id || b.name}
+                      onClick={() => mode !== "payment" && !isAllShiftSelected && handleBatchToggle(b.name)}
+                      className={clsx(
+                        "skeuo-card p-2.5 flex items-center justify-between cursor-pointer transition-all rounded-xl",
+                        isChecked
+                          ? "ring-2 ring-blue-500/80"
+                          : "opacity-80 hover:opacity-100",
+                        (mode === "payment" || isAllShiftSelected) && "cursor-not-allowed"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className={clsx("skeuo-dial w-5 h-5 text-[10px] font-bold", isChecked ? "text-blue-600 dark:text-cyan-400" : "text-slate-400")}>
+                          {isChecked ? "✓" : "○"}
+                        </span>
+                        <span className="font-bold text-xs text-slate-800 dark:text-white truncate">
+                          {b.name}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs ml-1">
+                        ₹{b.price}
                       </span>
-                      <span className="font-semibold text-emerald-400">₹{b.price}</span>
                     </div>
-                  </label>
-                );
-              })}
-
-              {displayBatches.length === 0 && (
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-500 text-xs">
-                  No shifts found. Please create shifts in the Batches section.
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          {/* REDESIGNED SEAT ALLOCATION UI (🟢 A01, 🔒 A03) */}
-          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+          {/* SKEUOMORPHIC 100-SEAT ALLOCATION MATRIX */}
+          <div className="skeuo-inset p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <label className="text-xs font-bold text-white flex items-center gap-1.5">
-                  Seat Allocation
+                <label className="text-[11px] font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Armchair size={13} className="text-blue-500" /> Seat Matrix
                   {formData.seatNumber > 0 && (
-                    <span className="text-blue-400 font-semibold text-[11px]">
-                      (Selected: {seatOccupancyMap[formData.seatNumber]?.seatCode || `Seat #${formData.seatNumber}`})
+                    <span className="text-blue-600 dark:text-cyan-400 font-extrabold text-[11px]">
+                      (Seat #{formData.seatNumber})
                     </span>
                   )}
                 </label>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
                   {formData.batch.length > 0
                     ? isAllShiftSelected
-                      ? "All Shifts allocated • Select any vacant seat"
+                      ? "All Shifts active • Choose any vacant seat"
                       : `Checking availability for: ${formData.batch.join(", ")}`
-                    : "Select a shift above to see live seat availability"}
+                    : "Select a shift above to check availability"}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px]">
-                <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                  🟢 Available
-                </span>
-                <span className="flex items-center gap-1 text-slate-500 font-semibold">
-                  🔒 Occupied
-                </span>
+              <div className="flex items-center gap-2 text-[10px] font-bold">
+                <span className="text-emerald-600 dark:text-emerald-400">🟢 Free</span>
+                <span className="text-slate-400">🔒 Taken</span>
               </div>
             </div>
 
@@ -623,7 +583,7 @@ export const StudentForm = ({
                 value={formData.seatNumber}
                 onChange={(e) => setFormData({ ...formData, seatNumber: Number(e.target.value) })}
                 className={clsx(
-                  "w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium",
+                  "skeuo-input w-full px-3 py-2 text-xs font-semibold",
                   mode === "payment" && "opacity-60 cursor-not-allowed"
                 )}
               >
@@ -644,26 +604,26 @@ export const StudentForm = ({
               </select>
             </div>
 
-            {/* FULL 100-SEAT VISUAL GRID (🟢 A01, 🔒 A03) - ALL SEATS ALWAYS VISIBLE */}
+            {/* 100-SEAT VISUAL MATRIX PODS */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Visual Seat Map (100 Seats)</span>
+              <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                <span>Visual Map (1 - 100)</span>
                 <button
                   type="button"
                   disabled={mode === "payment"}
                   onClick={() => setFormData({ ...formData, seatNumber: 0 })}
                   className={clsx(
-                    "px-2.5 py-0.5 rounded-lg text-[10px] font-semibold border transition-all",
+                    "skeuo-badge px-2.5 py-0.5 text-[9px] font-bold cursor-pointer transition-all",
                     formData.seatNumber === 0
-                      ? "bg-blue-600 border-blue-400 text-white font-bold"
-                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                      ? "bg-blue-600 text-blue-700 dark:text-cyan-300 border-blue-400"
+                      : "text-slate-500"
                   )}
                 >
-                  Unassign Seat (None)
+                  Clear Selection
                 </button>
               </div>
 
-              <div className="max-h-48 overflow-y-auto custom-scrollbar p-2 bg-slate-900/60 rounded-2xl border border-slate-800/80">
+              <div className="max-h-40 overflow-y-auto custom-scrollbar p-2 rounded-xl skeuo-inset">
                 <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5">
                   {Object.values(seatOccupancyMap).map((seat) => {
                     const isSelected = formData.seatNumber === seat.seatNumber;
@@ -684,52 +644,40 @@ export const StudentForm = ({
                             : `${seat.seatCode}: Available`
                         }
                         className={clsx(
-                          "h-10 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center transition-all relative group",
+                          "h-9 rounded-lg text-[10px] font-extrabold flex flex-col items-center justify-center transition-all cursor-pointer",
                           isSelected
-                            ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30 scale-105 z-10"
+                            ? "skeuo-btn skeuo-btn-primary scale-105 z-10"
                             : isOccupied
-                            ? "bg-slate-950/80 border-slate-800 text-slate-600 cursor-not-allowed opacity-60"
-                            : "bg-emerald-950/30 border-emerald-500/30 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-900/40 active:scale-95"
+                            ? "skeuo-inset text-slate-400 opacity-50 cursor-not-allowed"
+                            : "skeuo-dial text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:border-emerald-400"
                         )}
                       >
-                        <span className="flex items-center gap-0.5 text-[10px] leading-tight">
-                          {isSelected ? "🔵" : isOccupied ? "🔒" : "🟢"}
+                        <span className="text-[9px] leading-none font-mono">
+                          {isSelected ? "🔵" : isOccupied ? "🔒" : seat.seatCode}
                         </span>
-                        <span className="text-[10px] font-mono leading-tight">{seat.seatCode}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
             </div>
-
-            {/* Selected Seat Confirmation Strip */}
-            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
-              <span className="text-slate-400">Selected Allocation:</span>
-              <span className="font-bold text-white">
-                {formData.seatNumber > 0
-                  ? `🟢 ${seatOccupancyMap[formData.seatNumber]?.seatCode || `Seat #${formData.seatNumber}`}`
-                  : "None (Unassigned)"}
-              </span>
-            </div>
           </div>
-
 
           {/* Financials & Dates */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                 Total Fee (₹)
               </label>
               <input
                 type="number"
                 readOnly
                 value={formData.totalAmount}
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2 text-slate-400 text-xs cursor-not-allowed font-semibold"
+                className="skeuo-input w-full px-3 py-2 text-xs font-black opacity-80 cursor-not-allowed"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1">
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                 Paid Amount (₹)
               </label>
               <input
@@ -737,73 +685,62 @@ export const StudentForm = ({
                 required
                 min="0"
                 value={formData.paidAmount}
-                onChange={(e) =>
-                  setFormData({ ...formData, paidAmount: e.target.value })
-                }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(e) => setFormData({ ...formData, paidAmount: e.target.value })}
+                className="skeuo-input w-full px-3 py-2 text-xs font-semibold"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
-                <span>Validity From</span>
-                <span className="text-[9px] text-emerald-400 font-normal">Auto Today</span>
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                <span>Admission Date</span>
               </label>
               <input
                 type="date"
                 required
-                value={formData.validityFrom}
-                onChange={(e) =>
-                  setFormData({ ...formData, validityFrom: e.target.value })
-                }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                value={formData.admissionDate}
+                onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
+                className="skeuo-input w-full px-3 py-2 text-xs font-medium"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
-                <span>Validity To</span>
-                <span className="text-[9px] text-emerald-400 font-normal">+1 Month</span>
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider flex items-center justify-between">
+                <span>Validity Expiry</span>
               </label>
               <input
                 type="date"
                 required
                 value={formData.validityTo}
-                onChange={(e) =>
-                  setFormData({ ...formData, validityTo: e.target.value })
-                }
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                onChange={(e) => setFormData({ ...formData, validityTo: e.target.value })}
+                className="skeuo-input w-full px-3 py-2 text-xs font-medium"
               />
             </div>
           </div>
 
-          <div className="bg-slate-950/60 rounded-xl p-3 flex items-center justify-between border border-slate-800 text-xs">
+          {/* Ledger Balance Preview */}
+          <div className="skeuo-inset p-3 flex items-center justify-between text-xs">
             <div>
-              <span className="text-slate-500">Status: </span>
-              <span
-                className={clsx(
-                  "font-bold ml-1",
-                  formData.status === "Paid" ? "text-emerald-400" : "text-rose-400"
-                )}
-              >
+              <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Status: </span>
+              <Badge dot variant={formData.status === "Paid" ? "success" : formData.status === "Partial" ? "warning" : "danger"}>
                 {formData.status}
-              </span>
+              </Badge>
             </div>
             <div>
-              <span className="text-slate-500">Balance: </span>
-              <span className="font-bold text-white ml-1">₹{restFee}</span>
+              <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider">Balance Due: </span>
+              <span className="font-extrabold text-slate-800 dark:text-white ml-1">₹{restFee}</span>
             </div>
           </div>
 
+          {/* Actions */}
           <div className="pt-2">
             <button
               type="submit"
               disabled={isSubmitting || !!conflictWarning}
-              className="w-full h-12 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all text-sm"
+              className="skeuo-btn skeuo-btn-primary w-full py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
             >
               {isSubmitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>
-                  <Save size={16} /> Save Student
+                  <Save size={15} /> Save Student Record
                 </>
               )}
             </button>

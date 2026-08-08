@@ -2,6 +2,7 @@ import React from "react";
 import { Users, Phone, Armchair, Edit2, Trash2, Eye } from "lucide-react";
 import { Badge } from "./Badge";
 import { SaaSCard } from "./SaaSCard";
+import { clsx } from "clsx";
 
 export const StudentMobileCard = ({ student, onView, onEdit, onDelete }) => {
   const status =
@@ -13,30 +14,33 @@ export const StudentMobileCard = ({ student, onView, onEdit, onDelete }) => {
       : "Unpaid");
 
   return (
-    <SaaSCard className="p-4 space-y-3">
+    <SaaSCard className="p-4 space-y-3" withGrip>
       {/* Header Info */}
       <div className="flex items-center justify-between" onClick={onView}>
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center flex-shrink-0">
+          <div className="skeuo-dial w-12 h-12 overflow-hidden flex-shrink-0">
             {student.photo ? (
               <img
                 src={student.photo}
                 alt={student.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-full"
               />
             ) : (
-              <Users size={22} className="text-slate-400" />
+              <span className="font-black text-sm text-slate-700 dark:text-slate-300">
+                {(student.name || "S").charAt(0).toUpperCase()}
+              </span>
             )}
           </div>
           <div>
-            <h3 className="font-bold text-white text-base leading-snug">{student.name}</h3>
-            <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-              <Phone size={12} /> {student.phone}
+            <h3 className="font-extrabold text-slate-800 dark:text-white text-base leading-snug">{student.name}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5 font-semibold">
+              <Phone size={12} className="text-blue-500" /> {student.phone}
             </p>
           </div>
         </div>
 
         <Badge
+          dot
           variant={
             status === "Paid"
               ? "success"
@@ -50,38 +54,38 @@ export const StudentMobileCard = ({ student, onView, onEdit, onDelete }) => {
       </div>
 
       {/* Details Row */}
-      <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
-        <div className="flex items-center gap-1.5 text-slate-300">
-          <Armchair size={14} className="text-blue-400" />
-          <span className="font-semibold">
-            {student.seatNumber > 0 ? `Seat #${student.seatNumber}` : "No Seat"}
+      <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-800/80">
+        <div className="flex items-center gap-1.5 text-slate-800 dark:text-slate-300 font-bold">
+          <Armchair size={13} className="text-blue-500" />
+          <span>
+            {student.seatNumber > 0 ? `Seat #${student.seatNumber}` : "No Seat Assigned"}
           </span>
         </div>
 
-        <div className="text-slate-400 font-medium truncate max-w-[180px]">
+        <div className="text-slate-550 text-[11px] font-bold truncate max-w-[180px]">
           {Array.isArray(student.batch) ? student.batch.join(", ") : student.batch || "No Batch"}
         </div>
       </div>
 
       {/* 48px Min Touch Height Action Buttons */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80">
         <button
           onClick={onView}
-          className="h-12 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+          className="skeuo-btn h-12 text-slate-600 dark:text-slate-300 text-xs font-black flex items-center justify-center gap-1"
         >
-          <Eye size={16} /> View
+          <Eye size={14} className="text-blue-550" /> View
         </button>
         <button
           onClick={onEdit}
-          className="h-12 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+          className="skeuo-btn h-12 text-slate-600 dark:text-slate-300 text-xs font-black flex items-center justify-center gap-1"
         >
-          <Edit2 size={16} /> Edit
+          <Edit2 size={14} className="text-amber-500" /> Edit
         </button>
         <button
           onClick={onDelete}
-          className="h-12 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+          className="skeuo-btn h-12 text-rose-500 text-xs font-black flex items-center justify-center gap-1"
         >
-          <Trash2 size={16} /> Delete
+          <Trash2 size={14} /> Delete
         </button>
       </div>
     </SaaSCard>

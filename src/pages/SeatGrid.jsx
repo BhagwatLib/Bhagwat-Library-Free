@@ -397,58 +397,58 @@ export const SeatGrid = () => {
       {/* DESKTOP SIDE DRAWER (1024px and above) */}
       <AnimatePresence>
         {selectedSeat && (
-          <div className="hidden lg:flex fixed inset-0 z-50 justify-end bg-black/60 backdrop-blur-sm">
+          <div className="hidden lg:flex fixed inset-0 z-50 justify-end bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="bg-slate-900 border-l border-slate-800 w-full max-w-lg h-full overflow-y-auto custom-scrollbar p-6 space-y-6 shadow-2xl flex flex-col justify-between"
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="bg-[var(--card-bg)] border-l border-slate-200 dark:border-slate-800 w-full max-w-lg h-full overflow-y-auto custom-scrollbar p-6 space-y-6 shadow-2xl flex flex-col justify-between"
             >
               <div className="space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-extrabold text-xl shadow-lg">
+                    <div className="skeuo-dial w-12 h-12 text-blue-600 dark:text-cyan-400 font-black text-xl glow-cyan">
                       #{selectedSeat.seatNumber}
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        Seat #{selectedSeat.seatNumber} Details
+                      <h2 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        Seat #{selectedSeat.seatNumber} Details <span className="jewel-dot cyan" />
                       </h2>
-                      <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                        <span className="font-semibold text-blue-400">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5 font-medium">
+                        <span className="font-bold text-blue-600 dark:text-cyan-400">
                           {selectedSeat.occupiedSlotsCount}/4 Occupied
                         </span>
                         <span>•</span>
-                        <span className="text-emerald-400 font-semibold">
-                          {selectedSeat.availableSlotsCount} Available Slot(s)
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          {selectedSeat.availableSlotsCount} Slot(s) Free
                         </span>
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedSeat(null)}
-                    className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/50"
+                    className="skeuo-dial w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   >
-                    <X size={18} />
+                    <X size={15} />
                   </button>
                 </div>
 
                 {/* Seat Summary Statistics */}
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                    <p className="text-slate-400 text-[11px] font-medium">Total Students Assigned</p>
-                    <p className="text-lg font-bold text-white mt-0.5 flex items-center gap-1.5">
-                      <User size={16} className="text-blue-400" />
+                  <div className="skeuo-inset p-3.5">
+                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Assigned Students</span>
+                    <p className="text-base font-black text-slate-800 dark:text-white mt-0.5 flex items-center gap-1.5">
+                      <User size={15} className="text-blue-500" />
                       <span>{selectedSeat.assignedStudents.length} Students</span>
                     </p>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
-                    <p className="text-slate-400 text-[11px] font-medium">Available Batches</p>
-                    <p className="text-lg font-bold text-emerald-400 mt-0.5 flex items-center gap-1.5">
-                      <CheckCircle2 size={16} />
+                  <div className="skeuo-inset p-3.5">
+                    <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Available Shifts</span>
+                    <p className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1.5">
+                      <CheckCircle2 size={15} />
                       <span>{selectedSeat.availableSlotsCount} Free</span>
                     </p>
                   </div>
@@ -456,9 +456,9 @@ export const SeatGrid = () => {
 
                 {/* Batch Slots Breakdown & Student Cards */}
                 <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Batch Allocation Details (A, B, C, D)
-                  </h3>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
+                    Shift Allocation Breakdown (A, B, C, D)
+                  </span>
                   {BASE_SLOTS.map((slot) => {
                     const slotData = selectedSeat.slots[slot.id];
                     const student = slotData.student;
@@ -468,82 +468,81 @@ export const SeatGrid = () => {
                       <div
                         key={slot.id}
                         className={clsx(
-                          "rounded-2xl border p-4 transition-all space-y-3",
-                          isOcc
-                            ? "bg-slate-950/90 border-slate-800"
-                            : "bg-slate-950/30 border-slate-800/40"
+                          "skeuo-card p-4 space-y-3",
+                          isOcc ? "opacity-100" : "opacity-75"
                         )}
+                        withGrip
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Clock size={16} className="text-blue-400" />
-                            <span className="text-sm font-bold text-white">
-                              {slot.name} <span className="text-slate-400 font-normal text-xs">({slot.time})</span>
+                            <div className="skeuo-dial w-6 h-6 text-xs font-bold text-blue-500">
+                              <Clock size={12} />
+                            </div>
+                            <span className="text-xs font-extrabold text-slate-800 dark:text-white">
+                              {slot.name} <span className="text-slate-400 font-normal text-[11px]">({slot.time})</span>
                             </span>
                           </div>
-                          {isOcc ? (
-                            <Badge variant={slotData.status === "expired" ? "danger" : slotData.status === "reserved" ? "warning" : "success"}>
-                              Occupied 🟢
-                            </Badge>
-                          ) : (
-                            <Badge variant="default">Available ⚪</Badge>
-                          )}
+                          <Badge dot variant={isOcc ? "success" : "default"}>
+                            {isOcc ? "Occupied" : "Available"}
+                          </Badge>
                         </div>
 
                         {isOcc && student ? (
-                          <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
+                          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-700">
+                                <div className="skeuo-dial w-9 h-9 overflow-hidden">
                                   {student.photo ? (
-                                    <img src={student.photo} alt={student.name} className="w-full h-full object-cover" />
+                                    <img src={student.photo} alt={student.name} className="w-full h-full object-cover rounded-full" />
                                   ) : (
-                                    <User size={18} className="text-slate-400" />
+                                    <span className="font-extrabold text-xs text-slate-700 dark:text-slate-300">
+                                      {(student.name || "S").charAt(0).toUpperCase()}
+                                    </span>
                                   )}
                                 </div>
                                 <div>
-                                  <p className="text-sm font-bold text-white">{student.name}</p>
-                                  <p className="text-xs text-slate-400 flex items-center gap-1">
-                                    <Phone size={12} /> {student.phone}
+                                  <p className="text-xs font-extrabold text-slate-800 dark:text-white">{student.name}</p>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <Phone size={10} /> {student.phone}
                                   </p>
                                 </div>
                               </div>
 
                               <button
                                 onClick={() => handleRemoveSeat(student.id)}
-                                className="p-2 text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
+                                className="skeuo-dial w-7 h-7 text-slate-400 hover:text-rose-500"
                                 title="Remove seat assignment"
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={13} />
                               </button>
                             </div>
 
                             {/* Payment Status & Validity */}
-                            <div className="grid grid-cols-2 gap-2 text-xs bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+                            <div className="grid grid-cols-2 gap-2 text-xs skeuo-inset p-2.5">
                               <div className="flex items-center gap-1.5">
-                                <CreditCard size={14} className="text-emerald-400" />
-                                <span className="text-slate-400">Payment:</span>
-                                <span className={clsx("font-bold ml-1", student.paidAmount >= student.totalAmount && student.totalAmount > 0 ? "text-emerald-400" : "text-amber-400")}>
+                                <CreditCard size={12} className="text-emerald-500" />
+                                <span className="text-slate-400 text-[10px]">Payment:</span>
+                                <span className={clsx("font-bold text-[10px]", student.paidAmount >= student.totalAmount && student.totalAmount > 0 ? "text-emerald-500" : "text-amber-500")}>
                                   {student.status || "Paid"}
                                 </span>
                               </div>
                               <div className="flex items-center gap-1.5">
-                                <Calendar size={14} className="text-blue-400" />
-                                <span className="text-slate-400">Validity:</span>
-                                <span className="font-semibold text-white truncate">
+                                <Calendar size={12} className="text-blue-500" />
+                                <span className="text-slate-400 text-[10px]">Validity:</span>
+                                <span className="font-semibold text-slate-800 dark:text-white text-[10px] truncate">
                                   {student.validityTo || "N/A"}
                                 </span>
                               </div>
                             </div>
                           </div>
                         ) : (
-                          <div className="pt-2 border-t border-slate-800/50 flex justify-between items-center text-xs">
-                            <span className="text-slate-500">No student assigned to this slot</span>
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
+                            <span className="text-slate-400 text-[11px]">Slot is currently vacant</span>
                             <button
                               onClick={() => setAssignModal({ seatNumber: selectedSeat.seatNumber, targetSlot: slot.name })}
-                              className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                              className="skeuo-badge px-3 py-1 text-blue-600 dark:text-cyan-400 cursor-pointer"
                             >
-                              <UserPlus size={14} /> Assign Student
+                              <UserPlus size={12} /> Assign Student
                             </button>
                           </div>
                         )}
@@ -553,12 +552,12 @@ export const SeatGrid = () => {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                   onClick={() => setAssignModal({ seatNumber: selectedSeat.seatNumber, targetSlot: "Any" })}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-xs"
+                  className="skeuo-btn skeuo-btn-primary w-full py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg"
                 >
-                  <UserPlus size={16} /> Assign Student to Seat #{selectedSeat.seatNumber}
+                  <UserPlus size={15} /> Assign Student to Seat #{selectedSeat.seatNumber}
                 </button>
               </div>
             </motion.div>
@@ -575,14 +574,14 @@ export const SeatGrid = () => {
         >
           {selectedSeat && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+              <div className="skeuo-card p-4 flex items-center justify-between" withGrip>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center font-extrabold text-xl">
+                  <div className="skeuo-dial w-12 h-12 text-blue-600 dark:text-cyan-400 font-black text-lg">
                     #{selectedSeat.seatNumber}
                   </div>
                   <div>
-                    <h4 className="font-bold text-white text-base">Seat #{selectedSeat.seatNumber}</h4>
-                    <p className="text-xs text-slate-400">
+                    <h4 className="font-extrabold text-slate-800 dark:text-white text-sm">Seat #{selectedSeat.seatNumber}</h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       {selectedSeat.occupiedSlotsCount}/4 Occupied • {selectedSeat.availableSlotsCount} Free
                     </p>
                   </div>
@@ -590,9 +589,9 @@ export const SeatGrid = () => {
 
                 <button
                   onClick={() => setAssignModal({ seatNumber: selectedSeat.seatNumber, targetSlot: "Any" })}
-                  className="h-10 px-3.5 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md shadow-blue-600/20"
+                  className="skeuo-btn skeuo-btn-primary px-3 py-2 text-xs font-bold flex items-center gap-1"
                 >
-                  <UserPlus size={16} /> Assign
+                  <UserPlus size={14} /> Assign
                 </button>
               </div>
 
@@ -603,24 +602,24 @@ export const SeatGrid = () => {
                   const isOcc = slotData.occupied;
 
                   return (
-                    <div key={slot.id} className="p-3.5 rounded-2xl border bg-slate-950 border-slate-800 space-y-2.5">
+                    <div key={slot.id} className="skeuo-card p-3.5 space-y-2.5">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-white">{slot.name} ({slot.time})</span>
-                        <Badge variant={isOcc ? "success" : "default"}>{isOcc ? "Occupied 🟢" : "Available ⚪"}</Badge>
+                        <span className="font-bold text-slate-800 dark:text-white">{slot.name} ({slot.time})</span>
+                        <Badge dot variant={isOcc ? "success" : "default"}>{isOcc ? "Occupied" : "Available"}</Badge>
                       </div>
 
                       {isOcc && student && (
-                        <div className="space-y-2 pt-2 border-t border-slate-800 text-xs">
+                        <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-white">{student.name}</span>
-                            <button onClick={() => handleRemoveSeat(student.id)} className="p-1 text-rose-400">
-                              <Trash2 size={16} />
+                            <span className="font-bold text-slate-800 dark:text-white">{student.name}</span>
+                            <button onClick={() => handleRemoveSeat(student.id)} className="skeuo-dial w-6 h-6 text-rose-500">
+                              <Trash2 size={12} />
                             </button>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400">
-                            <p>Phone: <span className="text-white">{student.phone}</span></p>
-                            <p>Status: <span className="text-emerald-400">{student.status || "Paid"}</span></p>
-                            <p className="col-span-2">Validity: <span className="text-white">{student.validityTo || "N/A"}</span></p>
+                          <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 dark:text-slate-400 skeuo-inset p-2">
+                            <p>Phone: <span className="text-slate-800 dark:text-white font-medium">{student.phone}</span></p>
+                            <p>Status: <span className="text-emerald-500 font-bold">{student.status || "Paid"}</span></p>
+                            <p className="col-span-2">Validity: <span className="text-slate-800 dark:text-white font-medium">{student.validityTo || "N/A"}</span></p>
                           </div>
                         </div>
                       )}
@@ -636,28 +635,34 @@ export const SeatGrid = () => {
       {/* Assign Student Modal */}
       <AnimatePresence>
         {assignModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl"
+              className="skeuo-card w-full max-w-md p-6 space-y-4 shadow-2xl"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-bold text-white">
-                  Assign Student to Seat #{assignModal.seatNumber}
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                  Assign Student to Seat #{assignModal.seatNumber} <span className="jewel-dot cyan" />
                 </h3>
+                <button
+                  onClick={() => setAssignModal(null)}
+                  className="skeuo-dial w-7 h-7 text-slate-400 hover:text-white"
+                >
+                  <X size={14} />
+                </button>
               </div>
 
               {conflictError && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-start gap-2">
-                  <AlertTriangle size={16} className="text-rose-400 flex-shrink-0 mt-0.5" />
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-500 dark:text-rose-300 text-xs flex items-start gap-2">
+                  <AlertTriangle size={15} className="text-rose-500 flex-shrink-0 mt-0.5" />
                   <span>{conflictError}</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                   Select Student
                 </label>
                 <select
@@ -666,7 +671,7 @@ export const SeatGrid = () => {
                     setAssignStudentId(e.target.value);
                     setConflictError("");
                   }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-semibold"
                 >
                   <option value="">-- Choose Student --</option>
                   {students.map((s) => (
@@ -683,14 +688,14 @@ export const SeatGrid = () => {
                     setAssignModal(null);
                     setConflictError("");
                   }}
-                  className="flex-1 h-12 bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs"
+                  className="skeuo-btn flex-1 py-2.5 text-xs font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAssignStudent}
                   disabled={!assignStudentId}
-                  className="flex-1 h-12 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-xl text-xs shadow-lg shadow-blue-600/20 transition-all"
+                  className="skeuo-btn skeuo-btn-primary flex-1 py-2.5 text-xs font-black uppercase tracking-wider shadow-lg disabled:opacity-50"
                 >
                   Confirm Assign
                 </button>
@@ -702,3 +707,4 @@ export const SeatGrid = () => {
     </div>
   );
 };
+

@@ -75,40 +75,40 @@ export const ReminderSettings = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800/80 p-5 rounded-2xl">
+      <div className="skeuo-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3" withGrip>
         <div className="flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shadow-lg shadow-blue-500/10">
+          <div className="skeuo-dial w-12 h-12 text-blue-500 glow-purple flex items-center justify-center">
             <Bell size={22} />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white tracking-tight">
+            <h2 className="text-base font-extrabold text-slate-800 dark:text-white tracking-tight uppercase">
               Reminder Preferences
             </h2>
-            <p className="text-xs text-slate-400">
-              Configure automated WhatsApp book return & due notifications
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Configure automated WhatsApp membership renewal alerts & due notifications
             </p>
           </div>
         </div>
 
         {savedSuccess && (
-          <Badge variant="success" className="py-1.5 px-3 text-xs animate-in fade-in">
-            <CheckCircle2 size={14} className="mr-1" /> Settings Saved
+          <Badge dot variant="success" className="py-1.5 px-3 text-xs animate-in fade-in">
+            <CheckCircle2 size={13} className="mr-1" /> Settings Saved
           </Badge>
         )}
       </div>
 
       <form onSubmit={handleSave} className="space-y-5">
         {/* Settings Card */}
-        <SaaSCard className="p-6 md:p-8 space-y-6 bg-slate-900/90 border-slate-800/80">
+        <SaaSCard className="p-6 md:p-8 space-y-6" withGrip>
           {/* 1. WhatsApp Reminder Toggle */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700/80 transition-all">
+          <div className="flex items-center justify-between p-4 skeuo-inset">
             <div className="flex items-start space-x-3.5">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-500/20">
-                <MessageSquare size={18} />
+              <div className="skeuo-dial w-9 h-9 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                <MessageSquare size={16} />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">WhatsApp Reminders</h4>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">WhatsApp Reminders</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   Enable or disable sending automated reminder alerts via WhatsApp
                 </p>
               </div>
@@ -123,20 +123,20 @@ export const ReminderSettings = () => {
                 }
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-slate-300 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
           {/* 2. Automated Reminder System Toggle */}
-          <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-950/80 border border-slate-800/90 hover:border-slate-700/80 transition-all">
+          <div className="flex items-center justify-between p-4 skeuo-inset">
             <div className="flex items-start space-x-3.5">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/20">
-                <ShieldCheck size={18} />
+              <div className="skeuo-dial w-9 h-9 text-blue-500 flex items-center justify-center shrink-0 mt-0.5">
+                <ShieldCheck size={16} />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">Automated Reminder System</h4>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Automatically check membership validity expiry and dispatch daily reminders without manual action
+                <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Automated Reminder System</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Automatically check membership validity expiry and dispatch daily reminders
                 </p>
               </div>
             </div>
@@ -150,19 +150,19 @@ export const ReminderSettings = () => {
                 }
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-slate-300 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
           {/* 3. Reminder Time */}
-          <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/90 space-y-4">
+          <div className="p-4 skeuo-inset space-y-4">
             <div className="flex items-start space-x-3.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/20">
-                <Clock size={18} />
+              <div className="skeuo-dial w-9 h-9 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+                <Clock size={16} />
               </div>
               <div className="flex-1">
-                <h4 className="text-sm font-bold text-white">Reminder Time</h4>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider">Daily Reminder Time</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   Select the daily dispatch time during library working hours (default: 02:30 PM)
                 </p>
               </div>
@@ -176,40 +176,41 @@ export const ReminderSettings = () => {
                     key={preset.value}
                     type="button"
                     onClick={() => setSettings({ ...settings, reminderTime: preset.value })}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                    className={clsx(
+                      "skeuo-badge px-3 py-1.5 text-xs font-bold transition-all cursor-pointer",
                       settings.reminderTime === preset.value
-                        ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                        : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
-                    }`}
+                        ? "bg-blue-600 text-blue-700 dark:text-cyan-300 border-blue-400 font-extrabold"
+                        : "text-slate-500 dark:text-slate-400"
+                    )}
                   >
                     {preset.label}
                   </button>
                 ))}
               </div>
 
-              {/* Custom Time Input (Restricted to Working Hours 08:00 - 20:00) */}
+              {/* Custom Time Input */}
               <div className="flex items-center space-x-3 pt-1">
-                <span className="text-xs text-slate-400">Custom Time:</span>
+                <span className="text-xs text-slate-500 font-bold">Custom Time:</span>
                 <input
                   type="time"
                   min="08:00"
                   max="20:00"
                   value={settings.reminderTime}
                   onChange={(e) => setSettings({ ...settings, reminderTime: e.target.value })}
-                  className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-1.5 text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="skeuo-input px-3.5 py-1.5 text-xs font-mono font-bold"
                 />
-                <span className="text-[11px] text-slate-500">(Working Hours: 08:00 AM – 08:00 PM)</span>
+                <span className="text-[10px] text-slate-400">(08:00 AM – 08:00 PM)</span>
               </div>
             </div>
           </div>
 
           {/* Automated Behavior Summary */}
-          <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 text-xs text-slate-300 space-y-1.5">
-            <div className="flex items-center gap-2 font-bold text-blue-400">
-              <Info size={15} />
-              <span>How the Automated Membership Reminder Logic Works</span>
+          <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/20 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
+            <div className="flex items-center gap-2 font-black text-blue-600 dark:text-cyan-400 uppercase tracking-wider text-[11px]">
+              <Info size={14} />
+              <span>Automated Membership Reminder Logic</span>
             </div>
-            <ul className="list-disc list-inside space-y-1 text-slate-400 text-[11px] pl-1 leading-relaxed">
+            <ul className="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px] pl-1 leading-relaxed">
               <li>
                 <strong>Due Tomorrow:</strong> If a student's monthly library membership expires tomorrow, an automatic WhatsApp renewal reminder is sent today.
               </li>
@@ -218,9 +219,6 @@ export const ReminderSettings = () => {
               </li>
               <li>
                 <strong>Auto-Stop:</strong> As soon as the student's renewal is recorded or payment status marked Paid, all future reminders stop automatically.
-              </li>
-              <li>
-                <strong>No Duplicates:</strong> Students never receive duplicate reminder messages on the same calendar day.
               </li>
             </ul>
           </div>
@@ -232,9 +230,9 @@ export const ReminderSettings = () => {
           <button
             type="submit"
             disabled={saving}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
+            className="skeuo-btn skeuo-btn-primary px-6 py-3 text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg disabled:opacity-50"
           >
-            <Save size={16} />
+            <Save size={15} />
             <span>{saving ? "Saving Changes..." : "Save Settings"}</span>
           </button>
         </div>

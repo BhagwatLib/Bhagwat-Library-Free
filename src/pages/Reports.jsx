@@ -18,11 +18,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
 } from "recharts";
 import { subscribeStudents } from "../services/studentsService";
 import { subscribeBatches } from "../services/batchesService";
@@ -31,6 +26,7 @@ import { exportToPDF, exportToExcel } from "../utils/exportUtils";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
 import { SkeletonLoader } from "../components/SkeletonLoader";
+import { clsx } from "clsx";
 
 export const Reports = () => {
   const [students, setStudents] = useState([]);
@@ -54,7 +50,6 @@ export const Reports = () => {
       unsubBatches();
     };
   }, []);
-
 
   const seatMatrix = useMemo(() => getSeatMatrix(students, 100), [students]);
 
@@ -125,13 +120,13 @@ export const Reports = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <FileText className="text-emerald-400" size={26} /> Comprehensive Reports & Analytics
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+            Reports & Analytics <span className="jewel-dot cyan" />
           </h1>
-          <p className="text-xs text-slate-400">
-            Generate and export library financial reports, seat occupancy, and batch performance
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Export library ledger balance, check seat occupancy, and shift metrics
           </p>
         </div>
 
@@ -139,38 +134,41 @@ export const Reports = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportPDF}
-            className="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all active:scale-95"
+            className="skeuo-btn px-4 py-2.5 text-xs font-bold flex items-center gap-2"
           >
-            <Download size={16} /> Export PDF Report
+            <Download size={14} className="text-rose-500" /> Export PDF
           </button>
           <button
             onClick={handleExportExcel}
-            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all active:scale-95"
+            className="skeuo-btn skeuo-btn-primary px-4 py-2.5 text-xs font-bold flex items-center gap-2"
           >
-            <FileSpreadsheet size={16} /> Export Excel (.xlsx)
+            <FileSpreadsheet size={14} /> Export Excel (.xlsx)
           </button>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto custom-scrollbar">
         {[
           { id: "revenue", label: "Revenue Analytics", icon: DollarSign },
           { id: "occupancy", label: "Seat Occupancy", icon: Armchair },
           { id: "batches", label: "Batch Performance", icon: School },
         ].map((tab) => {
           const Icon = tab.icon;
+          const isSel = activeReportTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveReportTab(tab.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                activeReportTab === tab.id
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
-                  : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
-              }`}
+              className={clsx(
+                "skeuo-badge px-4 py-2 text-xs font-bold cursor-pointer transition-all whitespace-nowrap rounded-xl",
+                isSel
+                  ? "bg-blue-600 dark:bg-cyan-500/20 text-blue-700 dark:text-cyan-300 border border-blue-400/40 font-black"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+              )}
             >
-              <Icon size={16} /> {tab.label}
+              <Icon size={14} />
+              <span>{tab.label}</span>
             </button>
           );
         })}
@@ -179,38 +177,38 @@ export const Reports = () => {
       {/* Revenue Tab View */}
       {activeReportTab === "revenue" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <SaaSCard className="p-5">
-              <p className="text-xs text-slate-400 font-semibold">Total Revenue Expected</p>
-              <h3 className="text-2xl font-extrabold text-white mt-1">₹{revenueSummary.expected}</h3>
-            </SaaSCard>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="skeuo-inset p-5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Expected</span>
+              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1">₹{revenueSummary.expected}</h3>
+            </div>
 
-            <SaaSCard className="p-5">
-              <p className="text-xs text-slate-400 font-semibold">Total Revenue Collected</p>
-              <h3 className="text-2xl font-extrabold text-emerald-400 mt-1">₹{revenueSummary.collected}</h3>
-            </SaaSCard>
+            <div className="skeuo-inset p-5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Collected</span>
+              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹{revenueSummary.collected}</h3>
+            </div>
 
-            <SaaSCard className="p-5">
-              <p className="text-xs text-slate-400 font-semibold">Total Pending Dues</p>
-              <h3 className="text-2xl font-extrabold text-rose-400 mt-1">₹{revenueSummary.pending}</h3>
-            </SaaSCard>
+            <div className="skeuo-inset p-5">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Pending Balance</span>
+              <h3 className="text-2xl font-black text-rose-500 mt-1">₹{revenueSummary.pending}</h3>
+            </div>
           </div>
 
-          <SaaSCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Financial Collection Distribution</h3>
+          <SaaSCard className="p-6" withGrip>
+            <h3 className="text-xs font-black text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Revenue Breakdown Chart</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={[
-                    { name: "Total Expected", amount: revenueSummary.expected, fill: "#3b82f6" },
-                    { name: "Total Collected", amount: revenueSummary.collected, fill: "#10b981" },
-                    { name: "Total Pending", amount: revenueSummary.pending, fill: "#f43f5e" },
+                    { name: "Expected", amount: revenueSummary.expected, fill: "#3b82f6" },
+                    { name: "Collected", amount: revenueSummary.collected, fill: "#10b981" },
+                    { name: "Pending Dues", amount: revenueSummary.pending, fill: "#f43f5e" },
                   ]}
                 >
                   <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
                   <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155" }} />
-                  <Bar dataKey="amount" radius={[8, 8, 0, 0]} />
+                  <Tooltip contentStyle={{ backgroundColor: "var(--card-bg)", borderColor: "var(--border-color)" }} />
+                  <Bar dataKey="amount" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -221,32 +219,32 @@ export const Reports = () => {
       {/* Seat Occupancy Tab View */}
       {activeReportTab === "occupancy" && (
         <div className="space-y-6">
-          <SaaSCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-2">Library Seat Utilization (Seats 1-100)</h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Virtual slot occupancy breakdown across 4 time shifts
+          <SaaSCard className="p-6" withGrip>
+            <h3 className="text-xs font-black text-slate-800 dark:text-white mb-1 uppercase tracking-wider">Library Seat Utilization</h3>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4">
+              Shift slot occupancy details for all 100 available seat pods
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-                <p className="text-xs text-slate-400">Total Base Seats</p>
-                <p className="text-2xl font-extrabold text-white mt-1">100</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="skeuo-inset p-4 text-center">
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Base Seats</span>
+                <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">100</p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-                <p className="text-xs text-slate-400">Occupied Seats</p>
-                <p className="text-2xl font-extrabold text-emerald-400 mt-1">
+              <div className="skeuo-inset p-4 text-center">
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Occupied seats</span>
+                <p className="text-2xl font-black text-emerald-655 dark:text-emerald-400 mt-1">
                   {seatMatrix.filter((s) => s.occupiedSlotsCount > 0).length}
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-                <p className="text-xs text-slate-400">Fully Available Seats</p>
-                <p className="text-2xl font-extrabold text-blue-400 mt-1">
+              <div className="skeuo-inset p-4 text-center">
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Fully Available</span>
+                <p className="text-2xl font-black text-blue-500 mt-1">
                   {seatMatrix.filter((s) => s.occupiedSlotsCount === 0).length}
                 </p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center">
-                <p className="text-xs text-slate-400">Shift Slots Allocated</p>
-                <p className="text-2xl font-extrabold text-purple-400 mt-1">
+              <div className="skeuo-inset p-4 text-center">
+                <span className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Total Allocated Slots</span>
+                <p className="text-2xl font-black text-purple-500 mt-1">
                   {seatMatrix.reduce((acc, curr) => acc + curr.occupiedSlotsCount, 0)} / 400
                 </p>
               </div>
@@ -258,8 +256,8 @@ export const Reports = () => {
       {/* Batch Performance Tab View */}
       {activeReportTab === "batches" && (
         <div className="space-y-6">
-          <SaaSCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Universal Batch Performance Breakdown</h3>
+          <SaaSCard className="p-6" withGrip>
+            <h3 className="text-xs font-black text-slate-800 dark:text-white mb-4 uppercase tracking-wider">Universal Batch Performance Metrics</h3>
             <div className="space-y-3">
               {batches.map((b) => {
                 const bStudents = students.filter((s) => {
@@ -273,18 +271,18 @@ export const Reports = () => {
                 const revenue = bStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
 
                 return (
-                  <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div key={b.id} className="skeuo-inset p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-white text-sm">{b.name || b.time}</p>
-                        <Badge variant="purple">{b.duration || "4 Hours"}</Badge>
+                        <p className="font-extrabold text-slate-800 dark:text-white text-sm">{b.name || b.time}</p>
+                        <Badge dot variant="purple">{b.duration || "4 Hours"}</Badge>
                       </div>
-                      <p className="text-slate-400 mt-0.5">{b.time}</p>
-                      <p className="text-slate-500 text-[11px] mt-1">
-                        {bStudents.length} Students enrolled • Total Collected: <span className="text-emerald-400 font-semibold">₹{revenue}</span>
+                      <p className="text-slate-500 dark:text-slate-400 mt-0.5">{b.time}</p>
+                      <p className="text-slate-400 text-[11px] mt-1 font-medium">
+                        {bStudents.length} Students active • Revenue Collected: <span className="text-emerald-500 font-bold">₹{revenue}</span>
                       </p>
                     </div>
-                    <Badge variant="success" className="text-xs self-start sm:self-auto">
+                    <Badge dot variant="success">
                       ₹{b.price} / Month
                     </Badge>
                   </div>
@@ -297,4 +295,3 @@ export const Reports = () => {
     </div>
   );
 };
-

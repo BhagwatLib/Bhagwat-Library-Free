@@ -4,12 +4,13 @@
 
 @layer base {
   :root {
-    --bg-primary: #ECECEC;
-    --card-bg: #F4F4F4;
-    --card-surface: #EAEAEA;
+    /* Refined Soft Warm Gray Palette for Light Mode */
+    --bg-primary: #E6E7EA;
+    --card-bg: #F1F2F4;
+    --card-surface: #EAECEF;
     --text-primary: #1E293B;
     --text-secondary: #64748B;
-    --border-color: rgba(0, 0, 0, 0.06);
+    --border-color: #D1D5DB;
     --accent: #5B7FFF;
     --success: #36D399;
     --warning: #FBBF24;
@@ -17,6 +18,7 @@
   }
 
   html.dark {
+    /* Luxury Deep Charcoal for Dark Mode */
     --bg-primary: #1A1D24;
     --card-bg: #252932;
     --card-surface: #21252D;
@@ -48,7 +50,7 @@
 /* Dark Mode Card */
 html.dark .skeuo-card {
   background: linear-gradient(145deg, #282d37, #21252d);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: 
     8px 10px 22px rgba(10, 12, 16, 0.65), 
     -4px -4px 14px rgba(45, 52, 65, 0.25),
@@ -63,21 +65,22 @@ html.dark .skeuo-card:hover {
     inset 1px 1px 1.5px rgba(255, 255, 255, 0.14);
 }
 
-/* Light Mode Card */
+/* Refined Light Mode Card (Warm Soft Gray #F1F2F4 without harsh white glare) */
 html.light .skeuo-card {
-  background: linear-gradient(145deg, #ffffff, #f0f2f5);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(145deg, #F6F7F9, #EAECEF);
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    6px 8px 20px rgba(0, 0, 0, 0.07), 
-    -6px -6px 18px rgba(255, 255, 255, 0.95),
-    inset 1px 1px 2px rgba(255, 255, 255, 0.9);
+    6px 8px 18px rgba(0, 0, 0, 0.06), 
+    -5px -5px 15px rgba(255, 255, 255, 0.7),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.7),
+    inset -1px -1px 1.5px rgba(0, 0, 0, 0.03);
 }
 
 html.light .skeuo-card:hover {
   box-shadow: 
-    8px 12px 24px rgba(0, 0, 0, 0.09), 
-    -8px -8px 20px rgba(255, 255, 255, 1),
-    inset 1px 1px 2px rgba(255, 255, 255, 1);
+    8px 12px 22px rgba(0, 0, 0, 0.08), 
+    -6px -6px 18px rgba(255, 255, 255, 0.85),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.8);
 }
 
 /* 2. SKEUOMORPHIC RECESSED / INSET PANELS & TABLES */
@@ -95,11 +98,11 @@ html.dark .skeuo-inset {
 }
 
 html.light .skeuo-inset {
-  background: #E8EBF0;
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  background: #DFE2E7;
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    inset 3px 3px 8px rgba(0, 0, 0, 0.07), 
-    inset -3px -3px 8px rgba(255, 255, 255, 0.9);
+    inset 3px 3px 7px rgba(0, 0, 0, 0.07), 
+    inset -2px -2px 6px rgba(255, 255, 255, 0.6);
 }
 
 /* 3. SKEUOMORPHIC CIRCULAR DIAL / DISC */
@@ -122,15 +125,15 @@ html.dark .skeuo-dial {
 }
 
 html.light .skeuo-dial {
-  background: linear-gradient(145deg, #ffffff, #e6e9ee);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(145deg, #F8F9FA, #E1E5EA);
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    5px 5px 12px rgba(0, 0, 0, 0.08), 
-    -5px -5px 12px rgba(255, 255, 255, 0.95),
-    inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+    4px 4px 10px rgba(0, 0, 0, 0.07), 
+    -4px -4px 10px rgba(255, 255, 255, 0.75),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.6);
 }
 
-/* Glowing Neon Dial Rings (Reference Dashboard Look) */
+/* Glowing Neon Dial Rings */
 .skeuo-dial.glow-purple {
   box-shadow: 
     0 0 0 2px rgba(139, 92, 246, 0.4),
@@ -193,27 +196,27 @@ html.dark .skeuo-nav-pill.active {
 }
 
 html.light .skeuo-nav-pill {
-  background: linear-gradient(145deg, #ffffff, #eef0f4);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: linear-gradient(145deg, #F6F7F9, #E4E7EC);
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    4px 4px 10px rgba(0, 0, 0, 0.05), 
-    -4px -4px 10px rgba(255, 255, 255, 0.9);
+    3px 3px 8px rgba(0, 0, 0, 0.05), 
+    -3px -3px 8px rgba(255, 255, 255, 0.7);
 }
 
 html.light .skeuo-nav-pill:hover {
-  background: linear-gradient(145deg, #ffffff, #f4f6f9);
+  background: linear-gradient(145deg, #FAFBFD, #E8EBF0);
   box-shadow: 
-    5px 5px 12px rgba(0, 0, 0, 0.07), 
-    -5px -5px 12px rgba(255, 255, 255, 1);
+    4px 4px 10px rgba(0, 0, 0, 0.06), 
+    -4px -4px 10px rgba(255, 255, 255, 0.85);
 }
 
 html.light .skeuo-nav-pill.active {
-  background: linear-gradient(145deg, #ffffff, #e6edff);
-  border: 1px solid rgba(91, 127, 255, 0.3);
+  background: linear-gradient(145deg, #FFFFFF, #E1E8F8);
+  border: 1px solid rgba(91, 127, 255, 0.35);
   box-shadow: 
     inset 2px 2px 4px rgba(0, 0, 0, 0.06), 
-    inset -2px -2px 4px rgba(255, 255, 255, 0.9),
-    0 4px 12px rgba(91, 127, 255, 0.15);
+    inset -2px -2px 4px rgba(255, 255, 255, 0.8),
+    0 3px 10px rgba(91, 127, 255, 0.15);
 }
 
 /* 5. SKEUOMORPHIC TACTILE BUTTONS */
@@ -254,27 +257,27 @@ html.dark .skeuo-btn:active {
 }
 
 html.light .skeuo-btn {
-  background: linear-gradient(145deg, #ffffff, #e9ecef);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(145deg, #F7F8FA, #E2E6EC);
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    4px 4px 10px rgba(0, 0, 0, 0.07), 
-    -4px -4px 10px rgba(255, 255, 255, 0.95),
-    inset 1px 1px 1.5px rgba(255, 255, 255, 0.8);
+    3px 3px 8px rgba(0, 0, 0, 0.06), 
+    -3px -3px 8px rgba(255, 255, 255, 0.75),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.6);
   color: #1E293B;
 }
 
 html.light .skeuo-btn:hover {
-  background: linear-gradient(145deg, #ffffff, #f0f3f6);
+  background: linear-gradient(145deg, #FFFFFF, #E8EBF0);
   box-shadow: 
-    5px 5px 12px rgba(0, 0, 0, 0.09), 
-    -5px -5px 12px #ffffff;
+    4px 4px 10px rgba(0, 0, 0, 0.08), 
+    -4px -4px 10px rgba(255, 255, 255, 0.9);
 }
 
 html.light .skeuo-btn:active {
   transform: scale(0.97);
   box-shadow: 
     inset 3px 3px 6px rgba(0, 0, 0, 0.08), 
-    inset -2px -2px 4px #ffffff;
+    inset -2px -2px 4px rgba(255, 255, 255, 0.7);
 }
 
 /* Primary Button with Luxury Glow */
@@ -321,7 +324,7 @@ html.light .skeuo-btn:active {
     inset 1px 1px 1.5px rgba(255, 255, 255, 0.3) !important;
 }
 
-/* 6. SKEUOMORPHIC INSET INPUTS */
+/* 6. SKEUOMORPHIC INSET INPUTS & SELECTS & TEXTAREAS */
 .skeuo-input {
   border-radius: 14px;
   outline: none;
@@ -346,16 +349,16 @@ html.dark .skeuo-input:focus {
 }
 
 html.light .skeuo-input {
-  background: #E8EBF0;
+  background: #DEE2E7;
   color: #1E293B;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid #D1D5DB;
   box-shadow: 
     inset 2.5px 2.5px 6px rgba(0, 0, 0, 0.07), 
-    inset -2px -2px 5px rgba(255, 255, 255, 0.9);
+    inset -2px -2px 5px rgba(255, 255, 255, 0.75);
 }
 
 html.light .skeuo-input:focus {
-  background: #FFFFFF;
+  background: #F1F4F8;
   border-color: rgba(91, 127, 255, 0.5);
   box-shadow: 
     0 0 0 1px rgba(91, 127, 255, 0.3),
@@ -385,15 +388,15 @@ html.dark .skeuo-badge {
 }
 
 html.light .skeuo-badge {
-  background: linear-gradient(145deg, #ffffff, #e9ecef);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: linear-gradient(145deg, #F6F7F9, #E0E4EA);
+  border: 1px solid #D1D5DB;
   box-shadow: 
-    2px 2px 5px rgba(0, 0, 0, 0.06), 
-    -2px -2px 5px rgba(255, 255, 255, 0.9),
-    inset 1px 1px 1px rgba(255, 255, 255, 0.8);
+    2px 2px 5px rgba(0, 0, 0, 0.05), 
+    -2px -2px 5px rgba(255, 255, 255, 0.7),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.6);
 }
 
-/* 8. SCREW RIVET HARDWARE (Hardware detail from reference) */
+/* 8. SCREW RIVET HARDWARE */
 .skeuo-rivet {
   width: 6px;
   height: 6px;
@@ -409,7 +412,7 @@ html.dark .skeuo-rivet {
 }
 
 html.light .skeuo-rivet {
-  background: radial-gradient(circle at 35% 35%, #ffffff 15%, #b0b8c4 85%);
+  background: radial-gradient(circle at 35% 35%, #ffffff 15%, #9fa8b5 85%);
   box-shadow: 
     inset 1px 1px 1px #ffffff, 
     1px 1px 2px rgba(0, 0, 0, 0.2);
@@ -495,18 +498,18 @@ html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
 }
 
 html.light .custom-scrollbar::-webkit-scrollbar-track {
-  background: #E2E6EC;
+  background: #DCE0E6;
   border-radius: 4px;
 }
 
 html.light .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #B8C1CD;
+  background: #B2BAC5;
   border-radius: 4px;
-  box-shadow: inset 1px 1px 1px #ffffff;
+  box-shadow: inset 1px 1px 1px rgba(255,255,255,0.6);
 }
 
 html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #9FAAB8;
+  background: #98A3B2;
 }
 
 /* Scrollbar hidden */
@@ -517,4 +520,3 @@ html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-

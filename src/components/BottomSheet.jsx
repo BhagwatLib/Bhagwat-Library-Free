@@ -7,7 +7,7 @@ export const BottomSheet = ({
   onClose,
   title,
   children,
-  maxHeight = "max-h-[85vh]",
+  maxHeight = "max-h-[88vh]",
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -23,7 +23,7 @@ export const BottomSheet = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/75 backdrop-blur-md">
           {/* Backdrop Touch Dismiss */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -33,34 +33,39 @@ export const BottomSheet = ({
             className="absolute inset-0"
           />
 
-          {/* Bottom Sheet Container */}
+          {/* Modal / Sheet Container */}
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className={`relative z-10 w-full bg-slate-900 border-t border-slate-800 rounded-t-3xl shadow-2xl overflow-hidden flex flex-col ${maxHeight}`}
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            className={`relative z-10 w-full md:max-w-2xl bg-[var(--card-bg)] border-t md:border border-slate-200 dark:border-slate-800 rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col ${maxHeight}`}
           >
-            {/* Top Drag Handle Indicator */}
-            <div className="pt-3 pb-1 flex justify-center cursor-grab active:cursor-grabbing">
-              <div className="w-12 h-1.5 rounded-full bg-slate-700/80" />
+            {/* Top Drag Handle Indicator (Mobile only) */}
+            <div className="pt-3 pb-1 flex md:hidden justify-center cursor-grab active:cursor-grabbing">
+              <div className="w-12 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700" />
             </div>
 
             {/* Header */}
             {title && (
-              <div className="px-5 py-3 border-b border-slate-800/80 flex items-center justify-between">
-                <h3 className="text-base font-bold text-white tracking-tight">{title}</h3>
+              <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-[var(--card-bg)] sticky top-0 z-10">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">
+                    {title}
+                  </h3>
+                  <span className="jewel-dot cyan" />
+                </div>
                 <button
                   onClick={onClose}
-                  className="w-9 h-9 rounded-full bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                  className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 >
-                  <X size={18} />
+                  <X size={14} />
                 </button>
               </div>
             )}
 
             {/* Scrollable Sheet Content */}
-            <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4 pb-12">
+            <div className="p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 pb-8">
               {children}
             </div>
           </motion.div>
