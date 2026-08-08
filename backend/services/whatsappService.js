@@ -1,12 +1,13 @@
 /**
- * whatsappService.js - Production-ready on-demand WhatsApp gateway
+ * whatsappService.js - Production-ready on-demand WhatsApp gateway for Render
  *
- * Lifecycle:
+ * Architecture:
  * - Idle / DISCONNECTED on server startup (0 Puppeteer memory overhead).
  * - Starts ONLY when requested via /start or /qr.
  * - Single active browser instance enforced.
+ * - Uses Puppeteer bundled Chromium automatically (headless: "new").
  * - Temporary QR session (NoAuth) — fully ephemeral, zero file locks.
- * - Full cleanup on logout / destroy.
+ * - Full cleanup on logout / destroy (frees browser & memory).
  * - Crash-proof on Render: if Chromium is constrained, server and REST APIs stay 100% up.
  */
 
@@ -48,50 +49,6 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Detects available Chromium executable across local and cloud environments
- */
-function getPuppeteerExecutablePath() {
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH;
-  }
-  if (process.env.CHROME_BIN) {
-    return process.env.CHROME_BIN;
-  }
-  if (process.env.CHROME_PATH) {
-    return process.env.CHROME_PATH;
-  }
-
-  // Common Linux / Debian / Ubuntu / Render paths
-  const commonLinuxPaths = [
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/snap/bin/chromium',
-    '/usr/bin/chrome',
-  ];
-
-  for (const p of commonLinuxPaths) {
-    if (fs.existsSync(p)) {
-      return p;
-    }
-  }
-
-  // Check puppeteer bundled executable if available
-  try {
-    const puppeteer = require('puppeteer');
-    if (typeof puppeteer.executablePath === 'function') {
-      const pPath = puppeteer.executablePath();
-      if (pPath && fs.existsSync(pPath)) {
-        return pPath;
-      }
-    }
-  } catch (_) {}
-
-  return undefined;
-}
-
-/**
  * Returns current status snapshot
  */
 function getStatus() {
@@ -107,21 +64,15 @@ function getStatus() {
 }
 
 /**
- * Instantiates and configures single WhatsApp client instance
+ * Instantiates and configures single WhatsApp client instance with bundled Puppeteer
  */
 function setupClient() {
-  const executablePath = getPuppeteerExecutablePath();
-  if (executablePath) {
-    logger.info(`Puppeteer using Chromium binary at: ${executablePath}`);
-  } else {
-    logger.info('Puppeteer using default Chrome browser.');
-  }
+  logger.info('Instantiating WhatsApp client with Puppeteer bundled Chromium...');
 
   client = new Client({
     authStrategy: new NoAuth(), // Temporary ephemeral QR session — zero file lock issues on cloud
     puppeteer: {
-      headless: true,
-      ...(executablePath ? { executablePath } : {}),
+      headless: 'new', // Modern headless mode
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -192,7 +143,7 @@ function setupClient() {
         wid: client.info?.wid?.user || '',
         platform: client.info?.platform || 'web',
       };
-    } catch (e) {
+    } catch (_) {
       clientInfo = { pushname: 'Bhagwat Library Admin' };
     }
 
@@ -225,7 +176,7 @@ function setupClient() {
 }
 
 /**
- * Starts WhatsApp client on-demand
+ * Starts WhatsApp client on-demand (ensures only 1 active instance)
  */
 async function startClient() {
   if (isReady && client && client.ready) {
@@ -268,7 +219,7 @@ async function startClient() {
 }
 
 /**
- * Safely destroys client and frees all browser resources
+ * Safely destroys client and frees all browser resources & memory
  */
 async function destroyClient() {
   logger.info('Destroying WhatsApp Web client & releasing browser resources...');
