@@ -15,7 +15,7 @@ const BATCHES_COLLECTION = "batches";
 export const DEFAULT_BATCHES = [
   {
     id: "batch_a",
-    name: "A Batch",
+    name: "A Shift",
     time: "6:00 AM - 10:00 AM",
     duration: "4 Hours",
     slotKey: "morning",
@@ -25,7 +25,7 @@ export const DEFAULT_BATCHES = [
   },
   {
     id: "batch_b",
-    name: "B Batch",
+    name: "B Shift",
     time: "10:00 AM - 2:00 PM",
     duration: "4 Hours",
     slotKey: "noon",
@@ -35,7 +35,7 @@ export const DEFAULT_BATCHES = [
   },
   {
     id: "batch_c",
-    name: "C Batch",
+    name: "C Shift",
     time: "2:00 PM - 6:00 PM",
     duration: "4 Hours",
     slotKey: "afternoon",
@@ -45,7 +45,7 @@ export const DEFAULT_BATCHES = [
   },
   {
     id: "batch_d",
-    name: "D Batch",
+    name: "D Shift",
     time: "6:00 PM - 10:00 PM",
     duration: "4 Hours",
     slotKey: "evening",
@@ -55,7 +55,7 @@ export const DEFAULT_BATCHES = [
   },
   {
     id: "batch_all",
-    name: "All Batch",
+    name: "All Shift",
     time: "6:00 AM - 10:00 PM",
     duration: "16 Hours (Full Day)",
     slotKey: "all",
@@ -64,6 +64,7 @@ export const DEFAULT_BATCHES = [
     description: "Full day dedicated seat access",
   },
 ];
+
 
 /**
  * Seed default batches in Firestore if collection is empty

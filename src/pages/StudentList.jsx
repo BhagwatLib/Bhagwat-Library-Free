@@ -35,7 +35,7 @@ const isAllBatchIdentifier = (item) => {
   return str === "all batch" || str === "all batches" || str === "all shift" || str === "all shifts" || str === "all";
 };
 
-// Helper: Checks if a student is enrolled in "All Batch"
+// Helper: Checks if a student is enrolled in "All Batch" / "All Shift"
 const isStudentInAllBatch = (student) => {
   if (!student) return false;
   const bArr = Array.isArray(student.batch)
@@ -59,26 +59,41 @@ const isStudentInAllBatch = (student) => {
 };
 
 // Helper: Checks if a student matches a specific batch filter
-const isStudentMatchingBatch = (student, targetBatchName) => {
-  if (!student || !targetBatchName) return false;
+const isStudentMatchingBatch = (student, targetBatchId, targetBatchName) => {
+  if (!student) return false;
 
-  // "All Batches" / "All" matches every student in the library
-  const normalizedTarget = String(targetBatchName).toLowerCase().trim();
+  const key = String(targetBatchId || targetBatchName || "").toLowerCase().trim();
+
+  // 1. "All Batches" / "All" matches every student in the library
   if (
-    normalizedTarget === "all batches" ||
-    normalizedTarget === "all" ||
-    normalizedTarget === "all batch" ||
-    normalizedTarget === "all shift"
+    key === "all" ||
+    key === "all batches" ||
+    key === "all students" ||
+    key === ""
   ) {
     return true;
   }
 
-  // RULE: All Batch students have access to every batch and MUST appear in every individual batch filter
-  if (isStudentInAllBatch(student)) {
+  const isAllStudent = isStudentInAllBatch(student);
+
+  // 2. Dedicated "All Shift Students" filter button
+  if (
+    key === "all_shift_only" ||
+    key === "all shift students" ||
+    key === "all batch students" ||
+    key === "all shift" ||
+    key === "all batch"
+  ) {
+    return isAllStudent;
+  }
+
+  // 3. For an individual shift (e.g. A Shift, B Shift, C Shift, D Shift):
+  // If the student has All Shift membership, they automatically have access to all shifts!
+  if (isAllStudent) {
     return true;
   }
 
-  // Check student's individual batches
+  // Check student's assigned individual batches
   const bArr = Array.isArray(student.batch)
     ? student.batch
     : student.batch
@@ -92,10 +107,19 @@ const isStudentMatchingBatch = (student, targetBatchName) => {
     : [];
 
   const allBatches = [...bArr, ...assigned].map((b) => String(b).toLowerCase().trim());
+  const normalizedTarget = String(targetBatchName || targetBatchId).toLowerCase().trim();
 
   return allBatches.some((sBatch) => {
     if (!sBatch) return false;
-    return sBatch === normalizedTarget || sBatch.includes(normalizedTarget) || normalizedTarget.includes(sBatch);
+    return (
+      sBatch === normalizedTarget ||
+      sBatch.includes(normalizedTarget) ||
+      normalizedTarget.includes(sBatch) ||
+      (normalizedTarget.startsWith("a ") && (sBatch === "a" || sBatch.startsWith("a "))) ||
+      (normalizedTarget.startsWith("b ") && (sBatch === "b" || sBatch.startsWith("b "))) ||
+      (normalizedTarget.startsWith("c ") && (sBatch === "c" || sBatch.startsWith("c "))) ||
+      (normalizedTarget.startsWith("d ") && (sBatch === "d" || sBatch.startsWith("d ")))
+    );
   });
 };
 
@@ -104,7 +128,7 @@ export const StudentList = () => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterBatch, setFilterBatch] = useState("All Batches");
+  const [filterBatch, setFilterBatch] = useState("all");
   const [filterStatus, setFilterStatus] = useState("All");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -145,30 +169,35 @@ export const StudentList = () => {
     }
   };
 
-  // Dynamic filter buttons: "All Batches" + distinct individual batches from Batch Management
+  // Dynamic filter buttons: "All Batches" + ABCD Shifts from Batches module + "All Shift Students"
   const dynamicFilterButtons = useMemo(() => {
     const individualBatches = batches.filter(
       (b) => !isAllBatchIdentifier(b) && b.status !== "Inactive"
     );
 
+    const allShiftDoc = batches.find((b) => isAllBatchIdentifier(b) && b.status !== "Inactive");
+    const allShiftLabel = allShiftDoc ? `${allShiftDoc.name} Students` : "All Shift Students";
+
     return [
-      { id: "all", name: "All Batches" },
+      { id: "all", name: "All Batches", label: "All Batches" },
       ...individualBatches.map((b) => ({
         id: b.id || b.name,
         name: b.name || b.time,
+        label: b.name || b.time,
       })),
+      { id: "all_shift_only", name: "All Shift Students", label: allShiftLabel },
     ];
   }, [batches]);
 
-  // Compute student counts per batch: includes individual batch students + All Batch students
+  // Compute student counts per batch
   const batchCounts = useMemo(() => {
-    const counts = { "All Batches": students.length, All: students.length };
+    const counts = { all: students.length, "All Batches": students.length };
 
     dynamicFilterButtons.forEach((btn) => {
       if (btn.id === "all") return;
-      const count = students.filter((s) => isStudentMatchingBatch(s, btn.name)).length;
-      counts[btn.name] = count;
+      const count = students.filter((s) => isStudentMatchingBatch(s, btn.id, btn.name)).length;
       counts[btn.id] = count;
+      counts[btn.name] = count;
     });
 
     return counts;
@@ -183,7 +212,7 @@ export const StudentList = () => {
           s.phone.includes(searchTerm) ||
           (s.seatNumber && String(s.seatNumber).includes(searchTerm));
 
-        const matchesBatch = isStudentMatchingBatch(s, filterBatch);
+        const matchesBatch = isStudentMatchingBatch(s, filterBatch, filterBatch);
 
         const status =
           s.status ||
@@ -258,16 +287,17 @@ export const StudentList = () => {
             <Filter size={14} /> Filter:
           </span>
           {dynamicFilterButtons.map((btn) => {
-            const count = batchCounts[btn.name] ?? (btn.id === "all" ? students.length : 0);
+            const count = batchCounts[btn.id] ?? batchCounts[btn.name] ?? (btn.id === "all" ? students.length : 0);
             const isSelected =
+              filterBatch === btn.id ||
               filterBatch === btn.name ||
-              (btn.id === "all" && (filterBatch === "All Batches" || filterBatch === "All"));
+              (btn.id === "all" && (filterBatch === "all" || filterBatch === "All Batches"));
 
             return (
               <button
                 key={btn.id}
                 onClick={() => {
-                  setFilterBatch(btn.name);
+                  setFilterBatch(btn.id);
                   setCurrentPage(1);
                 }}
                 className={clsx(
@@ -277,7 +307,7 @@ export const StudentList = () => {
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 )}
               >
-                <span>{btn.name}</span>
+                <span>{btn.label || btn.name}</span>
                 <span
                   className={clsx(
                     "px-1.5 py-0.5 rounded-md text-[10px] font-bold",
@@ -293,6 +323,7 @@ export const StudentList = () => {
           })}
         </div>
       </div>
+
 
 
 
