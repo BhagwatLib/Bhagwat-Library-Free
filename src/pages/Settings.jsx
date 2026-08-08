@@ -23,18 +23,17 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
   const [saved, setSaved] = useState(false);
   const { theme, setTheme } = useTheme();
 
-  const [formData, setFormData] = useState({
+  const [formData] = useState({
     libraryName: "Bhagwat Library",
-    adminEmail: "admin@bhagwatlibrary.in",
-    contactPhone: "+91 9876543210",
+    ownerName: "Satyam Kumar himanshu",
+    adminEmail: "bhagwatlibrary0@gmail.com",
+    contactPhone: "6200822422",
     totalCapacity: 100,
     currency: "INR (₹)",
   });
 
   const handleProfileSubmit = (e) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   };
 
   const navTabs = [
@@ -183,11 +182,14 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
 
       {/* TAB CONTENT: LIBRARY PROFILE */}
       {activeSubTab === "profile" && (
-        <form onSubmit={handleProfileSubmit} className="space-y-6">
+        <div className="space-y-6">
           <SaaSCard className="p-6 space-y-4" withGrip>
-            <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 uppercase tracking-wider">
-              <Building size={16} className="text-blue-500" /> Library Profile & Organization
-            </h3>
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+                <Building size={16} className="text-blue-500" /> Library Profile Info
+              </h3>
+              <Badge variant="warning" dot>Profile Details Locked</Badge>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
@@ -197,8 +199,19 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
                 <input
                   type="text"
                   value={formData.libraryName}
-                  onChange={(e) => setFormData({ ...formData, libraryName: e.target.value })}
-                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
+                  readOnly
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Owner Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.ownerName}
+                  readOnly
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
                 />
               </div>
               <div>
@@ -208,8 +221,8 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
                 <input
                   type="email"
                   value={formData.adminEmail}
-                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
+                  readOnly
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
                 />
               </div>
               <div>
@@ -219,8 +232,8 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
                 <input
                   type="text"
                   value={formData.contactPhone}
-                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
+                  readOnly
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
                 />
               </div>
               <div>
@@ -231,21 +244,27 @@ export const Settings = ({ initialTab = "whatsapp" }) => {
                   type="number"
                   value={formData.totalCapacity}
                   readOnly
-                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-60 cursor-not-allowed"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Currency timing
+                </label>
+                <input
+                  type="text"
+                  value={formData.currency}
+                  readOnly
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-75 cursor-not-allowed"
                 />
               </div>
             </div>
           </SaaSCard>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="skeuo-btn skeuo-btn-primary px-6 py-3 text-xs flex items-center gap-2 shadow-lg"
-            >
-              <Save size={15} /> Save Profile Changes
-            </button>
+          <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center text-xs text-slate-500 dark:text-slate-400">
+            🔒 These settings are pre-configured securely and cannot be changed directly from the admin panel. Contact system administrator for any modification.
           </div>
-        </form>
+        </div>
       )}
     </div>
   );
