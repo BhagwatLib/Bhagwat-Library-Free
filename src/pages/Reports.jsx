@@ -17,7 +17,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
 } from "recharts";
 import { subscribeStudents } from "../services/studentsService";
 import { subscribeBatches } from "../services/batchesService";
@@ -207,7 +206,6 @@ export const Reports = () => {
                 >
                   <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
                   <YAxis stroke="#64748b" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: "var(--card-bg)", borderColor: "var(--border-color)" }} />
                   <Bar dataKey="amount" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

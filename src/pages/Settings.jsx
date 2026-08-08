@@ -18,7 +18,7 @@ import { WhatsAppScanner } from "../components/WhatsAppScanner";
 import { ReminderSettings } from "../components/ReminderSettings";
 import { useTheme } from "../context/ThemeContext";
 
-export const Settings = ({ initialTab = "appearance" }) => {
+export const Settings = ({ initialTab = "whatsapp" }) => {
   const [activeSubTab, setActiveSubTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
   const { theme, setTheme } = useTheme();
@@ -38,10 +38,10 @@ export const Settings = ({ initialTab = "appearance" }) => {
   };
 
   const navTabs = [
+    { id: "whatsapp", label: "WhatsApp Connection", icon: QrCode, desc: "QR scan & gateway pairing" },
+    { id: "reminders", label: "Reminder Settings", icon: Bell, desc: "Scheduler & alert rules" },
     { id: "appearance", label: "Appearance & Theme", icon: Palette, desc: "Light, Dark, & System" },
     { id: "profile", label: "Library Profile", icon: Building, desc: "Branding & contact details" },
-    { id: "whatsapp", label: "WhatsApp Scanner", icon: QrCode, desc: "Gateway & QR pairing" },
-    { id: "reminders", label: "Reminder Settings", icon: Bell, desc: "Scheduler & alert rules" },
   ];
 
   return (
@@ -53,7 +53,7 @@ export const Settings = ({ initialTab = "appearance" }) => {
             Admin Settings <span className="jewel-dot cyan" />
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Configure appearance theme, branding, WhatsApp gateway, and automated reminder schedules
+            Configure WhatsApp gateway, reminder schedules, appearance theme, and library branding
           </p>
         </div>
 
