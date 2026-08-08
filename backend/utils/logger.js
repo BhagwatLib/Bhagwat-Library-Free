@@ -10,13 +10,20 @@ const logFile = path.join(logDir, 'app.log');
 
 function formatMessage(level, message, meta) {
   const timestamp = new Date().toISOString();
-  const metaStr = meta ? ` | Meta: ${JSON.stringify(meta)}` : '';
+  let metaStr = '';
+  if (meta) {
+    if (meta.stack) {
+      metaStr = `\n--- STACK TRACE ---\n${meta.stack}\n-------------------`;
+    } else {
+      metaStr = ` | Meta: ${JSON.stringify(meta, null, 2)}`;
+    }
+  }
   return `[${timestamp}] [${level.toUpperCase()}]: ${message}${metaStr}\n`;
 }
 
 function writeLog(level, message, meta) {
   const formatted = formatMessage(level, message, meta);
-  // Log to console
+  // Log to console with full stack trace preservation
   if (level === 'error') {
     console.error(formatted.trim());
   } else if (level === 'warn') {

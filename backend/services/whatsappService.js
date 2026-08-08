@@ -1,5 +1,5 @@
 /**
- * whatsappService.js - Production-ready on-demand WhatsApp gateway for Render
+ * whatsappService.js - Production-ready on-demand WhatsApp gateway with full diagnostics
  *
  * Architecture:
  * - Idle / DISCONNECTED on server startup (0 Puppeteer memory overhead).
@@ -8,7 +8,7 @@
  * - Uses Puppeteer bundled Chromium automatically (headless: "new").
  * - Temporary QR session (NoAuth) — fully ephemeral, zero file locks.
  * - Full cleanup on logout / destroy (frees browser & memory).
- * - Crash-proof on Render: if Chromium is constrained, server and REST APIs stay 100% up.
+ * - Complete diagnostics & stack trace logging for Render deployment troubleshooting.
  */
 
 'use strict';
@@ -35,6 +35,7 @@ let latestQrDataUrl = null;
 let lastConnectedTime = null;
 let clientInfo = null;
 let isInitializing = false;
+let lastError = null;
 
 /**
  * Normalizes phone number to E.164 without '+' (e.g. 9876543210 -> 919876543210)
@@ -49,7 +50,7 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Returns current status snapshot
+ * Returns current status snapshot including last error diagnostics
  */
 function getStatus() {
   return {
@@ -59,6 +60,7 @@ function getStatus() {
     rawQr: latestQrRaw,
     lastConnectedTime,
     clientInfo,
+    lastError,
     timestamp: new Date().toISOString(),
   };
 }
@@ -67,24 +69,32 @@ function getStatus() {
  * Instantiates and configures single WhatsApp client instance with bundled Puppeteer
  */
 function setupClient() {
-  logger.info('Instantiating WhatsApp client with Puppeteer bundled Chromium...');
+  logger.info('[WhatsApp Diagnostics] Creating WhatsApp Client...');
+
+  const puppeteerArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--single-process',
+    '--disable-gpu',
+    '--disable-software-rasterizer',
+    '--disable-extensions',
+  ];
+
+  logger.info('[WhatsApp Diagnostics] Puppeteer Launch Configuration:', {
+    authStrategy: 'NoAuth',
+    headless: 'new',
+    puppeteerArgs,
+  });
 
   client = new Client({
-    authStrategy: new NoAuth(), // Temporary ephemeral QR session — zero file lock issues on cloud
+    authStrategy: new NoAuth(),
     puppeteer: {
-      headless: 'new', // Modern headless mode
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-extensions',
-      ],
+      headless: 'new',
+      args: puppeteerArgs,
     },
   });
 
@@ -92,6 +102,7 @@ function setupClient() {
 
   // Event: QR Code Received
   client.on('qr', async (qr) => {
+    logger.info('[WhatsApp Diagnostics] QR event received! Generating QR image...');
     latestQrRaw = qr;
     try {
       latestQrDataUrl = await QRCode.toDataURL(qr, {
@@ -102,15 +113,20 @@ function setupClient() {
           light: '#ffffff',
         },
       });
+      logger.info('[WhatsApp Diagnostics] QR Data URL generated successfully.');
     } catch (err) {
-      logger.error('Error generating QR Data URL:', { error: err.message });
+      logger.error('[WhatsApp Diagnostics] Error generating QR Data URL', {
+        message: err.message,
+        stack: err.stack,
+      });
     }
 
     connectionStatus = 'QR_READY';
     isReady = false;
     client.ready = false;
+    lastError = null;
 
-    logger.info('Event: qr - New WhatsApp QR Code generated for scanning.');
+    logger.info('[WhatsApp Diagnostics] Waiting for QR code to be scanned with mobile app...');
     console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
     qrcodeTerminal.generate(qr, { small: true });
     console.log('-----------------------------------------------------\n');
@@ -121,21 +137,24 @@ function setupClient() {
 
   // Event: Authenticated
   client.on('authenticated', () => {
+    logger.info('[WhatsApp Diagnostics] Authenticated! WhatsApp Web session established.');
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
     latestQrDataUrl = null;
-    logger.info('Event: authenticated - WhatsApp Web client authenticated successfully.');
+    lastError = null;
     whatsappEvents.emit('status_change', getStatus());
   });
 
   // Event: Ready
   client.on('ready', () => {
+    logger.info('[WhatsApp Diagnostics] Ready! WhatsApp Web client is ready and connected!');
     isReady = true;
     client.ready = true;
     connectionStatus = 'CONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
     lastConnectedTime = new Date().toISOString();
+    lastError = null;
 
     try {
       clientInfo = {
@@ -143,33 +162,37 @@ function setupClient() {
         wid: client.info?.wid?.user || '',
         platform: client.info?.platform || 'web',
       };
+      logger.info('[WhatsApp Diagnostics] Connected Account Info:', clientInfo);
     } catch (_) {
       clientInfo = { pushname: 'Bhagwat Library Admin' };
     }
 
-    logger.info('Event: ready - WhatsApp Web client is ready and connected!');
     whatsappEvents.emit('status_change', getStatus());
   });
 
   // Event: Auth Failure
   client.on('auth_failure', (msg) => {
+    logger.error('[WhatsApp Diagnostics] Authentication failed', { message: msg });
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
-    logger.error('Event: auth_failure - WhatsApp Web authentication failed:', { error: msg });
+    lastError = {
+      message: `Authentication failed: ${msg}`,
+      timestamp: new Date().toISOString(),
+    };
     whatsappEvents.emit('status_change', getStatus());
   });
 
   // Event: Disconnected
   client.on('disconnected', (reason) => {
+    logger.warn('[WhatsApp Diagnostics] Disconnected. Reason:', { reason });
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
-    logger.warn('Event: disconnected - WhatsApp Web client disconnected:', { reason });
     whatsappEvents.emit('status_change', getStatus());
     destroyClient().catch(() => {});
   });
@@ -180,34 +203,50 @@ function setupClient() {
  */
 async function startClient() {
   if (isReady && client && client.ready) {
-    logger.info('Client already connected and ready.');
+    logger.info('[WhatsApp Diagnostics] Client already connected and ready.');
     return getStatus();
   }
 
   if (isInitializing) {
-    logger.info('Client initialization already in progress...');
+    logger.info('[WhatsApp Diagnostics] Client initialization already in progress...');
     return getStatus();
   }
 
   isInitializing = true;
   connectionStatus = 'CONNECTING';
+  lastError = null;
   whatsappEvents.emit('status_change', getStatus());
 
   try {
     if (client) {
+      logger.info('[WhatsApp Diagnostics] Destroying previous client instance before new launch...');
       try {
         await client.destroy();
       } catch (err) {
-        logger.warn('Previous client cleanup warning (ignored):', { error: err.message });
+        logger.warn('[WhatsApp Diagnostics] Previous client cleanup warning (ignored):', {
+          message: err.message,
+          stack: err.stack,
+        });
       }
       client = null;
     }
 
     setupClient();
-    logger.info('Initializing WhatsApp Web client on-demand...');
+    logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
+    logger.info('[WhatsApp Diagnostics] Waiting for browser to launch and generate QR...');
+
     await client.initialize();
+    logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
   } catch (err) {
-    logger.warn('WhatsApp Web initialization deferred/unavailable on this host:', { error: err.message });
+    lastError = {
+      message: err.message,
+      stack: err.stack,
+      timestamp: new Date().toISOString(),
+    };
+    logger.error('[WhatsApp Diagnostics] WhatsApp initialization failed', {
+      message: err.message,
+      stack: err.stack,
+    });
     connectionStatus = 'DISCONNECTED';
     isReady = false;
     whatsappEvents.emit('status_change', getStatus());
@@ -222,16 +261,21 @@ async function startClient() {
  * Safely destroys client and frees all browser resources & memory
  */
 async function destroyClient() {
-  logger.info('Destroying WhatsApp Web client & releasing browser resources...');
+  logger.info('[WhatsApp Diagnostics] Destroying client...');
   if (client) {
     try {
       await client.logout();
+      logger.info('[WhatsApp Diagnostics] Client logged out.');
     } catch (_) {}
 
     try {
       await client.destroy();
+      logger.info('[WhatsApp Diagnostics] Client destroyed successfully.');
     } catch (err) {
-      logger.warn('Error during client.destroy() (ignored):', { error: err.message });
+      logger.warn('[WhatsApp Diagnostics] Warning during client.destroy():', {
+        message: err.message,
+        stack: err.stack,
+      });
     }
     client = null;
   }
@@ -244,7 +288,7 @@ async function destroyClient() {
   isInitializing = false;
 
   whatsappEvents.emit('status_change', getStatus());
-  logger.info('WhatsApp client completely destroyed. Memory & browser freed.');
+  logger.info('[WhatsApp Diagnostics] Client destroyed. Browser process closed and memory cleared.');
   return getStatus();
 }
 
@@ -263,7 +307,10 @@ async function getQr() {
 
   if (!client || connectionStatus === 'DISCONNECTED') {
     startClient().catch((err) => {
-      logger.warn('Error triggering on-demand QR start:', { error: err.message });
+      logger.error('[WhatsApp Diagnostics] Error triggering on-demand QR start:', {
+        message: err.message,
+        stack: err.stack,
+      });
     });
   }
 
@@ -271,6 +318,7 @@ async function getQr() {
     status: connectionStatus,
     qrCode: latestQrDataUrl,
     rawQr: latestQrRaw,
+    lastError,
   };
 }
 
@@ -289,7 +337,10 @@ async function getMediaFromUrl(url, filename) {
         const base64Data = data.toString('base64');
         return new MessageMedia('application/pdf', base64Data, filename || localFilename);
       } catch (err) {
-        logger.error(`Error reading local file: ${localPath}`, { error: err.message });
+        logger.error(`Error reading local file: ${localPath}`, {
+          message: err.message,
+          stack: err.stack,
+        });
       }
     }
   }
@@ -300,7 +351,10 @@ async function getMediaFromUrl(url, filename) {
     const base64Data = Buffer.from(response.data, 'binary').toString('base64');
     return new MessageMedia(mimeType, base64Data, filename || 'document.pdf');
   } catch (err) {
-    logger.error(`Failed to download document from URL: ${url}`, { error: err.message });
+    logger.error(`Failed to download document from URL: ${url}`, {
+      message: err.message,
+      stack: err.stack,
+    });
     throw err;
   }
 }
@@ -340,7 +394,10 @@ async function sendTextMessage(phone, message) {
     logger.info(`Message sent successfully. ID: ${messageId}`);
     return { success: true, messageId };
   } catch (error) {
-    logger.error(`Failed to send message to ${phone}`, { error: error.message });
+    logger.error(`Failed to send message to ${phone}`, {
+      message: error.message,
+      stack: error.stack,
+    });
     throw error;
   }
 }
@@ -383,7 +440,10 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     logger.info(`Document sent successfully. ID: ${messageId}`);
     return { success: true, messageId };
   } catch (error) {
-    logger.error(`Failed to send document [${filename}] to ${phone}`, { error: error.message });
+    logger.error(`Failed to send document [${filename}] to ${phone}`, {
+      message: error.message,
+      stack: error.stack,
+    });
     throw error;
   }
 }
@@ -426,7 +486,10 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
     } catch (error) {
       results.push({ phone, success: false, error: error.message });
       failureCount++;
-      logger.error(`Bulk send error for ${phone}: ${error.message}`);
+      logger.error(`Bulk send error for ${phone}:`, {
+        message: error.message,
+        stack: error.stack,
+      });
     }
   }
 
