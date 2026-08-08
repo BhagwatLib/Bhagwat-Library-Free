@@ -55,8 +55,9 @@ async function runTests() {
       amount: 450,
       seatNumber: 12,
       dueDate: '2026-08-20',
-      batch: 'Morning (8AM-12PM)',
+      batch: 'A Shift (6AM-10AM)',
     });
+
     if (!res.data.success || !res.data.pdfUrl.includes('/uploads/')) {
       throw new Error('Failed to generate PDF');
     }

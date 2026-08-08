@@ -41,42 +41,43 @@ function getInitialMemberships() {
       studentName: 'Rahul Sharma',
       phone: '918789366398',
       seatNumber: 12,
-      batch: 'Morning Shift (06:00 AM - 12:00 PM)',
+      batch: 'A Shift (06:00 AM - 10:00 AM)',
       validityTo: formatYMD(tomorrow), // Due Tomorrow
       paymentStatus: 'Unpaid',
-      dueAmount: 800,
+      dueAmount: 500,
     },
     {
       id: 'mem-2',
       studentName: 'Priya Patel',
       phone: '919876543210',
       seatNumber: 4,
-      batch: 'Full Day Shift',
+      batch: 'All Shift',
       validityTo: formatYMD(today), // Due Today
       paymentStatus: 'Unpaid',
-      dueAmount: 1200,
+      dueAmount: 1500,
     },
     {
       id: 'mem-3',
       studentName: 'Amit Kumar',
       phone: '919123456780',
       seatNumber: 18,
-      batch: 'Evening Shift (04:00 PM - 10:00 PM)',
+      batch: 'C Shift (02:00 PM - 06:00 PM)',
       validityTo: formatYMD(yesterday), // Overdue
       paymentStatus: 'Unpaid',
-      dueAmount: 800,
+      dueAmount: 500,
     },
     {
       id: 'mem-4',
       studentName: 'Ananya Verma',
       phone: '919988776655',
       seatNumber: 22,
-      batch: 'Morning Shift',
+      batch: 'B Shift',
       validityTo: formatYMD(nextMonth), // Active / Valid
       paymentStatus: 'Paid',
       dueAmount: 0,
     },
   ];
+
 }
 
 // Helpers to load and save JSON files

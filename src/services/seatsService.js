@@ -114,13 +114,13 @@ export const syncExistingStudentsToSeats = async () => {
       // Map batch string/array to normalized codes "A", "B", "C", "D"
       const targetSlots = getSlotsFromBatchInput(student.assignedBatches || student.batch);
       const cleanCodes = targetSlots.map((sCode) => sCode.toUpperCase()); // ["A", "B", "C", "D"]
-      const cleanBatches = cleanCodes.map((c) => `${c} Batch`);
+      const cleanBatches = cleanCodes.map((c) => `${c} Shift`);
 
       // Migration check: If assignedBatches is missing or batch contains old labels/"All Batch"
       const rawBatchStr = JSON.stringify(student.batch || "");
       const needsUpdate =
         !student.assignedBatches ||
-        /all|morning|noon|afternoon|evening/i.test(rawBatchStr);
+        /all/i.test(rawBatchStr);
 
       if (needsUpdate) {
         const studentDocRef = doc(db, STUDENTS_COLLECTION, student.id);
@@ -134,6 +134,7 @@ export const syncExistingStudentsToSeats = async () => {
         );
         batchHasOperations = true;
       }
+
 
       const seatNum = Number(student.seatNumber);
       if (seatNum > 0 && seatNum <= 100) {

@@ -303,7 +303,7 @@ export const BatchList = () => {
             <form onSubmit={handleSubmit} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Batch Name (e.g. A Batch, Morning Shift)
+                  Batch / Shift Name (e.g. A Shift, B Shift, C Shift, D Shift, All Shift)
                 </label>
                 <input
                   type="text"
@@ -313,8 +313,9 @@ export const BatchList = () => {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-                  placeholder="e.g. A Batch"
+                  placeholder="e.g. A Shift"
                 />
+
               </div>
 
               <div>
