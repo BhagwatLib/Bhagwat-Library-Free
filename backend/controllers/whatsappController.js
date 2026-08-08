@@ -1,7 +1,12 @@
+/**
+ * whatsappController.js - Request handlers for WhatsApp Gateway endpoints
+ */
+
+'use strict';
+
 const whatsappService = require('../services/whatsappService');
 const logger = require('../utils/logger');
 
-// Simple validation helpers
 const isValidPhone = (phone) => {
   if (!phone) return false;
   const digits = phone.toString().replace(/\D/g, '');
@@ -12,10 +17,33 @@ const isValidUrl = (urlStr) => {
   try {
     new URL(urlStr);
     return true;
-  } catch (err) {
+  } catch (_) {
     return false;
   }
 };
+
+/**
+ * Handles POST /api/whatsapp/start
+ * Starts client and begins QR generation on-demand
+ */
+async function startWhatsApp(req, res) {
+  try {
+    logger.info('WhatsApp start requested via API');
+    const status = await whatsappService.startClient();
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp gateway start initiated',
+      data: status,
+    });
+  } catch (error) {
+    logger.error('Error starting WhatsApp gateway:', { error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to start WhatsApp gateway',
+      error: error.message,
+    });
+  }
+}
 
 /**
  * Handles GET /api/whatsapp/status
@@ -30,6 +58,50 @@ function getStatus(req, res) {
   } catch (error) {
     return res.status(500).json({
       success: false,
+      message: 'Failed to retrieve status',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Handles GET /api/whatsapp/qr
+ * Returns current QR code or triggers on-demand generation
+ */
+async function getQr(req, res) {
+  try {
+    const qrData = await whatsappService.getQr();
+    return res.status(200).json({
+      success: true,
+      data: qrData,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get QR code',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Handles POST /api/whatsapp/logout
+ * Logs out, destroys browser, and frees all memory
+ */
+async function logoutWhatsApp(req, res) {
+  try {
+    logger.info('WhatsApp logout requested via API');
+    const status = await whatsappService.destroyClient();
+    return res.status(200).json({
+      success: true,
+      message: 'WhatsApp client logged out and destroyed',
+      data: status,
+    });
+  } catch (error) {
+    logger.error('Error during logout:', { error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to logout WhatsApp client',
       error: error.message,
     });
   }
@@ -41,19 +113,16 @@ function getStatus(req, res) {
 async function reconnectWhatsApp(req, res) {
   try {
     logger.info('Received reconnect request');
-    // Fire and do not block the response
-    whatsappService.reconnect().catch((err) => {
-      logger.error('Error during reconnect:', { error: err.message });
-    });
-
+    const status = await whatsappService.startClient();
     return res.status(200).json({
       success: true,
       message: 'Reconnection initiated',
-      data: whatsappService.getStatus(),
+      data: status,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
+      message: 'Reconnection failed',
       error: error.message,
     });
   }
@@ -64,28 +133,24 @@ async function reconnectWhatsApp(req, res) {
  */
 async function refreshQr(req, res) {
   try {
-    const { resetSession } = req.body || {};
-    logger.info(`Received refresh-qr request (resetSession: ${resetSession})`);
-    
-    whatsappService.refreshQr(Boolean(resetSession)).catch((err) => {
-      logger.error('Error during refreshQr:', { error: err.message });
-    });
-
+    logger.info('Received refresh-qr request');
+    const status = await whatsappService.startClient();
     return res.status(200).json({
       success: true,
       message: 'QR code refresh initiated',
-      data: whatsappService.getStatus(),
+      data: status,
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
+      message: 'QR refresh failed',
       error: error.message,
     });
   }
 }
 
 /**
- * Handles GET /api/whatsapp/events (Server-Sent Events)
+ * Handles GET /api/whatsapp/events (SSE)
  */
 function eventsStream(req, res) {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -93,20 +158,20 @@ function eventsStream(req, res) {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  // Send initial state immediately
+  // Send initial state
   const initialData = JSON.stringify(whatsappService.getStatus());
   res.write(`event: status\ndata: ${initialData}\n\n`);
 
   const onStatusChange = (status) => {
     try {
       res.write(`event: status\ndata: ${JSON.stringify(status)}\n\n`);
-    } catch (e) {}
+    } catch (_) {}
   };
 
   const onQr = (qrData) => {
     try {
       res.write(`event: qr\ndata: ${JSON.stringify(qrData)}\n\n`);
-    } catch (e) {}
+    } catch (_) {}
   };
 
   whatsappService.events.on('status_change', onStatusChange);
@@ -120,6 +185,44 @@ function eventsStream(req, res) {
 }
 
 /**
+ * Handles POST /api/whatsapp/send (Standard Text Send)
+ */
+async function sendTextMessage(req, res, next) {
+  try {
+    const { phone, message } = req.body;
+
+    if (!phone || !isValidPhone(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid phone number (at least 10 digits) is required.',
+        error: 'Invalid phone number',
+      });
+    }
+
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content cannot be empty.',
+        error: 'Empty message',
+      });
+    }
+
+    if (!whatsappService.ready) {
+      return res.status(503).json({
+        success: false,
+        message: 'WhatsApp client is not connected. Please scan the QR code first.',
+        error: 'WhatsApp not ready',
+      });
+    }
+
+    const result = await whatsappService.sendTextMessage(phone, message.trim());
+    return res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Handles POST /api/whatsapp/test-message
  */
 async function sendTestMessage(req, res, next) {
@@ -129,21 +232,23 @@ async function sendTestMessage(req, res, next) {
     if (!phone || !isValidPhone(phone)) {
       return res.status(400).json({
         success: false,
-        error: 'A valid phone number (at least 10 digits) is required.',
+        message: 'A valid phone number (at least 10 digits) is required.',
+        error: 'Invalid phone number',
       });
     }
 
     if (!whatsappService.ready) {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp client is not connected. Please scan the QR code first.',
+        message: 'WhatsApp client is not connected. Please scan the QR code first.',
+        error: 'WhatsApp not ready',
       });
     }
 
     const testMsg =
       message && typeof message === 'string' && message.trim().length > 0
         ? message.trim()
-        : `👋 Hello! This is a test message from Bhagwat Library Management System WhatsApp service. System is active & connected! ✅`;
+        : '👋 Hello! This is a test message from Bhagwat Library WhatsApp Gateway. System is active & connected! ✅';
 
     const result = await whatsappService.sendTextMessage(phone, testMsg);
     return res.status(200).json({
@@ -151,41 +256,6 @@ async function sendTestMessage(req, res, next) {
       message: 'Test message sent successfully!',
       ...result,
     });
-  } catch (error) {
-    next(error);
-  }
-}
-
-/**
- * Handles POST /api/whatsapp/send
- */
-async function sendTextMessage(req, res, next) {
-  try {
-    const { phone, message } = req.body;
-
-    // Validation
-    if (!phone || !isValidPhone(phone)) {
-      return res.status(400).json({
-        success: false,
-        error: 'A valid phone number (with country code) is required.',
-      });
-    }
-    if (!message || typeof message !== 'string' || message.trim() === '') {
-      return res.status(400).json({
-        success: false,
-        error: 'Message content cannot be empty.',
-      });
-    }
-
-    if (!whatsappService.ready) {
-      return res.status(503).json({
-        success: false,
-        error: 'WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.',
-      });
-    }
-
-    const result = await whatsappService.sendWhatsAppMessage(phone, message.trim());
-    return res.status(200).json(result);
   } catch (error) {
     next(error);
   }
@@ -201,20 +271,23 @@ async function sendInvoiceMessage(req, res, next) {
     if (!phone || !isValidPhone(phone)) {
       return res.status(400).json({
         success: false,
-        error: 'A valid phone number (with country code) is required.',
+        message: 'A valid phone number is required.',
+        error: 'Invalid phone number',
       });
     }
     if (!invoiceUrl || !isValidUrl(invoiceUrl)) {
       return res.status(400).json({
         success: false,
-        error: 'A valid invoice URL is required.',
+        message: 'A valid invoice URL is required.',
+        error: 'Invalid URL',
       });
     }
 
     if (!whatsappService.ready) {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.',
+        message: 'WhatsApp client is not connected. Please scan the QR code in Settings.',
+        error: 'WhatsApp not ready',
       });
     }
 
@@ -227,7 +300,6 @@ async function sendInvoiceMessage(req, res, next) {
       }
     } catch (_) {}
 
-    logger.info(`Attempting standard document send for invoice to ${phone}...`);
     const result = await whatsappService.sendDocument(
       phone,
       invoiceUrl,
@@ -250,39 +322,43 @@ async function sendReminderMessage(req, res, next) {
     if (!phone || !isValidPhone(phone)) {
       return res.status(400).json({
         success: false,
-        error: 'A valid phone number (with country code) is required.',
+        message: 'A valid phone number is required.',
+        error: 'Invalid phone number',
       });
     }
     if (!studentName || typeof studentName !== 'string' || studentName.trim() === '') {
       return res.status(400).json({
         success: false,
-        error: 'Student name is required.',
+        message: 'Student name is required.',
+        error: 'Invalid student name',
       });
     }
     if (dueAmount === undefined || isNaN(Number(dueAmount))) {
       return res.status(400).json({
         success: false,
-        error: 'Due amount must be a number.',
+        message: 'Due amount must be a number.',
+        error: 'Invalid amount',
       });
     }
     if (!dueDate) {
       return res.status(400).json({
         success: false,
-        error: 'Due date is required.',
+        message: 'Due date is required.',
+        error: 'Invalid due date',
       });
     }
 
     if (!whatsappService.ready) {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.',
+        message: 'WhatsApp client is not connected. Please scan the QR code in Settings.',
+        error: 'WhatsApp not ready',
       });
     }
 
     const formattedAmount = Number(dueAmount).toFixed(2);
     const generatedMessage = `Dear ${studentName.trim()},\n\nThis is a payment reminder from Bhagwat Library. You have a pending fee of INR ${formattedAmount} which is due on ${dueDate}.\n\nPlease clear the dues to ensure uninterrupted library access.\n\nThank you!`;
 
-    logger.info(`Attempting standard text send for reminder to ${phone}...`);
     const result = await whatsappService.sendTextMessage(phone, generatedMessage);
     return res.status(200).json(result);
   } catch (error) {
@@ -300,7 +376,8 @@ async function sendBulkMessages(req, res, next) {
     if (!phones || !Array.isArray(phones) || phones.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'A non-empty list of phone numbers (phones) is required.',
+        message: 'A non-empty list of phone numbers is required.',
+        error: 'Empty phones list',
       });
     }
 
@@ -308,21 +385,24 @@ async function sendBulkMessages(req, res, next) {
     if (validPhones.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'No valid phone numbers found in the provided list.',
+        message: 'No valid phone numbers found in list.',
+        error: 'Invalid phone numbers',
       });
     }
 
     if (!message || typeof message !== 'string' || message.trim() === '') {
       return res.status(400).json({
         success: false,
-        error: 'Message content cannot be empty.',
+        message: 'Message content cannot be empty.',
+        error: 'Empty message',
       });
     }
 
     if (!whatsappService.ready) {
       return res.status(503).json({
         success: false,
-        error: 'WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.',
+        message: 'WhatsApp client is not connected. Please scan the QR code in Settings.',
+        error: 'WhatsApp not ready',
       });
     }
 
@@ -334,7 +414,10 @@ async function sendBulkMessages(req, res, next) {
 }
 
 module.exports = {
+  startWhatsApp,
   getStatus,
+  getQr,
+  logoutWhatsApp,
   reconnectWhatsApp,
   refreshQr,
   eventsStream,
@@ -344,4 +427,3 @@ module.exports = {
   sendReminderMessage,
   sendBulkMessages,
 };
-

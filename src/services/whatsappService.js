@@ -64,10 +64,40 @@ export const getWhatsAppStatus = async () => {
 };
 
 /**
+ * Start WhatsApp gateway on-demand
+ */
+export const startWhatsAppGateway = async () => {
+  const res = await fetch(`${BACKEND_URL}/api/whatsapp/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return res.json();
+};
+
+/**
+ * Get or trigger QR code
+ */
+export const getWhatsAppQr = async () => {
+  const res = await fetch(`${BACKEND_URL}/api/whatsapp/qr`);
+  return res.json();
+};
+
+/**
+ * Logout and destroy WhatsApp browser instance
+ */
+export const logoutWhatsApp = async () => {
+  const res = await fetch(`${BACKEND_URL}/api/whatsapp/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return res.json();
+};
+
+/**
  * Reconnect WhatsApp client
  */
 export const reconnectWhatsApp = async () => {
-  const res = await fetch(`${BACKEND_URL}/api/whatsapp/reconnect`, {
+  const res = await fetch(`${BACKEND_URL}/api/whatsapp/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
@@ -77,14 +107,14 @@ export const reconnectWhatsApp = async () => {
 /**
  * Refresh QR Code
  */
-export const refreshWhatsAppQR = async (resetSession = false) => {
-  const res = await fetch(`${BACKEND_URL}/api/whatsapp/refresh-qr`, {
+export const refreshWhatsAppQR = async () => {
+  const res = await fetch(`${BACKEND_URL}/api/whatsapp/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resetSession }),
   });
   return res.json();
 };
+
 
 /**
  * Send Test WhatsApp Message

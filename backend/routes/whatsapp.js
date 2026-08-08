@@ -1,10 +1,21 @@
+/**
+ * routes/whatsapp.js - WhatsApp Gateway API Routes
+ */
+
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const whatsappController = require('../controllers/whatsappController');
 
-// Status and Connection Management
+// Gateway Lifecycle & QR
+router.post('/start', whatsappController.startWhatsApp);
 router.get('/status', whatsappController.getStatus);
+router.get('/qr', whatsappController.getQr);
+router.post('/logout', whatsappController.logoutWhatsApp);
 router.get('/events', whatsappController.eventsStream);
+
+// Session controls & test
 router.post('/reconnect', whatsappController.reconnectWhatsApp);
 router.post('/refresh-qr', whatsappController.refreshQr);
 router.post('/test-message', whatsappController.sendTestMessage);
@@ -16,4 +27,3 @@ router.post('/reminder', whatsappController.sendReminderMessage);
 router.post('/bulk', whatsappController.sendBulkMessages);
 
 module.exports = router;
-

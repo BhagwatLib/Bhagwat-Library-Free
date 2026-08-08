@@ -1,4 +1,18 @@
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+/**
+ * whatsappService.js - Production-ready on-demand WhatsApp gateway
+ *
+ * Lifecycle:
+ * - Idle / DISCONNECTED on server startup (0 Puppeteer memory overhead).
+ * - Starts ONLY when requested via /start or /qr.
+ * - Single active browser instance enforced.
+ * - Temporary QR session (NoAuth) — fully ephemeral, zero file locks.
+ * - Full cleanup on logout / destroy.
+ * - Crash-proof on Render: if Chromium is constrained, server and REST APIs stay 100% up.
+ */
+
+'use strict';
+
+const { Client, NoAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
@@ -7,10 +21,11 @@ const axios = require('axios');
 const EventEmitter = require('events');
 const logger = require('../utils/logger');
 
-// Event emitter for broadcasting WhatsApp lifecycle events
+// Event emitter for broadcasting real-time WhatsApp lifecycle events
 class WhatsAppEventEmitter extends EventEmitter {}
 const whatsappEvents = new WhatsAppEventEmitter();
 
+// Singleton State
 let client = null;
 let isReady = false;
 let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'AUTHENTICATED' | 'CONNECTED'
@@ -20,36 +35,21 @@ let lastConnectedTime = null;
 let clientInfo = null;
 let isInitializing = false;
 
-// Normalize phone number to E.164 without '+' (e.g. 8789366398 -> 918789366398)
-const normalizePhoneNumber = (phone) => {
+/**
+ * Normalizes phone number to E.164 without '+' (e.g. 9876543210 -> 919876543210)
+ */
+function normalizePhoneNumber(phone) {
   if (!phone) return '';
   let clean = phone.toString().replace(/\D/g, '');
   if (clean.length === 10) {
     clean = '91' + clean;
   }
   return clean;
-};
-
-// LocalAuth session folder — configurable via WHATSAPP_SESSION_PATH env var
-const authPath = process.env.WHATSAPP_SESSION_PATH
-  ? path.resolve(process.env.WHATSAPP_SESSION_PATH)
-  : path.join(__dirname, '../.wwebjs_auth');
-
-
-// Function to clean LocalAuth folder ONLY when explicitly requested or severe auth failure
-function cleanAuthFolder() {
-  if (fs.existsSync(authPath)) {
-    try {
-      logger.warn('Clearing LocalAuth session folder...');
-      fs.rmSync(authPath, { recursive: true, force: true });
-      logger.info('Successfully cleared LocalAuth folder.');
-    } catch (err) {
-      logger.error('Failed to remove LocalAuth folder:', { error: err.message });
-    }
-  }
 }
 
-// Helper to detect executable path across local and cloud environments (Render, Koyeb, Linux, etc.)
+/**
+ * Detects available Chromium executable across local and cloud environments
+ */
 function getPuppeteerExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     return process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -77,7 +77,7 @@ function getPuppeteerExecutablePath() {
     }
   }
 
-  // If puppeteer provides computeExecutablePath or default path, attempt to check
+  // Check puppeteer bundled executable if available
   try {
     const puppeteer = require('puppeteer');
     if (typeof puppeteer.executablePath === 'function') {
@@ -86,28 +86,39 @@ function getPuppeteerExecutablePath() {
         return pPath;
       }
     }
-  } catch (e) {
-    // Ignore and let puppeteer resolve default
-  }
+  } catch (_) {}
 
   return undefined;
 }
 
-// Function to setup Client instance
-function setupClient() {
-  logger.info('Setting up whatsapp-web.js client instance...');
-  connectionStatus = 'CONNECTING';
-  whatsappEvents.emit('status_change', getStatus());
+/**
+ * Returns current status snapshot
+ */
+function getStatus() {
+  return {
+    isReady: Boolean(isReady && client?.ready),
+    status: connectionStatus,
+    qrCode: latestQrDataUrl,
+    rawQr: latestQrRaw,
+    lastConnectedTime,
+    clientInfo,
+    timestamp: new Date().toISOString(),
+  };
+}
 
+/**
+ * Instantiates and configures single WhatsApp client instance
+ */
+function setupClient() {
   const executablePath = getPuppeteerExecutablePath();
   if (executablePath) {
-    logger.info(`Using custom Puppeteer Chromium executable: ${executablePath}`);
+    logger.info(`Puppeteer using Chromium binary at: ${executablePath}`);
+  } else {
+    logger.info('Puppeteer using default Chrome browser.');
   }
 
   client = new Client({
-    authStrategy: new LocalAuth({
-      dataPath: authPath,
-    }),
+    authStrategy: new NoAuth(), // Temporary ephemeral QR session — zero file lock issues on cloud
     puppeteer: {
       headless: true,
       ...(executablePath ? { executablePath } : {}),
@@ -148,7 +159,7 @@ function setupClient() {
     isReady = false;
     client.ready = false;
 
-    logger.info('Event: qr - New QR code generated from WhatsApp Web.');
+    logger.info('Event: qr - New WhatsApp QR Code generated for scanning.');
     console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
     qrcodeTerminal.generate(qr, { small: true });
     console.log('-----------------------------------------------------\n');
@@ -157,7 +168,7 @@ function setupClient() {
     whatsappEvents.emit('status_change', getStatus());
   });
 
-  // Event: Authenticated (Session saved)
+  // Event: Authenticated
   client.on('authenticated', () => {
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
@@ -189,15 +200,14 @@ function setupClient() {
     whatsappEvents.emit('status_change', getStatus());
   });
 
-  // Event: Auth Failure (Token expired or revoked by mobile app)
+  // Event: Auth Failure
   client.on('auth_failure', (msg) => {
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
-    logger.error('Event: auth_failure - WhatsApp Web authentication failure:', { error: msg });
-    cleanAuthFolder();
+    logger.error('Event: auth_failure - WhatsApp Web authentication failed:', { error: msg });
     whatsappEvents.emit('status_change', getStatus());
   });
 
@@ -210,22 +220,22 @@ function setupClient() {
     latestQrDataUrl = null;
     logger.warn('Event: disconnected - WhatsApp Web client disconnected:', { reason });
     whatsappEvents.emit('status_change', getStatus());
-
-    // Do NOT wipe auth directory. Attempt graceful reconnect to restore saved session.
-    logger.info('Auto-attempting client reconnection preserving saved session in 5 seconds...');
-    setTimeout(() => {
-      initializeClient().catch((err) => {
-        logger.error('Auto-reconnect failed:', { error: err.message });
-      });
-    }, 5000);
+    destroyClient().catch(() => {});
   });
 }
 
-// Function to initialize the client
-async function initializeClient() {
+/**
+ * Starts WhatsApp client on-demand
+ */
+async function startClient() {
+  if (isReady && client && client.ready) {
+    logger.info('Client already connected and ready.');
+    return getStatus();
+  }
+
   if (isInitializing) {
     logger.info('Client initialization already in progress...');
-    return;
+    return getStatus();
   }
 
   isInitializing = true;
@@ -237,63 +247,85 @@ async function initializeClient() {
       try {
         await client.destroy();
       } catch (err) {
-        logger.warn('Previous client destroy error (ignored):', { error: err.message });
+        logger.warn('Previous client cleanup warning (ignored):', { error: err.message });
       }
       client = null;
     }
 
     setupClient();
-    logger.info('Initializing WhatsApp Web client...');
+    logger.info('Initializing WhatsApp Web client on-demand...');
     await client.initialize();
   } catch (err) {
-    logger.warn('WhatsApp Web client initialization deferred/unavailable (REST APIs remain fully active):', { error: err.message });
+    logger.warn('WhatsApp Web initialization deferred/unavailable on this host:', { error: err.message });
     connectionStatus = 'DISCONNECTED';
     isReady = false;
     whatsappEvents.emit('status_change', getStatus());
   } finally {
     isInitializing = false;
   }
+
+  return getStatus();
 }
 
-// Start initialization on startup safely without blocking the server
-try {
-  initializeClient().catch((err) => {
-    logger.warn('Initial WhatsApp setup warning (REST APIs remain active):', { error: err.message });
-  });
-} catch (err) {
-  logger.warn('WhatsApp startup exception (REST APIs remain active):', { error: err.message });
-}
+/**
+ * Safely destroys client and frees all browser resources
+ */
+async function destroyClient() {
+  logger.info('Destroying WhatsApp Web client & releasing browser resources...');
+  if (client) {
+    try {
+      await client.logout();
+    } catch (_) {}
 
-
-// Reconnect helper
-async function reconnect() {
-  logger.info('Manual Reconnect requested by admin.');
-  return initializeClient();
-}
-
-// Force Refresh QR / Reset Session helper
-async function refreshQr(forceCleanSession = false) {
-  logger.info(`Refresh QR requested (forceClean: ${forceCleanSession})...`);
-  if (forceCleanSession) {
-    cleanAuthFolder();
+    try {
+      await client.destroy();
+    } catch (err) {
+      logger.warn('Error during client.destroy() (ignored):', { error: err.message });
+    }
+    client = null;
   }
-  return initializeClient();
+
+  isReady = false;
+  connectionStatus = 'DISCONNECTED';
+  latestQrRaw = null;
+  latestQrDataUrl = null;
+  clientInfo = null;
+  isInitializing = false;
+
+  whatsappEvents.emit('status_change', getStatus());
+  logger.info('WhatsApp client completely destroyed. Memory & browser freed.');
+  return getStatus();
 }
 
-// Get current state snapshot
-function getStatus() {
+/**
+ * Gets or triggers QR code generation
+ */
+async function getQr() {
+  if (isReady && client?.ready) {
+    return {
+      status: 'CONNECTED',
+      qrCode: null,
+      rawQr: null,
+      message: 'WhatsApp is already connected.',
+    };
+  }
+
+  if (!client || connectionStatus === 'DISCONNECTED') {
+    startClient().catch((err) => {
+      logger.warn('Error triggering on-demand QR start:', { error: err.message });
+    });
+  }
+
   return {
-    isReady: isReady && !!client?.ready,
     status: connectionStatus,
     qrCode: latestQrDataUrl,
     rawQr: latestQrRaw,
-    lastConnectedTime,
-    clientInfo,
-    timestamp: new Date().toISOString(),
   };
 }
 
-// Helper to fetch media from URL or load local file
+/**
+ * Downloads media from URL or loads local file
+ */
 async function getMediaFromUrl(url, filename) {
   if (url.includes('/uploads/')) {
     const parts = url.split('/uploads/');
@@ -322,23 +354,25 @@ async function getMediaFromUrl(url, filename) {
   }
 }
 
+/**
+ * Sends text message to single recipient
+ */
 async function sendTextMessage(phone, message) {
   if (!isReady || !client || !client.ready) {
-    throw new Error('WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.');
+    throw new Error('WhatsApp client is not connected. Please scan the QR code first in Settings → WhatsApp Gateway.');
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
   if (!normalizedPhone) {
-    throw new Error('Invalid phone number provided');
+    throw new Error('Invalid phone number provided.');
   }
   if (!message) {
-    throw new Error('Message content is empty');
+    throw new Error('Message content cannot be empty.');
   }
 
   try {
-    logger.info(`Checking if number is registered: ${normalizedPhone}...`);
+    logger.info(`Checking WhatsApp registration for: ${normalizedPhone}...`);
     const numberId = await client.getNumberId(normalizedPhone);
-    logger.info(`getNumberId result for ${normalizedPhone}:`, { numberId });
 
     if (!numberId) {
       logger.warn(`Number ${normalizedPhone} is not registered on WhatsApp.`);
@@ -348,10 +382,10 @@ async function sendTextMessage(phone, message) {
     }
 
     const resolvedJid = numberId._serialized;
-    logger.info(`Sending WhatsApp message to ${resolvedJid}...`);
+    logger.info(`Sending message to ${resolvedJid}...`);
     const response = await client.sendMessage(resolvedJid, message);
 
-    const messageId = response?.id?.id || `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const messageId = response?.id?.id || `msg-${Date.now()}`;
     logger.info(`Message sent successfully. ID: ${messageId}`);
     return { success: true, messageId };
   } catch (error) {
@@ -360,25 +394,24 @@ async function sendTextMessage(phone, message) {
   }
 }
 
-async function sendWhatsAppMessage(phone, message) {
-  return sendTextMessage(phone, message);
-}
-
+/**
+ * Sends PDF or image document
+ */
 async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', caption = '') {
   if (!isReady || !client || !client.ready) {
-    throw new Error('WhatsApp client is not connected. Please scan the QR code in Settings → WhatsApp Scanner.');
+    throw new Error('WhatsApp client is not connected. Please scan the QR code first in Settings → WhatsApp Gateway.');
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
   if (!normalizedPhone) {
-    throw new Error('Invalid phone number provided');
+    throw new Error('Invalid phone number provided.');
   }
   if (!documentUrl) {
-    throw new Error('Document URL is required');
+    throw new Error('Document URL is required.');
   }
 
   try {
-    logger.info(`Checking if number is registered: ${normalizedPhone}...`);
+    logger.info(`Checking WhatsApp registration for: ${normalizedPhone}...`);
     const numberId = await client.getNumberId(normalizedPhone);
 
     if (!numberId) {
@@ -389,13 +422,13 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     }
 
     const resolvedJid = numberId._serialized;
-    logger.info(`Resolving media for document send from URL: ${documentUrl}...`);
+    logger.info(`Resolving media from URL: ${documentUrl}...`);
     const media = await getMediaFromUrl(documentUrl, filename);
 
     logger.info(`Sending document [${filename}] to ${resolvedJid}...`);
     const response = await client.sendMessage(resolvedJid, media, { caption });
 
-    const messageId = response?.id?.id || `fallback-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const messageId = response?.id?.id || `doc-${Date.now()}`;
     logger.info(`Document sent successfully. ID: ${messageId}`);
     return { success: true, messageId };
   } catch (error) {
@@ -418,13 +451,13 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function sendBulkMessages(phones, message, delayMs = 1000) {
   if (!Array.isArray(phones) || phones.length === 0) {
-    throw new Error('Phones list must be a non-empty array');
+    throw new Error('Phones list must be a non-empty array.');
   }
   if (!message) {
-    throw new Error('Bulk message content is empty');
+    throw new Error('Bulk message content cannot be empty.');
   }
 
-  logger.info(`Starting bulk message sending to ${phones.length} recipients...`);
+  logger.info(`Starting bulk dispatch to ${phones.length} recipients...`);
   const results = [];
   let successCount = 0;
   let failureCount = 0;
@@ -442,11 +475,10 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
     } catch (error) {
       results.push({ phone, success: false, error: error.message });
       failureCount++;
-      logger.error(`Bulk send error for recipient ${phone}: ${error.message}`);
+      logger.error(`Bulk send error for ${phone}: ${error.message}`);
     }
   }
 
-  logger.info(`Bulk message sending finished. Success: ${successCount}, Failures: ${failureCount}`);
   return {
     success: true,
     totalCount: phones.length,
@@ -457,18 +489,20 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
 }
 
 module.exports = {
+  startClient,
+  destroyClient,
+  getQr,
+  getStatus,
   sendTextMessage,
-  sendWhatsAppMessage,
+  sendWhatsAppMessage: sendTextMessage,
   sendDocument,
   sendInvoiceTemplate,
   sendReminderTemplate,
   sendBulkMessages,
-  getStatus,
-  reconnect,
-  refreshQr,
+  reconnect: startClient,
+  refreshQr: startClient,
   events: whatsappEvents,
   get ready() {
-    return isReady && client && client.ready;
+    return Boolean(isReady && client && client.ready);
   },
 };
-
