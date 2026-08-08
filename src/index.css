@@ -527,3 +527,39 @@ html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ==========================================================================
+   LIGHT MODE READABILITY & CONTRAST OVERRIDES (INDUSTRIAL GRAY SYSTEM)
+   ========================================================================== */
+html.light .text-slate-300 {
+  color: #2F3338 !important;
+}
+html.light .text-slate-400 {
+  color: #24282D !important;
+}
+html.light .text-slate-500 {
+  color: #171A1E !important;
+}
+html.light .text-slate-600 {
+  color: #0E1012 !important;
+}
+html.light .text-slate-700 {
+  color: #08090A !important;
+}
+html.light .text-slate-800 {
+  color: #020303 !important;
+}
+html.light .text-slate-900 {
+  color: #000000 !important;
+}
+
+/* Improve Select Options contrast in both light and dark mode dropdowns */
+html.light select option {
+  background-color: #878B8F !important;
+  color: #000000 !important;
+}
+html.dark select option {
+  background-color: #252932 !important;
+  color: #FFFFFF !important;
+}
+
