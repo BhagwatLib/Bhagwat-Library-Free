@@ -179,40 +179,40 @@ export const SeatGrid = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Armchair className="text-blue-500" size={26} /> Seats Dashboard (1 - 100)
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+            Seats Matrix (1 - 100) <span className="jewel-dot cyan" />
           </h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Realtime Firestore synchronized batch slot allocation (A, B, C, D)
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
-            <span className="text-slate-400">Overall Fill Rate: </span>
-            <span className="font-extrabold text-emerald-400">{stats.occupancyRate}%</span>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="skeuo-card px-3.5 py-1.5 text-xs flex items-center gap-2 rounded-xl">
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold">Fill Rate: </span>
+            <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{stats.occupancyRate}%</span>
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
-            <span className="text-slate-400">Available: </span>
-            <span className="font-extrabold text-blue-400">{stats.availableSeats}</span>
+          <div className="skeuo-card px-3.5 py-1.5 text-xs flex items-center gap-2 rounded-xl">
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold">Available: </span>
+            <span className="font-extrabold text-blue-600 dark:text-cyan-400">{stats.availableSeats}</span>
           </div>
-          <div className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs flex items-center gap-2">
-            <span className="text-slate-400">Full (4/4): </span>
-            <span className="font-extrabold text-purple-400">{stats.fullSeats}</span>
+          <div className="skeuo-card px-3.5 py-1.5 text-xs flex items-center gap-2 rounded-xl">
+            <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold">Full (4/4): </span>
+            <span className="font-extrabold text-purple-600 dark:text-purple-400">{stats.fullSeats}</span>
           </div>
         </div>
       </div>
 
-      {/* Controls Bar: Search & Filters */}
+      {/* Controls Bar: Recessed Search & Tactile Shift Filter Pills */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
             placeholder="Search by seat #, student name, phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500"
+            className="skeuo-input w-full pl-10 pr-4 py-2.5 text-xs font-medium placeholder:text-slate-400"
           />
         </div>
 
@@ -222,17 +222,16 @@ export const SeatGrid = () => {
               key={filter}
               onClick={() => setActiveFilter(filter)}
               className={clsx(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
+                "skeuo-badge px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all rounded-xl cursor-pointer",
                 activeFilter === filter
-                  ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                  : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white"
+                  ? "bg-blue-600 dark:bg-cyan-500/20 text-blue-700 dark:text-cyan-300 border border-blue-400/40 font-extrabold"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
               )}
             >
               {filter}
             </button>
           ))}
         </div>
-
       </div>
 
       {/* DESKTOP SEAT GRID VIEW (1024px and above) */}
@@ -245,39 +244,40 @@ export const SeatGrid = () => {
           return (
             <motion.div
               key={seat.seatNumber}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setSelectedSeat(seat)}
               className={clsx(
-                "rounded-2xl border p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[125px] relative group shadow-md lg:p-5 lg:min-h-[140px]",
+                "skeuo-card p-4 flex flex-col justify-between cursor-pointer transition-all min-h-[135px] relative group rounded-2xl",
                 isFull
-                  ? "bg-slate-900/95 border-purple-500/40 hover:border-purple-400 shadow-purple-500/5"
+                  ? "border-purple-500/40"
                   : isPartial
-                  ? "bg-slate-900/90 border-blue-500/40 hover:border-blue-400 shadow-blue-500/5"
-                  : "bg-slate-950/60 border-slate-800/80 hover:border-emerald-500/60 opacity-80"
+                  ? "border-blue-500/40"
+                  : "border-slate-300 dark:border-slate-800/80"
               )}
             >
               {/* Header: Seat Number & Count */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1 lg:text-sm">
+                <span className="text-xs font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-1.5">
+                  <Armchair size={13} className={isFull ? "text-purple-500" : isPartial ? "text-cyan-400" : "text-slate-400"} />
                   Seat {seat.seatNumber}
                 </span>
                 <span
                   className={clsx(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded-md border lg:text-[11px] lg:px-2 lg:py-1",
+                    "skeuo-dial w-6 h-6 text-[10px] font-extrabold",
                     isFull
-                      ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                      ? "text-purple-600 dark:text-purple-400"
                       : isPartial
-                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                      : "bg-slate-800 border-slate-700 text-slate-400"
+                      ? "text-blue-600 dark:text-cyan-400"
+                      : "text-slate-500 dark:text-slate-400"
                   )}
                 >
-                  {seat.occupiedSlotsCount}/4
+                  {seat.occupiedSlotsCount}
                 </span>
               </div>
 
               {/* Realtime Batch Status Indicators (A 🟢, B 🟢, C ⚪, D 🟢) */}
-              <div className="grid grid-cols-4 gap-1.5 my-2.5 lg:my-3 lg:gap-2">
+              <div className="grid grid-cols-4 gap-1.5 my-2.5">
                 {BASE_SLOTS.map((slot) => {
                   const sData = seat.slots[slot.id];
                   const isOcc = sData.occupied;
@@ -286,27 +286,27 @@ export const SeatGrid = () => {
                     <div
                       key={slot.id}
                       className={clsx(
-                        "h-5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all border lg:h-6 lg:text-[11px]",
+                        "h-6 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all",
                         isOcc
-                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                          : "bg-slate-950/80 border-slate-800 text-slate-600"
+                          ? "skeuo-dial text-emerald-600 dark:text-emerald-400 border border-emerald-500/40"
+                          : "skeuo-inset text-slate-400 dark:text-slate-600"
                       )}
                       title={`${slot.name}: ${isOcc ? sData.student?.name : "Available"}`}
                     >
-                      {slot.slotCode} {isOcc ? "🟢" : "⚪"}
+                      {slot.slotCode}
                     </div>
                   );
                 })}
               </div>
 
               {/* Footer: Status or Student Names */}
-              <div className="text-[10px] truncate font-medium lg:text-[11px]">
+              <div className="text-[10px] truncate font-semibold">
                 {seat.assignedStudents.length > 0 ? (
-                  <span className="text-slate-350">
+                  <span className="text-slate-700 dark:text-slate-300">
                     {seat.assignedStudents.map((s) => s.name).join(", ")}
                   </span>
                 ) : (
-                  <span className="text-emerald-400/80 italic font-semibold">Available</span>
+                  <span className="text-emerald-600 dark:text-emerald-400/80 font-bold">🟢 Available</span>
                 )}
               </div>
             </motion.div>
@@ -314,7 +314,7 @@ export const SeatGrid = () => {
         })}
       </div>
 
-      {/* MOBILE GRID VIEW (< 1024px) - 100% UNTOUCHED ORIGINAL MOBILE CODE */}
+      {/* MOBILE GRID VIEW (< 1024px) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:hidden gap-3">
         {filteredSeats.map((seat) => {
           const isFull = seat.occupiedSlotsCount === 4;
@@ -324,42 +324,43 @@ export const SeatGrid = () => {
           return (
             <motion.div
               key={seat.seatNumber}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
               onClick={() => setSelectedSeat(seat)}
               className={clsx(
-                "rounded-2xl border p-3 flex flex-col justify-between cursor-pointer transition-all duration-200 min-h-[105px] relative group shadow-md",
+                "skeuo-card p-3 flex flex-col justify-between cursor-pointer transition-all min-h-[110px] relative rounded-2xl",
                 isFull
-                  ? "bg-slate-900/95 border-purple-500/40 hover:border-purple-400 shadow-purple-500/5"
+                  ? "border-purple-500/40"
                   : isPartial
-                  ? "bg-slate-900/90 border-blue-500/40 hover:border-blue-400 shadow-blue-500/5"
-                  : "bg-slate-950/60 border-slate-800/80 hover:border-emerald-500/60 opacity-80"
+                  ? "border-blue-500/40"
+                  : "border-slate-300 dark:border-slate-800"
               )}
             >
               {/* Header: Seat Number & Count */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white tracking-tight flex items-center gap-1">
+                <span className="text-xs font-bold text-slate-800 dark:text-white">
                   Seat {seat.seatNumber}
                 </span>
                 <span
                   className={clsx(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded-md border",
+                    "skeuo-dial w-5 h-5 text-[9px] font-bold",
                     isFull
-                      ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                      ? "text-purple-500"
                       : isPartial
-                      ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
-                      : "bg-slate-800 border-slate-700 text-slate-400"
+                      ? "text-blue-500"
+                      : "text-slate-400"
                   )}
                 >
-                  {seat.occupiedSlotsCount}/4
+                  {seat.occupiedSlotsCount}
                 </span>
               </div>
 
-              {/* Realtime Batch Status Indicators (A 🟢, B 🟢, C ⚪, D 🟢) */}
+              {/* Realtime Batch Status Indicators */}
               <div className="grid grid-cols-4 gap-1 my-2">
                 {BASE_SLOTS.map((slot) => {
                   const sData = seat.slots[slot.id];
                   const isOcc = sData.occupied;
+
 
                   return (
                     <div

@@ -6,24 +6,29 @@ import {
   Bell,
   QrCode,
   CheckCircle2,
-  Sliders,
-  Shield,
+  Palette,
+  Sun,
+  Moon,
+  Laptop,
 } from "lucide-react";
+import { clsx } from "clsx";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
 import { WhatsAppScanner } from "../components/WhatsAppScanner";
 import { ReminderSettings } from "../components/ReminderSettings";
+import { useTheme } from "../context/ThemeContext";
 
-export const Settings = ({ initialTab = "profile" }) => {
+export const Settings = ({ initialTab = "appearance" }) => {
   const [activeSubTab, setActiveSubTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
+  const { theme, setTheme } = useTheme();
+
   const [formData, setFormData] = useState({
     libraryName: "Bhagwat Library",
     adminEmail: "admin@bhagwatlibrary.in",
     contactPhone: "+91 9876543210",
     totalCapacity: 100,
     currency: "INR (₹)",
-    theme: "Dark SaaS",
   });
 
   const handleProfileSubmit = (e) => {
@@ -33,6 +38,7 @@ export const Settings = ({ initialTab = "profile" }) => {
   };
 
   const navTabs = [
+    { id: "appearance", label: "Appearance & Theme", icon: Palette, desc: "Light, Dark, & System" },
     { id: "profile", label: "Library Profile", icon: Building, desc: "Branding & contact details" },
     { id: "whatsapp", label: "WhatsApp Scanner", icon: QrCode, desc: "Gateway & QR pairing" },
     { id: "reminders", label: "Reminder Settings", icon: Bell, desc: "Scheduler & alert rules" },
@@ -43,11 +49,11 @@ export const Settings = ({ initialTab = "profile" }) => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <SettingsIcon className="text-blue-400" size={26} /> Admin Settings
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+            Admin Settings <span className="jewel-dot cyan" />
           </h1>
-          <p className="text-xs text-slate-400">
-            Configure library branding, WhatsApp gateway connectivity, and automated reminder schedules
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Configure appearance theme, branding, WhatsApp gateway, and automated reminder schedules
           </p>
         </div>
 
@@ -59,7 +65,7 @@ export const Settings = ({ initialTab = "profile" }) => {
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3 overflow-x-auto custom-scrollbar">
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800/80 pb-3 overflow-x-auto custom-scrollbar">
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -67,18 +73,107 @@ export const Settings = ({ initialTab = "profile" }) => {
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id)}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-semibold text-xs transition-all whitespace-nowrap ${
+              className={clsx(
+                "flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap",
                 isActive
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border border-blue-500/40"
-                  : "bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-850 border border-slate-800/80"
-              }`}
+                  ? "skeuo-btn skeuo-btn-primary"
+                  : "skeuo-btn text-slate-600 dark:text-slate-400"
+              )}
             >
-              <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
+              <Icon size={15} />
               <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
+
+      {/* TAB CONTENT: APPEARANCE (Exact User Request) */}
+      {activeSubTab === "appearance" && (
+        <SaaSCard className="p-6 space-y-6" withGrip>
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-3">
+            <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2 uppercase tracking-wider">
+              <Palette size={16} className="text-purple-500" /> Appearance & Theme Controls
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Select your preferred luxury skeuomorphic workspace theme.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {/* 1. Light Mode */}
+            <div
+              onClick={() => setTheme("light")}
+              className={clsx(
+                "skeuo-card p-5 cursor-pointer flex flex-col items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-95 text-center relative",
+                theme === "light"
+                  ? "ring-2 ring-blue-500 shadow-xl"
+                  : "opacity-80"
+              )}
+            >
+              <div className="skeuo-dial w-14 h-14 bg-gradient-to-tr from-amber-100 to-amber-200 text-amber-600">
+                <Sun size={24} />
+              </div>
+              <div>
+                <span className="font-black text-sm text-slate-800 dark:text-white block">
+                  ○ Light Mode
+                </span>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Soft gray (#ECECEC) & raised Apple-like surfaces
+                </span>
+              </div>
+              {theme === "light" && <span className="jewel-dot cyan absolute top-3 right-3" />}
+            </div>
+
+            {/* 2. Dark Mode */}
+            <div
+              onClick={() => setTheme("dark")}
+              className={clsx(
+                "skeuo-card p-5 cursor-pointer flex flex-col items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-95 text-center relative",
+                theme === "dark"
+                  ? "ring-2 ring-cyan-500 shadow-xl"
+                  : "opacity-80"
+              )}
+            >
+              <div className="skeuo-dial w-14 h-14 glow-purple text-purple-400">
+                <Moon size={24} />
+              </div>
+              <div>
+                <span className="font-black text-sm text-slate-800 dark:text-white block">
+                  ○ Dark Mode
+                </span>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Premium charcoal (#1A1D24) & neon glows
+                </span>
+              </div>
+              {theme === "dark" && <span className="jewel-dot cyan absolute top-3 right-3" />}
+            </div>
+
+            {/* 3. System Default */}
+            <div
+              onClick={() => setTheme("system")}
+              className={clsx(
+                "skeuo-card p-5 cursor-pointer flex flex-col items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-95 text-center relative",
+                theme === "system"
+                  ? "ring-2 ring-purple-500 shadow-xl"
+                  : "opacity-80"
+              )}
+            >
+              <div className="skeuo-dial w-14 h-14 text-slate-500">
+                <Laptop size={24} />
+              </div>
+              <div>
+                <span className="font-black text-sm text-slate-800 dark:text-white block">
+                  ○ System Default
+                </span>
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Synchronizes automatically with your OS preference
+                </span>
+              </div>
+              {theme === "system" && <span className="jewel-dot cyan absolute top-3 right-3" />}
+            </div>
+          </div>
+        </SaaSCard>
+      )}
 
       {/* TAB CONTENT: WHATSAPP SCANNER */}
       {activeSubTab === "whatsapp" && <WhatsAppScanner />}
@@ -89,46 +184,54 @@ export const Settings = ({ initialTab = "profile" }) => {
       {/* TAB CONTENT: LIBRARY PROFILE */}
       {activeSubTab === "profile" && (
         <form onSubmit={handleProfileSubmit} className="space-y-6">
-          <SaaSCard className="p-6 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-              <Building size={16} className="text-blue-400" /> Library Profile & Branding
+          <SaaSCard className="p-6 space-y-4" withGrip>
+            <h3 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 uppercase tracking-wider">
+              <Building size={16} className="text-blue-500" /> Library Profile & Organization
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Library Name</label>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Library Name
+                </label>
                 <input
                   type="text"
                   value={formData.libraryName}
                   onChange={(e) => setFormData({ ...formData, libraryName: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Admin Email</label>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Admin Email
+                </label>
                 <input
                   type="email"
                   value={formData.adminEmail}
                   onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Contact Phone</label>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Contact Phone
+                </label>
                 <input
                   type="text"
                   value={formData.contactPhone}
                   onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Total Seat Capacity</label>
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Total Seat Capacity
+                </label>
                 <input
                   type="number"
                   value={formData.totalCapacity}
                   readOnly
-                  className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-500 text-sm cursor-not-allowed"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium opacity-60 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -137,9 +240,9 @@ export const Settings = ({ initialTab = "profile" }) => {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+              className="skeuo-btn skeuo-btn-primary px-6 py-3 text-xs flex items-center gap-2 shadow-lg"
             >
-              <Save size={16} /> Save Profile Changes
+              <Save size={15} /> Save Profile Changes
             </button>
           </div>
         </form>
@@ -147,4 +250,3 @@ export const Settings = ({ initialTab = "profile" }) => {
     </div>
   );
 };
-

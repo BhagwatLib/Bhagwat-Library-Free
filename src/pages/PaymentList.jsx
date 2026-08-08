@@ -152,11 +152,11 @@ export const PaymentList = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <DollarSign className="text-emerald-400" size={26} /> Payments & Invoicing
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+            Payments & Invoicing <span className="jewel-dot cyan" />
           </h1>
-          <p className="text-xs text-slate-400">
-            Realtime Firestore synchronized card filters & billing summaries
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Realtime Firestore synchronized billing ledger & payment management
           </p>
         </div>
 
@@ -172,119 +172,119 @@ export const PaymentList = () => {
               amount: metrics.totalPending,
             });
           }}
-          className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 self-start md:self-auto"
+          className="skeuo-btn px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 flex items-center gap-2 self-start md:self-auto"
         >
-          <Bell size={16} /> Notify Unpaid ({metrics.unpaidCount + metrics.partialCount})
+          <Bell size={15} className="text-amber-500" /> Notify Unpaid ({metrics.unpaidCount + metrics.partialCount})
         </button>
       </div>
 
-      {/* TOP DASHBOARD CARD FILTERS */}
+      {/* TOP SKEUOMORPHIC CARD FILTERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Enrolled Card */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <div
           onClick={() => {
             setFilterStatus("All");
             setCurrentPage(1);
           }}
           className={clsx(
-            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            "skeuo-card p-5 cursor-pointer flex flex-col justify-between h-32 transition-all active:scale-98 relative",
             filterStatus === "All"
-              ? "bg-blue-950/80 border-blue-500 shadow-blue-500/10"
-              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+              ? "ring-2 ring-blue-500"
+              : "opacity-90"
           )}
         >
-          <div className="flex items-center justify-between z-10">
-            <p className="text-xs font-semibold text-slate-400">Total Enrolled</p>
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Total Enrolled
+            </span>
+            <span className="jewel-dot cyan" />
           </div>
-          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+          <h3 className="text-3xl font-black text-slate-800 dark:text-white">
             {metrics.totalStudents}
           </h3>
-          <p className="text-[10px] text-blue-400 mt-2 font-medium z-10">Click to show all</p>
-        </motion.div>
+          <span className="text-[10px] text-blue-600 dark:text-cyan-400 font-semibold">Click to show all</span>
+        </div>
 
         {/* Paid Card */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <div
           onClick={() => {
             setFilterStatus("Paid");
             setCurrentPage(1);
           }}
           className={clsx(
-            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            "skeuo-card p-5 cursor-pointer flex flex-col justify-between h-32 transition-all active:scale-98 relative",
             filterStatus === "Paid"
-              ? "bg-emerald-950/80 border-emerald-500 shadow-emerald-500/10"
-              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+              ? "ring-2 ring-emerald-500"
+              : "opacity-90"
           )}
         >
-          <div className="flex items-center justify-between z-10">
-            <p className="text-xs font-semibold text-slate-400">Paid Students</p>
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Paid Students
+            </span>
+            <span className="jewel-dot emerald" />
           </div>
-          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+          <h3 className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
             {metrics.paidCount}
           </h3>
-          <p className="text-[10px] text-emerald-400 mt-2 font-medium z-10">Click to filter list</p>
-        </motion.div>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Click to filter list</span>
+        </div>
 
         {/* Partially Paid Card */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <div
           onClick={() => {
             setFilterStatus("Partial");
             setCurrentPage(1);
           }}
           className={clsx(
-            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            "skeuo-card p-5 cursor-pointer flex flex-col justify-between h-32 transition-all active:scale-98 relative",
             filterStatus === "Partial"
-              ? "bg-amber-950/80 border-amber-500 shadow-amber-500/10"
-              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+              ? "ring-2 ring-amber-500"
+              : "opacity-90"
           )}
         >
-          <div className="flex items-center justify-between z-10">
-            <p className="text-xs font-semibold text-slate-400">Partially Paid</p>
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Partially Paid
+            </span>
+            <span className="jewel-dot amber" />
           </div>
-          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+          <h3 className="text-3xl font-black text-amber-600 dark:text-amber-400">
             {metrics.partialCount}
           </h3>
-          <p className="text-[10px] text-amber-400 mt-2 font-medium z-10">Click to filter list</p>
-        </motion.div>
+          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Click to filter list</span>
+        </div>
 
         {/* Unpaid Card */}
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+        <div
           onClick={() => {
             setFilterStatus("Unpaid");
             setCurrentPage(1);
           }}
           className={clsx(
-            "p-5 rounded-2xl cursor-pointer transition-all border shadow-lg flex flex-col justify-between min-h-[110px] relative overflow-hidden",
+            "skeuo-card p-5 cursor-pointer flex flex-col justify-between h-32 transition-all active:scale-98 relative",
             filterStatus === "Unpaid"
-              ? "bg-rose-950/80 border-rose-500 shadow-rose-500/10"
-              : "bg-slate-900 border-slate-800 hover:border-slate-700"
+              ? "ring-2 ring-rose-500"
+              : "opacity-90"
           )}
         >
-          <div className="flex items-center justify-between z-10">
-            <p className="text-xs font-semibold text-slate-400">Unpaid Students</p>
-            <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Unpaid Students
+            </span>
+            <span className="jewel-dot ruby" />
           </div>
-          <h3 className="text-3xl font-extrabold text-white mt-2 z-10">
+          <h3 className="text-3xl font-black text-rose-600 dark:text-rose-400">
             {metrics.unpaidCount}
           </h3>
-          <p className="text-[10px] text-rose-400 mt-2 font-medium z-10">Click to filter list</p>
-        </motion.div>
+          <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">Click to filter list</span>
+        </div>
       </div>
 
-      {/* SEARCH CONTROL */}
+      {/* SEARCH & FILTER CONTROLS */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
             placeholder="Search payments by student name or phone..."
@@ -293,9 +293,10 @@ export const PaymentList = () => {
               setSearchTerm(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500"
+            className="skeuo-input w-full pl-10 pr-4 py-2.5 text-xs font-medium placeholder:text-slate-400"
           />
         </div>
+
 
         <div className="flex items-center gap-2">
           {["All", "Paid", "Partial", "Unpaid"].map((status) => (

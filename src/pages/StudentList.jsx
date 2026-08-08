@@ -8,6 +8,7 @@ import {
   Edit2,
   Trash2,
   Armchair,
+  Sparkles,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { subscribeStudents } from "../services/studentsService";
@@ -246,12 +247,12 @@ export const StudentList = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="text-blue-400" size={26} /> Student Directory
+          <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+            Student Directory <span className="jewel-dot cyan" />
           </h1>
-          <p className="text-xs text-slate-400">
-            Manage student registrations, batch shifts, seat numbers, and validity (
-            <span className="text-blue-400 font-semibold">{filteredStudents.length}</span> / {students.length} Total)
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Manage registrations, shift allocations, and memberships (
+            <span className="text-blue-600 dark:text-cyan-400 font-bold">{filteredStudents.length}</span> / {students.length} Total)
           </p>
         </div>
 
@@ -260,16 +261,16 @@ export const StudentList = () => {
             setEditingStudent(null);
             setIsFormOpen(true);
           }}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all self-start md:self-auto"
+          className="skeuo-btn skeuo-btn-primary px-4 py-2.5 text-xs font-bold flex items-center gap-2 shadow-lg self-start md:self-auto"
         >
           <Plus size={16} /> Add New Student
         </button>
       </div>
 
-      {/* Controls: Search & Dynamic Batch Filter Buttons */}
+      {/* Controls: Recessed Search & Dynamic Batch Filter Pills */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
             placeholder="Search by student name, phone, or seat #..."
@@ -278,13 +279,13 @@ export const StudentList = () => {
               setSearchTerm(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-500"
+            className="skeuo-input w-full pl-10 pr-4 py-2.5 text-xs font-medium placeholder:text-slate-400"
           />
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-          <span className="text-xs text-slate-400 font-semibold flex items-center gap-1 shrink-0">
-            <Filter size={14} /> Filter:
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1 shrink-0 uppercase tracking-wider">
+            <Filter size={13} /> Filter:
           </span>
           {dynamicFilterButtons.map((btn) => {
             const count = batchCounts[btn.id] ?? batchCounts[btn.name] ?? (btn.id === "all" ? students.length : 0);
@@ -301,19 +302,17 @@ export const StudentList = () => {
                   setCurrentPage(1);
                 }}
                 className={clsx(
-                  "px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border flex items-center gap-2",
+                  "skeuo-badge px-3.5 py-1.5 text-xs font-bold cursor-pointer transition-all flex items-center gap-2 rounded-xl",
                   isSelected
-                    ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20 font-bold"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                    ? "bg-blue-600 dark:bg-cyan-500/20 text-blue-700 dark:text-cyan-300 border border-blue-400/40 font-extrabold"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 )}
               >
                 <span>{btn.label || btn.name}</span>
                 <span
                   className={clsx(
-                    "px-1.5 py-0.5 rounded-md text-[10px] font-bold",
-                    isSelected
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-800 text-slate-400"
+                    "px-1.5 py-0.5 rounded-md text-[10px] font-bold skeuo-dial w-5 h-5",
+                    isSelected ? "text-blue-700 dark:text-cyan-300" : "text-slate-500 dark:text-slate-400"
                   )}
                 >
                   {count}
@@ -324,26 +323,23 @@ export const StudentList = () => {
         </div>
       </div>
 
-
-
-
-      {/* DESKTOP TABLE VIEW (1024px and above) */}
+      {/* DESKTOP SKEUOMORPHIC TABLE VIEW */}
       <div className="hidden lg:block">
-        <SaaSCard className="overflow-hidden">
-          <div className="overflow-x-auto custom-scrollbar">
+        <SaaSCard className="overflow-hidden p-0" withGrip>
+          <div className="overflow-x-auto custom-scrollbar p-2">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <thead className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                 <tr>
-                  <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">Phone</th>
-                  <th className="px-6 py-4">Seat #</th>
-                  <th className="px-6 py-4">Batch / Shift</th>
-                  <th className="px-6 py-4">Admission</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-5 py-3.5">Student</th>
+                  <th className="px-5 py-3.5">Phone</th>
+                  <th className="px-5 py-3.5">Seat #</th>
+                  <th className="px-5 py-3.5">Batch / Shift</th>
+                  <th className="px-5 py-3.5">Admission</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800/60">
                 {paginatedStudents.map((student) => {
                   const status =
                     student.status ||
@@ -357,59 +353,62 @@ export const StudentList = () => {
                   return (
                     <tr
                       key={student.id}
-                      className="hover:bg-slate-800/40 transition-colors group"
+                      className="hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors group"
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5">
                         <div
                           onClick={() => setViewingStudent(student)}
-                          className="flex items-center gap-3 cursor-pointer group/profile"
+                          className="flex items-center gap-3 cursor-pointer"
                         >
-                          <div className="w-9 h-9 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-700">
+                          <div className="skeuo-dial w-9 h-9 overflow-hidden flex-shrink-0">
                             {student.photo ? (
                               <img
                                 src={student.photo}
                                 alt={student.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover rounded-full"
                               />
                             ) : (
-                              <Users size={16} className="text-slate-400" />
+                              <span className="font-extrabold text-xs text-slate-700 dark:text-slate-300">
+                                {(student.name || "S").charAt(0).toUpperCase()}
+                              </span>
                             )}
                           </div>
                           <div>
-                            <p className="font-bold text-white group-hover/profile:text-blue-400 transition-colors">
+                            <p className="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-cyan-400 transition-colors">
                               {student.name}
                             </p>
-                            <p className="text-[10px] text-slate-400">{student.address || "No address"}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">{student.address || "No address specified"}</p>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-slate-300 font-medium">
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300 font-medium">
                         {student.phone}
                       </td>
 
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5">
                         {student.seatNumber > 0 ? (
-                          <Badge variant="primary" className="text-xs">
-                            <Armchair size={12} className="mr-1" /> Seat #{student.seatNumber}
+                          <Badge variant="primary" className="text-[11px]">
+                            <Armchair size={11} className="mr-1 text-blue-500" /> Seat #{student.seatNumber}
                           </Badge>
                         ) : (
-                          <span className="text-slate-500 italic">None</span>
+                          <span className="text-slate-400 italic">Unassigned</span>
                         )}
                       </td>
 
-                      <td className="px-6 py-4 text-slate-300 font-medium max-w-[180px] truncate">
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300 font-medium max-w-[180px] truncate">
                         {Array.isArray(student.batch)
                           ? student.batch.join(", ")
-                          : student.batch}
+                          : student.batch || "A Shift"}
                       </td>
 
-                      <td className="px-6 py-4 text-slate-400">
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                         {student.admissionDate || "-"}
                       </td>
 
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5">
                         <Badge
+                          dot
                           variant={
                             status === "Paid"
                               ? "success"
@@ -422,31 +421,31 @@ export const StudentList = () => {
                         </Badge>
                       </td>
 
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setViewingStudent(student)}
-                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                            className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-cyan-400"
                             title="View Profile"
                           >
-                            <Eye size={15} />
+                            <Eye size={13} />
                           </button>
                           <button
                             onClick={() => {
                               setEditingStudent(student);
                               setIsFormOpen(true);
                             }}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                            className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400"
                             title="Edit Student"
                           >
-                            <Edit2 size={15} />
+                            <Edit2 size={13} />
                           </button>
                           <button
                             onClick={() => setStudentToDelete(student.id)}
-                            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-rose-500"
                             title="Delete Student"
                           >
-                            <Trash2 size={15} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -473,7 +472,7 @@ export const StudentList = () => {
             </table>
           </div>
 
-          <div className="p-4 border-t border-slate-800">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

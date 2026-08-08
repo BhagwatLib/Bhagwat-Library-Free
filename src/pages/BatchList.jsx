@@ -223,14 +223,16 @@ export const BatchList = () => {
       {/* Batch Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {batchMetrics.map((batch) => (
-          <SaaSCard key={batch.id} className="p-6 space-y-4">
+          <SaaSCard key={batch.id} className="p-6 space-y-4" withGrip>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <div className="bg-purple-500/10 border border-purple-500/20 text-purple-300 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5">
-                  <Clock size={13} />
-                  <span>{batch.name || batch.time}</span>
+                <div className="skeuo-dial w-8 h-8 font-bold text-xs text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Clock size={14} />
                 </div>
-                <Badge variant={batch.status === "Active" ? "success" : "default"}>
+                <span className="font-extrabold text-sm text-slate-800 dark:text-white">
+                  {batch.name || batch.time}
+                </span>
+                <Badge dot variant={batch.status === "Active" ? "success" : "default"}>
                   {batch.status || "Active"}
                 </Badge>
               </div>
@@ -238,64 +240,64 @@ export const BatchList = () => {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleEdit(batch)}
-                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                  className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400"
                   title="Edit Batch"
                 >
-                  <Edit2 size={15} />
+                  <Edit2 size={13} />
                 </button>
                 <button
                   onClick={() => setBatchToDelete(batch.id)}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-rose-500"
                   title="Delete Batch"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
 
             <div>
-              <h3 className="text-base font-extrabold text-white">{batch.time}</h3>
+              <h3 className="text-sm font-extrabold text-slate-800 dark:text-white">{batch.time}</h3>
               <div className="flex items-center justify-between text-xs mt-1">
-                <span className="text-slate-400">
-                  Duration: <span className="font-semibold text-slate-200">{batch.duration || "4 Hours"}</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  Duration: <span className="font-semibold text-slate-700 dark:text-slate-200">{batch.duration || "4 Hours"}</span>
                 </span>
-                <span className="text-slate-400">
-                  Monthly Fee: <span className="font-bold text-emerald-400">₹{batch.price}</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  Monthly Fee: <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{batch.price}</span>
                 </span>
               </div>
               {batch.description && (
-                <p className="text-[11px] text-slate-500 mt-1.5 line-clamp-1 italic">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-1 italic">
                   {batch.description}
                 </p>
               )}
             </div>
 
-            {/* Metrics Breakdown */}
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800 text-xs">
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-slate-400 text-[10px]">Enrolled Students</p>
-                <p className="text-sm font-bold text-white mt-0.5 flex items-center gap-1">
-                  <Users size={14} className="text-blue-400" /> {batch.studentsCount}
+            {/* Metrics Breakdown (Skeuomorphic mini boxes) */}
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
+              <div className="p-2.5 rounded-xl skeuo-inset">
+                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold">Enrolled Students</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-white mt-0.5 flex items-center gap-1">
+                  <Users size={13} className="text-blue-500" /> {batch.studentsCount}
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-slate-400 text-[10px]">Seats Occupied</p>
-                <p className="text-sm font-bold text-white mt-0.5 flex items-center gap-1">
-                  <Armchair size={14} className="text-purple-400" /> {batch.seatsUsedCount}
+              <div className="p-2.5 rounded-xl skeuo-inset">
+                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold">Seats Occupied</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-white mt-0.5 flex items-center gap-1">
+                  <Armchair size={13} className="text-purple-500" /> {batch.seatsUsedCount}
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-slate-400 text-[10px]">Revenue Generated</p>
-                <p className="text-sm font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
-                  <TrendingUp size={14} /> ₹{batch.batchRevenue}
+              <div className="p-2.5 rounded-xl skeuo-inset">
+                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold">Revenue Generated</p>
+                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
+                  <TrendingUp size={13} /> ₹{batch.batchRevenue}
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-slate-400 text-[10px]">Batch Occupancy</p>
-                <p className="text-sm font-bold text-cyan-400 mt-0.5">
+              <div className="p-2.5 rounded-xl skeuo-inset">
+                <p className="text-slate-500 dark:text-slate-400 text-[10px] font-semibold">Batch Occupancy</p>
+                <p className="text-sm font-bold text-blue-600 dark:text-cyan-400 mt-0.5">
                   {batch.occupancyRate}%
                 </p>
               </div>
@@ -303,11 +305,11 @@ export const BatchList = () => {
 
             {/* Progress Bar */}
             <div className="space-y-1 pt-1">
-              <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
+              <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
                 <span>Capacity Fill Rate</span>
                 <span>{batch.studentsCount}/100</span>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+              <div className="w-full h-2 rounded-full skeuo-inset overflow-hidden p-0.5">
                 <div
                   className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all"
                   style={{ width: `${Math.min(100, batch.occupancyRate)}%` }}
@@ -321,23 +323,23 @@ export const BatchList = () => {
       {/* Create / Edit Batch Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-base font-bold text-white">
-                {editingBatch ? "Edit Batch Details" : "Add New Batch Shift"}
+          <div className="skeuo-card w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h2 className="text-sm font-extrabold text-slate-800 dark:text-white uppercase tracking-wider">
+                {editingBatch ? "Edit Shift Details" : "Add New Shift"}
               </h2>
               <button
                 onClick={() => setIsFormOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className="skeuo-dial w-7 h-7 text-slate-400 hover:text-white"
               >
-                <X size={18} />
+                <X size={14} />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Batch / Shift Name (e.g. A Shift, B Shift, C Shift, D Shift, All Shift)
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Shift Name (e.g. A Shift, B Shift, All Shift)
                 </label>
                 <input
                   type="text"
@@ -346,15 +348,14 @@ export const BatchList = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                   placeholder="e.g. A Shift"
                 />
-
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Batch Timing (e.g. 6:00 AM - 10:00 AM)
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
+                  Shift Timing (e.g. 6:00 AM - 10:00 AM)
                 </label>
                 <input
                   type="text"
@@ -363,14 +364,14 @@ export const BatchList = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, time: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  className="skeuo-input w-full px-4 py-2.5 text-xs font-medium"
                   placeholder="e.g. 6:00 AM - 10:00 AM"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                     Monthly Fee (₹)
                   </label>
                   <input
@@ -381,13 +382,13 @@ export const BatchList = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, price: e.target.value })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="skeuo-input w-full px-3 py-2 text-xs font-medium"
                     placeholder="500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                     Duration
                   </label>
                   <input
@@ -396,14 +397,14 @@ export const BatchList = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, duration: e.target.value })
                     }
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="skeuo-input w-full px-3 py-2 text-xs font-medium"
                     placeholder="4 Hours"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">
                   Description / Notes (Optional)
                 </label>
                 <textarea
@@ -411,7 +412,7 @@ export const BatchList = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none h-14"
+                  className="skeuo-input w-full px-3 py-2 text-xs font-medium resize-none h-16"
                   placeholder="Brief description of this study shift..."
                 />
               </div>
@@ -420,21 +421,22 @@ export const BatchList = () => {
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="flex-1 bg-slate-800 text-slate-300 font-semibold py-2.5 rounded-xl text-xs"
+                  className="skeuo-btn flex-1 py-2.5 text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 rounded-xl text-xs shadow-lg shadow-purple-500/20 active:scale-95 transition-all flex items-center justify-center gap-1"
+                  className="skeuo-btn skeuo-btn-primary flex-1 py-2.5 text-xs flex items-center justify-center gap-1.5"
                 >
-                  <Save size={16} /> Save Batch
+                  <Save size={14} /> Save Shift
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
 
       {/* Delete Confirmation Modal */}
       <ConfirmModal

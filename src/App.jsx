@@ -21,10 +21,6 @@ const App = () => {
     }
   }, []);
 
-  // Force dark theme on html root
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
 
   const handleLogin = () => {
     sessionStorage.setItem("isLoggedIn", "true");

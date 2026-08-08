@@ -8,19 +8,23 @@ import {
   School,
   FileText,
   Settings as SettingsIcon,
-  CalendarCheck,
   Bell,
   Sparkles,
   LogOut,
   ChevronRight,
   MessageSquare,
+  Layers,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { BottomSheet } from "./BottomSheet";
 import { FloatingActionButton } from "./FloatingActionButton";
+import { useTheme } from "../context/ThemeContext";
 
 export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) => {
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
+  const { theme, setTheme, isDark } = useTheme();
 
   const desktopNavItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -53,104 +57,140 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     window.location.reload();
   };
 
+  const toggleTheme = () => {
+    setTheme(isDark ? "light" : "dark");
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 flex">
-      {/* DESKTOP SIDEBAR (1024px and above) */}
-      <aside className="hidden lg:flex w-64 flex-col border-r border-slate-800/80 bg-slate-900/90 backdrop-blur-xl shrink-0 h-screen sticky top-0 z-30">
-        {/* Sidebar Header */}
-        <div className="p-5 border-b border-slate-800/80 flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-            <Armchair className="w-5 h-5" />
+    <div className="min-h-screen bg-[#ECECEC] dark:bg-[#1A1D24] text-slate-800 dark:text-slate-100 font-sans flex transition-colors duration-300">
+      {/* DESKTOP SKEUOMORPHIC SIDEBAR */}
+      <aside className="hidden lg:flex w-72 flex-col p-4 shrink-0 h-screen sticky top-0 z-30 justify-between">
+        <div className="space-y-6">
+          {/* Header Brand Capsule */}
+          <div className="flex items-center gap-3.5 px-2 pt-2">
+            <div className="skeuo-dial w-11 h-11 flex-shrink-0">
+              <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <h1 className="font-extrabold text-slate-800 dark:text-white tracking-wider leading-none text-sm uppercase">
+                Library Pro
+              </h1>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold tracking-wider uppercase mt-0.5 block">
+                SaaS Dashboard
+              </span>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-white tracking-tight leading-none text-base">
-              Library Pro
-            </h1>
-            <span className="text-[11px] text-slate-400 font-medium tracking-wide uppercase">
-              SaaS Dashboard
-            </span>
-          </div>
+
+          {/* Navigation Pill List */}
+          <nav className="space-y-2.5">
+            {desktopNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onTabChange(item.id)}
+                  className={clsx(
+                    "skeuo-nav-pill w-full px-3.5 py-3 flex items-center justify-between text-xs font-semibold tracking-wide",
+                    isActive ? "active text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={clsx(
+                        "skeuo-dial w-7 h-7 flex items-center justify-center transition-all",
+                        isActive
+                          ? "text-blue-600 dark:text-cyan-400"
+                          : "text-slate-500 dark:text-slate-400"
+                      )}
+                    >
+                      <Icon size={14} />
+                    </div>
+                    <span>{item.label}</span>
+                  </div>
+
+                  {/* Active Indicator Jewel or subtle hardware dot */}
+                  {isActive ? (
+                    <div className="jewel-dot cyan mr-1" />
+                  ) : (
+                    <div className="skeuo-rivet mr-1" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Navigation Links */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1 custom-scrollbar">
-          {desktopNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
-                  isActive
-                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30 shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 ${
-                    isActive ? "text-blue-400" : "text-slate-400"
-                  }`}
-                />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sidebar Footer / User Profile */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center text-sm font-semibold text-slate-300">
-                A
+        {/* Sidebar Footer: Rotary Admin Switch & Theme Quick Toggle */}
+        <div className="space-y-3 pt-4">
+          <div className="skeuo-card p-3 flex items-center justify-between rounded-2xl">
+            <div className="flex items-center gap-3">
+              {/* Skeuomorphic Rotary Dial */}
+              <div className="skeuo-dial w-10 h-10 glow-cyan">
+                <div className="w-4 h-4 rounded-full bg-slate-700 dark:bg-slate-900 border border-cyan-400 flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-semibold text-white leading-tight">
+                <span className="text-xs font-bold text-slate-800 dark:text-white leading-tight">
                   Admin Workspace
                 </span>
-                <span className="text-[10px] text-slate-400">Owner</span>
+                <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold">
+                  Super Administrator
+                </span>
               </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={toggleTheme}
+                title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                className="skeuo-dial w-8 h-8 text-slate-600 dark:text-amber-400 hover:scale-105"
+              >
+                {isDark ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                title="Logout"
+                className="skeuo-dial w-8 h-8 text-slate-400 hover:text-red-500"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT VIEWPORT */}
       <div className="flex-1 min-w-0 pb-20 lg:pb-0 overflow-y-auto">
-        <header className="lg:hidden px-4 py-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
+        {/* Mobile Header Bar */}
+        <header className="lg:hidden px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-[#ECECEC]/90 dark:bg-[#1A1D24]/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center shadow-md">
-              <img
-                src="/logo.jpg"
-                alt="Logo"
-                className="w-full h-full object-cover"
-              />
+            <div className="skeuo-dial w-9 h-9">
+              <Layers className="w-4 h-4 text-purple-500" />
             </div>
             <div>
-              <h1 className="font-extrabold text-base text-white tracking-tight flex items-center gap-1">
-                Bhagwat Library <Sparkles className="text-amber-400" size={14} />
+              <h1 className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight flex items-center gap-1">
+                Bhagwat Library <Sparkles className="text-amber-400" size={13} />
               </h1>
-              <p className="text-[10px] text-slate-400 font-medium">Mobile Admin</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">SaaS Dashboard</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onTabChange("payments")}
-              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white flex items-center justify-center transition-colors relative"
+              onClick={toggleTheme}
+              className="skeuo-dial w-8 h-8 text-slate-700 dark:text-amber-400"
             >
-              <Bell size={18} />
-              <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-2 right-2 animate-ping" />
-              <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-2 right-2" />
+              {isDark ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+            <button
+              onClick={() => onTabChange("payments")}
+              className="skeuo-dial w-8 h-8 text-slate-600 dark:text-slate-300 relative"
+            >
+              <Bell size={15} />
+              <span className="jewel-dot amber absolute top-1 right-1" />
             </button>
           </div>
         </header>
@@ -163,7 +203,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
         </main>
       </div>
 
-      {/* MOBILE-ONLY FLOATING ACTION BUTTON (FAB) (< 1024px) */}
+      {/* MOBILE FLOATING ACTION BUTTON */}
       <div className="lg:hidden">
         <FloatingActionButton
           onAction={(actionId) => {
@@ -175,8 +215,8 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
         />
       </div>
 
-      {/* MOBILE-ONLY BOTTOM NAVIGATION BAR (< 1024px) */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 border-t border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#ECECEC]/95 dark:bg-[#1A1D24]/95 border-t border-slate-200 dark:border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
         {mainBottomTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
@@ -198,25 +238,25 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
               className={clsx(
                 "flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-200 active:scale-95",
                 isActive
-                  ? "text-blue-400 font-bold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-blue-600 dark:text-cyan-400 font-bold"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
               )}
             >
               <div
                 className={clsx(
                   "p-1.5 rounded-full transition-all",
-                  isActive ? "bg-blue-600/20 text-blue-400 scale-110" : ""
+                  isActive ? "skeuo-dial text-blue-600 dark:text-cyan-400 scale-110" : ""
                 )}
               >
-                <Icon size={20} />
+                <Icon size={18} />
               </div>
-              <span className="text-[11px] font-medium tracking-tight mt-0.5">{tab.label}</span>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">{tab.label}</span>
             </button>
           );
         })}
       </nav>
 
-      {/* "More Options" Bottom Sheet (< 1024px) */}
+      {/* "More Options" Bottom Sheet */}
       <BottomSheet
         isOpen={isMoreSheetOpen}
         onClose={() => setIsMoreSheetOpen(false)}
@@ -235,23 +275,23 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                   onTabChange(item.id);
                 }}
                 className={clsx(
-                  "p-4 rounded-2xl border text-left flex items-center gap-4 transition-all active:scale-98",
+                  "p-4 rounded-2xl text-left flex items-center gap-4 transition-all active:scale-98 skeuo-card",
                   isSelected
-                    ? "bg-blue-600/20 border-blue-500/40 text-white shadow-lg"
-                    : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                    ? "border-blue-500/50 text-blue-600 dark:text-cyan-400"
+                    : "text-slate-700 dark:text-slate-300"
                 )}
               >
                 <div
                   className={clsx(
-                    "w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0",
-                    isSelected ? "bg-blue-600 text-white" : "bg-slate-800 text-blue-400"
+                    "skeuo-dial w-11 h-11 flex items-center justify-center flex-shrink-0",
+                    isSelected ? "text-blue-600 dark:text-cyan-400" : "text-slate-500 dark:text-slate-400"
                   )}
                 >
-                  <Icon size={22} />
+                  <Icon size={20} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-white">{item.label}</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">{item.desc}</p>
+                  <h4 className="font-bold text-sm leading-tight text-slate-800 dark:text-white">{item.label}</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
                 </div>
               </button>
             );
@@ -261,3 +301,4 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     </div>
   );
 };
+

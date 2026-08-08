@@ -3,26 +3,20 @@ import {
   Bell,
   AlertTriangle,
   Clock,
-  Calendar,
-  User,
-  Armchair,
-  CheckCircle2,
-  AlertCircle,
-  X,
   Send,
   Loader2,
-  ChevronRight,
+  CheckCircle2,
+  SlidersHorizontal,
 } from "lucide-react";
-import { SaaSCard } from "./SaaSCard";
-import { Badge } from "./Badge";
+import { clsx } from "clsx";
 import {
   sendMembershipReminder,
   sendBulkReminders,
 } from "../services/whatsappService";
 
-export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
+export const MembershipAlertsWidget = ({ students = [], maxStudents = 5 }) => {
   const [activeTab, setActiveTab] = useState("All");
-  const [confirmModal, setConfirmModal] = useState(null); // { type: "single"|"bulk_expiring"|"bulk_expired", student?: object, count?: number }
+  const [confirmModal, setConfirmModal] = useState(null);
   const [sending, setSending] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
@@ -41,26 +35,21 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
         const diffTime = expiry.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        let statusCategory = "normal"; // green > 2 days
+        let statusCategory = "normal";
         let statusLabel = "";
-        let badgeColorClass = "";
 
         if (diffDays < 0) {
           statusCategory = "expired";
           statusLabel = "Expired";
-          badgeColorClass = "bg-rose-950/80 text-rose-300 border-rose-800/80"; // Dark Red / Crimson
         } else if (diffDays === 0) {
           statusCategory = "today";
           statusLabel = "Today";
-          badgeColorClass = "bg-rose-600/20 text-rose-400 border-rose-500/30"; // Red
         } else if (diffDays === 1) {
           statusCategory = "tomorrow";
           statusLabel = "Tomorrow";
-          badgeColorClass = "bg-amber-500/20 text-amber-400 border-amber-500/30"; // Orange
         } else if (diffDays === 2) {
           statusCategory = "2days";
-          statusLabel = "2 days";
-          badgeColorClass = "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"; // Yellow
+          statusLabel = "In 2 Days";
         }
 
         return {
@@ -68,10 +57,9 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
           diffDays,
           statusCategory,
           statusLabel,
-          badgeColorClass,
         };
       })
-      .filter((s) => s && s.diffDays <= 2); // Show only <= 2 days or already expired
+      .filter((s) => s && s.diffDays <= 2);
   }, [students]);
 
   // Counts for Tabs
@@ -106,7 +94,7 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
   // Filtered List based on Active Tab
   const filteredStudents = useMemo(() => {
     return processedStudents.filter((s) => {
-      if (activeTab === "Expiring Today") return s.diffDays === 0;
+      if (activeTab === "Today") return s.diffDays === 0;
       if (activeTab === "Tomorrow") return s.diffDays === 1;
       if (activeTab === "Within 2 Days") return s.diffDays >= 0 && s.diffDays <= 2;
       if (activeTab === "Expired") return s.diffDays < 0;
@@ -114,7 +102,6 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
     });
   }, [processedStudents, activeTab]);
 
-  // Lists for Bulk Actions
   const expiringWithin2DaysList = useMemo(() => {
     return processedStudents.filter((s) => s.diffDays >= 0 && s.diffDays <= 2);
   }, [processedStudents]);
@@ -123,7 +110,6 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
     return processedStudents.filter((s) => s.diffDays < 0);
   }, [processedStudents]);
 
-  // Toast Helper
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -131,7 +117,6 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
     }, 3200);
   };
 
-  // Execute Dispatch Actions
   const handleConfirmSend = async () => {
     if (!confirmModal) return;
     setSending(true);
@@ -159,7 +144,7 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
 
   const tabs = [
     { id: "All", label: `All (${counts.allCount})` },
-    { id: "Expiring Today", label: `Today (${counts.todayCount})` },
+    { id: "Today", label: `Today (${counts.todayCount})` },
     { id: "Tomorrow", label: `Tomorrow (${counts.tomorrowCount})` },
     { id: "Within 2 Days", label: `Within 2 Days (${counts.within2DaysCount})` },
     { id: "Expired", label: `Expired (${counts.expired})` },
@@ -175,259 +160,262 @@ export const MembershipAlertsWidget = ({ students = [], maxStudents }) => {
         </div>
       )}
 
-      {/* BONUS COUNTER CARDS (CLICKABLE FILTERS) */}
-      <div className="grid grid-cols-2 gap-3.5">
-        <button
+      {/* MINI STATUS PANELS (Expiring Soon & Expired Members) */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Expiring Soon */}
+        <div
           onClick={() => setActiveTab("Within 2 Days")}
-          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between group ${
-            activeTab === "Within 2 Days"
-              ? "bg-amber-500/15 border-amber-500/40 ring-2 ring-amber-500/20"
-              : "bg-slate-900/80 border-slate-800/80 hover:border-amber-500/30 hover:bg-slate-900"
-          }`}
+          className={clsx(
+            "skeuo-card p-4 flex items-center gap-3.5 cursor-pointer transition-all active:scale-98",
+            activeTab === "Within 2 Days" ? "ring-1 ring-amber-400/50" : ""
+          )}
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
-              <Clock size={16} />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 leading-none">Expiring Soon</p>
-              <h4 className="text-sm font-extrabold text-amber-400 mt-1">
-                🟡 Soon : {counts.expiringSoon}
-              </h4>
-            </div>
+          <div className="skeuo-dial w-10 h-10 glow-amber flex-shrink-0">
+            <Clock size={18} className="text-amber-500" />
           </div>
-        </button>
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase block">
+              Expiring Soon
+            </span>
+            <span className="text-sm font-extrabold text-slate-800 dark:text-amber-400 mt-0.5 block">
+              Soon : {counts.expiringSoon}
+            </span>
+          </div>
+          <div className="skeuo-rivet ml-auto" />
+        </div>
 
-        <button
+        {/* Expired Members */}
+        <div
           onClick={() => setActiveTab("Expired")}
-          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between group ${
-            activeTab === "Expired"
-              ? "bg-rose-950/40 border-rose-700/50 ring-2 ring-rose-500/20"
-              : "bg-slate-900/80 border-slate-800/80 hover:border-rose-500/30 hover:bg-slate-900"
-          }`}
+          className={clsx(
+            "skeuo-card p-4 flex items-center gap-3.5 cursor-pointer transition-all active:scale-98",
+            activeTab === "Expired" ? "ring-1 ring-rose-500/50" : ""
+          )}
         >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center font-bold">
-              <AlertTriangle size={16} />
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 leading-none">Expired Members</p>
-              <h4 className="text-sm font-extrabold text-rose-400 mt-1">
-                🔴 Expired : {counts.expired}
-              </h4>
-            </div>
+          <div className="skeuo-dial w-10 h-10 glow-red flex-shrink-0">
+            <AlertTriangle size={18} className="text-rose-500" />
           </div>
-        </button>
+          <div>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase block">
+              Expired Members
+            </span>
+            <span className="text-sm font-extrabold text-rose-600 dark:text-rose-400 mt-0.5 block">
+              Expired : {counts.expired}
+            </span>
+          </div>
+          <div className="skeuo-rivet ml-auto" />
+        </div>
       </div>
 
-      {/* MAIN MEMBERSHIP ALERTS CARD */}
-      <SaaSCard className="p-4 md:p-5 bg-slate-900/90 border-slate-800/80 space-y-4">
-        {/* Header Title */}
-        <div className="pb-3 border-b border-slate-800/80">
-          <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-            <Bell className="text-amber-400" size={16} /> Membership Alerts
-          </h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            Realtime membership validity alerts
-          </p>
+      {/* MAIN MEMBERSHIP ALERTS PANEL */}
+      <div className="skeuo-card p-5 md:p-6 space-y-4 relative">
+        {/* Grip Dots */}
+        <div className="skeuo-grip absolute top-5 right-5">
+          <div className="skeuo-grip-dot" />
+          <div className="skeuo-grip-dot" />
+          <div className="skeuo-grip-dot" />
+          <div className="skeuo-grip-dot" />
+          <div className="skeuo-grip-dot" />
+          <div className="skeuo-grip-dot" />
         </div>
 
-        {/* Auto Filter Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all ${
-                activeTab === t.id
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/20"
-                  : "bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Students Table/List */}
-        {filteredStudents.length === 0 ? (
-          <div className="p-6 text-center bg-slate-950/40 rounded-xl border border-slate-800/60 text-slate-400">
-            <CheckCircle2 size={24} className="mx-auto text-emerald-400/80 mb-2" />
-            <p className="font-semibold text-xs text-slate-300">No Membership Alerts</p>
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-2">
+            <Bell size={18} className="text-amber-500" />
+            <h3 className="font-extrabold text-slate-800 dark:text-white text-xs tracking-wider uppercase">
+              Membership Alerts
+            </h3>
           </div>
-        ) : (
-          <div className="divide-y divide-slate-800/60 overflow-hidden">
-            {/* Desktop Table Header */}
-            <div className="hidden md:flex items-center text-[10px] font-bold uppercase tracking-wider text-slate-500 pb-2 px-1">
-              <div className="w-8 shrink-0"></div>
-              <div className="flex-1 min-w-0">Name</div>
-              <div className="w-20 text-center shrink-0">Seat</div>
-              <div className="w-24 shrink-0">Batch</div>
-              <div className="w-20 text-center shrink-0">Expiry</div>
-              <div className="w-10 text-right shrink-0">Action</div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="jewel-dot cyan" />
+            <span className="jewel-dot emerald" />
+            <span className="jewel-dot amber" />
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 ml-1">
+              Realtime membership validity alerts
+            </span>
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={clsx(
+                  "skeuo-badge px-3 py-1.5 text-[10px] font-bold rounded-xl cursor-pointer transition-all",
+                  activeTab === t.id
+                    ? "bg-blue-600 dark:bg-cyan-500/20 text-blue-700 dark:text-cyan-300 border border-blue-400/40"
+                    : "text-slate-600 dark:text-slate-400"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            className="skeuo-dial w-7 h-7 flex-shrink-0 text-slate-500 dark:text-slate-400"
+            title="Filter Options"
+          >
+            <SlidersHorizontal size={13} />
+          </button>
+        </div>
+
+        {/* Table Rows (Debossed / Inset Table Surface) */}
+        <div className="space-y-2 pt-2">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 pb-1">
+            <span className="col-span-4">Name</span>
+            <span className="col-span-2 text-center">Seat</span>
+            <span className="col-span-3">Batch</span>
+            <span className="col-span-2 text-center">Expiry</span>
+            <span className="col-span-1 text-right">Action</span>
+          </div>
+
+          {filteredStudents.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400 skuo-inset rounded-xl">
+              No active membership alerts in this view.
             </div>
+          ) : (
+            filteredStudents.slice(0, maxStudents).map((s) => {
+              const initial = (s.name || "S").charAt(0).toUpperCase();
+              const isExpired = s.diffDays < 0;
 
-            <div className="space-y-1.5 md:space-y-0 md:divide-y md:divide-slate-800/40 max-h-[384px] overflow-y-auto custom-scrollbar">
-              {(maxStudents ? filteredStudents.slice(0, maxStudents) : filteredStudents).map((student) => {
-                const batchDisplay = Array.isArray(student.batch)
-                  ? student.batch.join(", ")
-                  : String(student.batch || "No Batch");
-
-                const firstLetter = student.name.charAt(0).toUpperCase();
-
-                return (
-                  <div
-                    key={student.id}
-                    className="flex flex-col md:flex-row md:items-center p-3 md:py-2 md:px-1 rounded-xl md:rounded-none bg-slate-950/40 md:bg-transparent border border-slate-800/80 md:border-none gap-2 md:gap-3 hover:bg-slate-800/25 transition-colors min-h-[48px]"
-                  >
-                    {/* Avatar & Name */}
-                    <div className="flex items-center space-x-2.5 flex-1 min-w-0">
-                      <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700/80 flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">
-                        {firstLetter}
+              return (
+                <div
+                  key={s.id}
+                  className="skeuo-card p-2.5 flex items-center justify-between text-xs rounded-xl hover:scale-[1.01] transition-all"
+                >
+                  <div className="grid grid-cols-12 w-full items-center">
+                    {/* Name + Initial Avatar Disc */}
+                    <div className="col-span-4 flex items-center gap-2.5 min-w-0">
+                      <div className="skeuo-dial w-7 h-7 font-extrabold text-[11px] text-slate-700 dark:text-slate-200 flex-shrink-0">
+                        {initial}
                       </div>
-                      <span className="font-bold text-white text-xs truncate leading-none">
-                        {student.name}
+                      <span className="font-bold text-slate-800 dark:text-white truncate">
+                        {s.name}
                       </span>
                     </div>
 
                     {/* Seat */}
-                    <div className="md:w-20 md:text-center shrink-0 flex md:block items-center gap-1.5 text-[11px] text-slate-400">
-                      <span className="md:hidden text-[10px] text-slate-500 font-bold uppercase">Seat:</span>
-                      <span className="font-semibold text-slate-200">
-                        {student.seatNumber ? `Seat ${student.seatNumber}` : "N/A"}
+                    <div className="col-span-2 text-center">
+                      <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                        Seat {s.seatNumber || "-"}
                       </span>
                     </div>
 
                     {/* Batch */}
-                    <div className="md:w-24 shrink-0 flex md:block items-center gap-1.5 text-[11px] text-slate-400 truncate">
-                      <span className="md:hidden text-[10px] text-slate-500 font-bold uppercase">Batch:</span>
-                      <span className="font-medium text-slate-300 truncate">
-                        {batchDisplay}
-                      </span>
+                    <div className="col-span-3 truncate text-[11px] text-slate-600 dark:text-slate-400">
+                      {Array.isArray(s.batch)
+                        ? s.batch.join(", ")
+                        : s.batch || "A Shift"}
                     </div>
 
-                    {/* Expiry Status */}
-                    <div className="md:w-20 md:text-center shrink-0 flex md:block items-center gap-1.5">
-                      <span className="md:hidden text-[10px] text-slate-500 font-bold uppercase">Expiry:</span>
+                    {/* Expiry Badge */}
+                    <div className="col-span-2 text-center">
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border inline-block text-center min-w-[56px] leading-tight ${student.badgeColorClass}`}
+                        className={clsx(
+                          "skeuo-badge px-2.5 py-0.5 text-[10px]",
+                          isExpired
+                            ? "text-rose-600 dark:text-rose-400 border-rose-500/30"
+                            : "text-amber-600 dark:text-amber-400 border-amber-500/30"
+                        )}
                       >
-                        {student.statusLabel}
+                        {isExpired ? "Expired" : s.statusLabel}
                       </span>
                     </div>
 
-                    {/* Action Icon */}
-                    <div className="md:w-10 text-right shrink-0 flex md:block justify-end pt-1 md:pt-0">
+                    {/* Action Bell */}
+                    <div className="col-span-1 flex justify-end">
                       <button
-                        onClick={() => setConfirmModal({ type: "single", student })}
-                        className="p-1.5 rounded-lg bg-blue-600/15 text-blue-400 border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                        title="Send Renewal Reminder"
+                        onClick={() =>
+                          setConfirmModal({ type: "single", student: s })
+                        }
+                        className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-amber-400 active:scale-95"
+                        title="Send WhatsApp Alert"
                       >
-                        <Bell size={13} />
+                        <Bell size={12} />
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              );
+            })
+          )}
+        </div>
 
-        {/* Footer Actions (Bulks) */}
-        {filteredStudents.length > 0 && (
-          <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span className="text-[10px] text-slate-500">
-              Showing max {maxStudents || filteredStudents.length} alerts
-            </span>
-            
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                onClick={() =>
-                  setConfirmModal({
-                    type: "bulk_expiring",
-                    count: expiringWithin2DaysList.length,
-                  })
-                }
-                disabled={expiringWithin2DaysList.length === 0}
-                className="px-2.5 py-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-[10px] font-bold hover:bg-amber-500/20 transition-all disabled:opacity-40 flex items-center space-x-1"
-              >
-                <Bell size={12} />
-                <span>🔔 Notify All Expiring</span>
-              </button>
+        {/* Footer Actions Strip */}
+        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+            Showing max {maxStudents} alerts
+          </span>
 
-              <button
-                onClick={() =>
-                  setConfirmModal({
-                    type: "bulk_expired",
-                    count: expiredList.length,
-                  })
-                }
-                disabled={expiredList.length === 0}
-                className="px-2.5 py-1.5 bg-rose-950/50 text-rose-400 border border-rose-800/40 rounded-lg text-[10px] font-bold hover:bg-rose-950 hover:text-rose-300 transition-all disabled:opacity-40 flex items-center space-x-1"
-              >
-                <AlertCircle size={12} />
-                <span>🔴 Notify All Expired</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </SaaSCard>
-
-      {/* CONFIRMATION DIALOG MODAL */}
-      {confirmModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800/80 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5 relative">
+          <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setConfirmModal(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              onClick={() =>
+                setConfirmModal({
+                  type: "bulk_expiring",
+                  count: expiringWithin2DaysList.length,
+                })
+              }
+              disabled={expiringWithin2DaysList.length === 0}
+              className="skeuo-btn px-3 py-1.5 text-xs text-amber-700 dark:text-amber-400 border-amber-500/30 disabled:opacity-40 flex items-center gap-1.5"
             >
-              <X size={18} />
+              <Bell size={13} className="text-amber-500" />
+              <span>Notify All Expiring</span>
             </button>
 
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-              <Bell size={20} />
-            </div>
+            <button
+              onClick={() =>
+                setConfirmModal({
+                  type: "bulk_expired",
+                  count: expiredList.length,
+                })
+              }
+              disabled={expiredList.length === 0}
+              className="skeuo-btn px-3 py-1.5 text-xs text-rose-700 dark:text-rose-400 border-rose-500/30 disabled:opacity-40 flex items-center gap-1.5"
+            >
+              <AlertTriangle size={13} className="text-rose-500" />
+              <span>Notify All Expired</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
-            <div>
-              <h3 className="text-base font-bold text-white">
-                {confirmModal.type === "single"
-                  ? "Send Renewal Reminder?"
-                  : confirmModal.type === "bulk_expiring"
-                  ? "Send Reminders to Expiring Students?"
-                  : "Notify Expired Members?"}
-              </h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                {confirmModal.type === "single"
-                  ? `Are you sure you want to send a membership renewal reminder to ${confirmModal.student?.name}?`
-                  : confirmModal.type === "bulk_expiring"
-                  ? `Send reminder to all ${confirmModal.count} students whose membership expires within the next 2 days?`
-                  : `Send expiry notice to all ${confirmModal.count} members whose membership has already expired?`}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end space-x-3 pt-1">
+      {/* CONFIRMATION MODAL */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
+          <div className="skeuo-card max-w-sm w-full p-6 space-y-4">
+            <h4 className="font-extrabold text-sm text-slate-800 dark:text-white flex items-center gap-2">
+              <Send size={16} className="text-blue-500" /> Confirm WhatsApp Reminder
+            </h4>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {confirmModal.type === "single"
+                ? `Send direct membership reminder to ${confirmModal.student?.name} via WhatsApp?`
+                : `Send bulk WhatsApp reminders to ${confirmModal.count} students?`}
+            </p>
+            <div className="flex justify-end gap-2.5 pt-2">
               <button
                 onClick={() => setConfirmModal(null)}
-                disabled={sending}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+                className="skeuo-btn px-3.5 py-2 text-xs"
               >
                 Cancel
               </button>
-
               <button
                 onClick={handleConfirmSend}
                 disabled={sending}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 shadow-lg shadow-blue-600/35 disabled:opacity-50"
+                className="skeuo-btn skeuo-btn-primary px-4 py-2 text-xs flex items-center gap-1.5"
               >
                 {sending ? (
                   <>
-                    <Loader2 size={13} className="animate-spin" />
-                    <span>Sending...</span>
+                    <Loader2 size={13} className="animate-spin" /> Dispatching...
                   </>
                 ) : (
                   <>
-                    <Send size={13} />
-                    <span>Send</span>
+                    <Send size={13} /> Send Now
                   </>
                 )}
               </button>

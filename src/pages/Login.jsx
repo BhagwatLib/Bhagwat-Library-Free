@@ -1,5 +1,6 @@
 import React from "react";
-import { Lock } from "lucide-react";
+import { Lock, ShieldCheck, KeyRound } from "lucide-react";
+import { SaaSCard } from "../components/SaaSCard";
 
 export const Login = ({ onLogin }) => {
   const [password, setPassword] = React.useState("");
@@ -16,60 +17,70 @@ export const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-[#0f172a] flex items-center justify-center p-4 transition-colors duration-300">
-      <div className="w-full max-w-sm bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl overflow-hidden shadow-primary/5 dark:shadow-none transition-all duration-300">
-        <div className="p-8">
-          <div className="flex flex-col items-center gap-4 mb-8">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/20 shadow-lg flex items-center justify-center">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4 transition-colors duration-300">
+      <div className="w-full max-w-sm">
+        <SaaSCard className="p-8 relative" withRivet withGrip>
+          <div className="flex flex-col items-center gap-4 mb-6">
+            <div className="skeuo-dial w-20 h-20 glow-purple text-purple-400 p-1">
               <img
                 src="/logo.jpg"
                 alt="Logo"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-full"
+                onError={(e) => {
+                  e.target.style.display = "none";
+                }}
               />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white text-center">
-              Admin Access
-            </h1>
-            <p className="text-slate-500 dark:text-gray-400 text-center text-sm">
-              Please enter the password to access the Bhagwat Library Admin
-              Portal.
-            </p>
+            
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-1.5">
+                <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">
+                  Bhagwat Library
+                </h1>
+                <span className="jewel-dot cyan" />
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Admin Security Terminal
+              </p>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`w-full bg-slate-50 dark:bg-white/5 border ${
-                  error
-                    ? "border-danger animate-shake"
-                    : "border-slate-200 dark:border-white/10"
-                } rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-slate-400 dark:placeholder:text-gray-600 text-center tracking-widest shadow-inner dark:shadow-none`}
-                placeholder="Enter Password"
-                autoFocus
-              />
+              <div className="relative">
+                <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`skeuo-input w-full pl-10 pr-4 py-3 text-sm font-semibold tracking-widest text-center ${
+                    error ? "border-rose-500 ring-2 ring-rose-500/30" : ""
+                  }`}
+                  placeholder="••••••••••••"
+                  autoFocus
+                />
+              </div>
               {error && (
-                <p className="text-danger text-xs text-center mt-2 animate-in fade-in slide-in-from-top-1">
-                  Incorrect password. Please try again.
+                <p className="text-rose-500 text-xs text-center mt-2 font-bold animate-in fade-in">
+                  Incorrect access key. Please retry.
                 </p>
               )}
             </div>
 
             <button
               type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-3 rounded-xl transition-all active:scale-95 shadow-lg shadow-primary/20"
+              className="skeuo-btn skeuo-btn-primary w-full py-3 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2"
             >
-              Access Portal
+              <ShieldCheck size={16} /> Access Portal
             </button>
           </form>
-        </div>
-        <div className="bg-slate-50 dark:bg-white/5 p-4 text-center border-t border-slate-100 dark:border-none">
-          <p className="text-slate-400 dark:text-gray-500 text-xs">
-            ® Bhagwat Library
-          </p>
-        </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-center">
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+              Automated Cloud Sync Active
+            </p>
+          </div>
+        </SaaSCard>
       </div>
     </div>
   );

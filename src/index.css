@@ -3,42 +3,513 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-primary: #ECECEC;
+    --card-bg: #F4F4F4;
+    --card-surface: #EAEAEA;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --border-color: rgba(0, 0, 0, 0.06);
+    --accent: #5B7FFF;
+    --success: #36D399;
+    --warning: #FBBF24;
+    --danger: #EF4444;
+  }
+
+  html.dark {
+    --bg-primary: #1A1D24;
+    --card-bg: #252932;
+    --card-surface: #21252D;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --border-color: rgba(255, 255, 255, 0.07);
+  }
+
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased selection:bg-blue-500/30;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    @apply antialiased selection:bg-blue-500/30;
   }
 }
 
-.glass {
-  @apply bg-slate-900/60 backdrop-blur-xl border border-white/10;
+/* ==========================================================================
+   SKEUOMORPHIC DESIGN SYSTEM - DARK & LIGHT TOKENS
+   ========================================================================== */
+
+/* 1. SKEUOMORPHIC FLOATING CARD */
+.skeuo-card {
+  position: relative;
+  border-radius: 22px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Custom Scrollbar Styles */
+/* Dark Mode Card */
+html.dark .skeuo-card {
+  background: linear-gradient(145deg, #282d37, #21252d);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    8px 10px 22px rgba(10, 12, 16, 0.65), 
+    -4px -4px 14px rgba(45, 52, 65, 0.25),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.1),
+    inset -1px -1px 2px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .skeuo-card:hover {
+  box-shadow: 
+    10px 14px 28px rgba(10, 12, 16, 0.75), 
+    -5px -5px 16px rgba(45, 52, 65, 0.35),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.14);
+}
+
+/* Light Mode Card */
+html.light .skeuo-card {
+  background: linear-gradient(145deg, #ffffff, #f0f2f5);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    6px 8px 20px rgba(0, 0, 0, 0.07), 
+    -6px -6px 18px rgba(255, 255, 255, 0.95),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+html.light .skeuo-card:hover {
+  box-shadow: 
+    8px 12px 24px rgba(0, 0, 0, 0.09), 
+    -8px -8px 20px rgba(255, 255, 255, 1),
+    inset 1px 1px 2px rgba(255, 255, 255, 1);
+}
+
+/* 2. SKEUOMORPHIC RECESSED / INSET PANELS & TABLES */
+.skeuo-inset {
+  border-radius: 18px;
+  transition: all 0.25s ease;
+}
+
+html.dark .skeuo-inset {
+  background: #1C2027;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 
+    inset 3px 3px 8px rgba(0, 0, 0, 0.6), 
+    inset -2px -2px 6px rgba(255, 255, 255, 0.03);
+}
+
+html.light .skeuo-inset {
+  background: #E8EBF0;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 
+    inset 3px 3px 8px rgba(0, 0, 0, 0.07), 
+    inset -3px -3px 8px rgba(255, 255, 255, 0.9);
+}
+
+/* 3. SKEUOMORPHIC CIRCULAR DIAL / DISC */
+.skeuo-dial {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.25s ease;
+}
+
+html.dark .skeuo-dial {
+  background: linear-gradient(145deg, #2b303b, #1d2128);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    6px 6px 14px rgba(10, 12, 16, 0.7), 
+    -4px -4px 10px rgba(45, 52, 65, 0.3),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+html.light .skeuo-dial {
+  background: linear-gradient(145deg, #ffffff, #e6e9ee);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    5px 5px 12px rgba(0, 0, 0, 0.08), 
+    -5px -5px 12px rgba(255, 255, 255, 0.95),
+    inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Glowing Neon Dial Rings (Reference Dashboard Look) */
+.skeuo-dial.glow-purple {
+  box-shadow: 
+    0 0 0 2px rgba(139, 92, 246, 0.4),
+    0 0 16px rgba(139, 92, 246, 0.35),
+    6px 6px 14px rgba(10, 12, 16, 0.7);
+}
+
+.skeuo-dial.glow-cyan {
+  box-shadow: 
+    0 0 0 2px rgba(6, 182, 212, 0.4),
+    0 0 16px rgba(6, 182, 212, 0.35),
+    6px 6px 14px rgba(10, 12, 16, 0.7);
+}
+
+.skeuo-dial.glow-amber {
+  box-shadow: 
+    0 0 0 2px rgba(245, 158, 11, 0.4),
+    0 0 16px rgba(245, 158, 11, 0.35),
+    6px 6px 14px rgba(10, 12, 16, 0.7);
+}
+
+.skeuo-dial.glow-red {
+  box-shadow: 
+    0 0 0 2px rgba(239, 68, 68, 0.4),
+    0 0 16px rgba(239, 68, 68, 0.35),
+    6px 6px 14px rgba(10, 12, 16, 0.7);
+}
+
+/* 4. SKEUOMORPHIC PILL NAVIGATION */
+.skeuo-nav-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 9999px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html.dark .skeuo-nav-pill {
+  background: linear-gradient(145deg, #272c36, #20242c);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 
+    4px 4px 10px rgba(12, 14, 18, 0.6), 
+    -3px -3px 8px rgba(45, 52, 65, 0.2);
+}
+
+html.dark .skeuo-nav-pill:hover {
+  background: linear-gradient(145deg, #2d333f, #222730);
+  box-shadow: 
+    5px 5px 12px rgba(12, 14, 18, 0.7), 
+    -3px -3px 10px rgba(50, 58, 72, 0.3);
+}
+
+html.dark .skeuo-nav-pill.active {
+  background: linear-gradient(145deg, #1f2738, #252b3d);
+  border: 1px solid rgba(91, 127, 255, 0.3);
+  box-shadow: 
+    inset 2px 2px 4px rgba(0, 0, 0, 0.5), 
+    inset -1px -1px 2px rgba(255, 255, 255, 0.1),
+    0 0 12px rgba(91, 127, 255, 0.25);
+}
+
+html.light .skeuo-nav-pill {
+  background: linear-gradient(145deg, #ffffff, #eef0f4);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 
+    4px 4px 10px rgba(0, 0, 0, 0.05), 
+    -4px -4px 10px rgba(255, 255, 255, 0.9);
+}
+
+html.light .skeuo-nav-pill:hover {
+  background: linear-gradient(145deg, #ffffff, #f4f6f9);
+  box-shadow: 
+    5px 5px 12px rgba(0, 0, 0, 0.07), 
+    -5px -5px 12px rgba(255, 255, 255, 1);
+}
+
+html.light .skeuo-nav-pill.active {
+  background: linear-gradient(145deg, #ffffff, #e6edff);
+  border: 1px solid rgba(91, 127, 255, 0.3);
+  box-shadow: 
+    inset 2px 2px 4px rgba(0, 0, 0, 0.06), 
+    inset -2px -2px 4px rgba(255, 255, 255, 0.9),
+    0 4px 12px rgba(91, 127, 255, 0.15);
+}
+
+/* 5. SKEUOMORPHIC TACTILE BUTTONS */
+.skeuo-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+html.dark .skeuo-btn {
+  background: linear-gradient(145deg, #2c323d, #20242c);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 
+    4px 4px 10px rgba(10, 12, 16, 0.6), 
+    -3px -3px 8px rgba(45, 52, 65, 0.25),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.1);
+  color: #F1F5F9;
+}
+
+html.dark .skeuo-btn:hover {
+  background: linear-gradient(145deg, #323846, #232832);
+  box-shadow: 
+    5px 5px 14px rgba(10, 12, 16, 0.7), 
+    -3px -3px 10px rgba(50, 58, 72, 0.35);
+}
+
+html.dark .skeuo-btn:active {
+  transform: scale(0.97);
+  box-shadow: 
+    inset 3px 3px 6px rgba(0, 0, 0, 0.6), 
+    inset -1px -1px 3px rgba(255, 255, 255, 0.05);
+}
+
+html.light .skeuo-btn {
+  background: linear-gradient(145deg, #ffffff, #e9ecef);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    4px 4px 10px rgba(0, 0, 0, 0.07), 
+    -4px -4px 10px rgba(255, 255, 255, 0.95),
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.8);
+  color: #1E293B;
+}
+
+html.light .skeuo-btn:hover {
+  background: linear-gradient(145deg, #ffffff, #f0f3f6);
+  box-shadow: 
+    5px 5px 12px rgba(0, 0, 0, 0.09), 
+    -5px -5px 12px #ffffff;
+}
+
+html.light .skeuo-btn:active {
+  transform: scale(0.97);
+  box-shadow: 
+    inset 3px 3px 6px rgba(0, 0, 0, 0.08), 
+    inset -2px -2px 4px #ffffff;
+}
+
+/* Primary Button with Luxury Glow */
+.skeuo-btn-primary {
+  background: linear-gradient(145deg, #5B7FFF, #4568F5) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 
+    0 6px 18px rgba(91, 127, 255, 0.4), 
+    inset 1px 1px 2px rgba(255, 255, 255, 0.4) !important;
+}
+
+.skeuo-btn-primary:hover {
+  background: linear-gradient(145deg, #6B8DFF, #5073FF) !important;
+  box-shadow: 
+    0 8px 22px rgba(91, 127, 255, 0.55), 
+    inset 1px 1px 2px rgba(255, 255, 255, 0.6) !important;
+}
+
+.skeuo-btn-primary:active {
+  transform: scale(0.97);
+  box-shadow: 
+    inset 2px 2px 6px rgba(0, 0, 0, 0.4), 
+    0 2px 8px rgba(91, 127, 255, 0.4) !important;
+}
+
+/* Success Button */
+.skeuo-btn-success {
+  background: linear-gradient(145deg, #36D399, #28B57E) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 
+    0 4px 14px rgba(54, 211, 153, 0.35), 
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Danger Button */
+.skeuo-btn-danger {
+  background: linear-gradient(145deg, #EF4444, #DC2626) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 
+    0 4px 14px rgba(239, 68, 68, 0.35), 
+    inset 1px 1px 1.5px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 6. SKEUOMORPHIC INSET INPUTS */
+.skeuo-input {
+  border-radius: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+html.dark .skeuo-input {
+  background: #1B1E25;
+  color: #F8FAFC;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 
+    inset 2.5px 2.5px 6px rgba(0, 0, 0, 0.65), 
+    inset -1.5px -1.5px 4px rgba(255, 255, 255, 0.03);
+}
+
+html.dark .skeuo-input:focus {
+  border-color: rgba(91, 127, 255, 0.5);
+  box-shadow: 
+    inset 2px 2px 5px rgba(0, 0, 0, 0.7), 
+    0 0 0 1px rgba(91, 127, 255, 0.4),
+    0 0 12px rgba(91, 127, 255, 0.2);
+}
+
+html.light .skeuo-input {
+  background: #E8EBF0;
+  color: #1E293B;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    inset 2.5px 2.5px 6px rgba(0, 0, 0, 0.07), 
+    inset -2px -2px 5px rgba(255, 255, 255, 0.9);
+}
+
+html.light .skeuo-input:focus {
+  background: #FFFFFF;
+  border-color: rgba(91, 127, 255, 0.5);
+  box-shadow: 
+    0 0 0 1px rgba(91, 127, 255, 0.3),
+    0 0 12px rgba(91, 127, 255, 0.15);
+}
+
+/* 7. EMBOSSED TACTILE BADGES */
+.skeuo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  transition: all 0.2s ease;
+}
+
+html.dark .skeuo-badge {
+  background: linear-gradient(145deg, #272c36, #1d2128);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    2px 2px 5px rgba(10, 12, 16, 0.5), 
+    -1.5px -1.5px 4px rgba(45, 52, 65, 0.2),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+html.light .skeuo-badge {
+  background: linear-gradient(145deg, #ffffff, #e9ecef);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    2px 2px 5px rgba(0, 0, 0, 0.06), 
+    -2px -2px 5px rgba(255, 255, 255, 0.9),
+    inset 1px 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+/* 8. SCREW RIVET HARDWARE (Hardware detail from reference) */
+.skeuo-rivet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+html.dark .skeuo-rivet {
+  background: radial-gradient(circle at 35% 35%, #7e8b9e 15%, #2d3440 85%);
+  box-shadow: 
+    inset 1px 1px 1px rgba(255, 255, 255, 0.6), 
+    1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+html.light .skeuo-rivet {
+  background: radial-gradient(circle at 35% 35%, #ffffff 15%, #b0b8c4 85%);
+  box-shadow: 
+    inset 1px 1px 1px #ffffff, 
+    1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 9. GRIP DOTS PATTERN (:::) */
+.skeuo-grip {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  gap: 3px;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.skeuo-grip-dot {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+}
+
+html.dark .skeuo-grip-dot {
+  background: #15181E;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.8), 1px 1px 1px rgba(255,255,255,0.08);
+}
+
+html.light .skeuo-grip-dot {
+  background: #BCC3CD;
+  box-shadow: inset 1px 1px 2px rgba(0,0,0,0.2), 1px 1px 1px #ffffff;
+}
+
+/* 10. GLOWING JEWEL DOT */
+.jewel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.jewel-dot.cyan {
+  background: #00F2FE;
+  box-shadow: 0 0 6px #00F2FE, 0 0 12px rgba(0, 242, 254, 0.6);
+}
+
+.jewel-dot.emerald {
+  background: #36D399;
+  box-shadow: 0 0 6px #36D399, 0 0 12px rgba(54, 211, 153, 0.6);
+}
+
+.jewel-dot.amber {
+  background: #FBBF24;
+  box-shadow: 0 0 6px #FBBF24, 0 0 12px rgba(251, 191, 36, 0.6);
+}
+
+.jewel-dot.ruby {
+  background: #EF4444;
+  box-shadow: 0 0 6px #EF4444, 0 0 12px rgba(239, 68, 68, 0.6);
+}
+
+.jewel-dot.purple {
+  background: #8B5CF6;
+  box-shadow: 0 0 6px #8B5CF6, 0 0 12px rgba(139, 92, 246, 0.6);
+}
+
+/* 11. SKEUOMORPHIC SCROLLBARS */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+html.dark .custom-scrollbar::-webkit-scrollbar-track {
+  background: #171A21;
   border-radius: 4px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2D333F;
   border-radius: 4px;
-  transition: background 0.2s;
+  box-shadow: inset 1px 1px 1px rgba(255,255,255,0.08);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #3B4352;
 }
 
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.02);
+html.light .custom-scrollbar::-webkit-scrollbar-track {
+  background: #E2E6EC;
+  border-radius: 4px;
 }
 
-/* Scrollbar hidden for horizontal seat picker */
+html.light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #B8C1CD;
+  border-radius: 4px;
+  box-shadow: inset 1px 1px 1px #ffffff;
+}
+
+html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9FAAB8;
+}
+
+/* Scrollbar hidden */
 .custom-scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
@@ -46,3 +517,4 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
