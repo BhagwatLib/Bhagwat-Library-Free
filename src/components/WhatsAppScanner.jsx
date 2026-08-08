@@ -1,0 +1,422 @@
+import React, { useState, useEffect, useRef } from "react";
+import {
+  QrCode,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  CheckCircle2,
+  AlertTriangle,
+  Smartphone,
+  ShieldCheck,
+  Clock,
+  RotateCcw,
+  Sparkles,
+  Info,
+  ExternalLink,
+} from "lucide-react";
+import { SaaSCard } from "./SaaSCard";
+import { Badge } from "./Badge";
+import {
+  getWhatsAppStatus,
+  reconnectWhatsApp,
+  refreshWhatsAppQR,
+} from "../services/whatsappService";
+
+export const WhatsAppScanner = () => {
+  const [statusData, setStatusData] = useState({
+    isReady: false,
+    status: "DISCONNECTED",
+    qrCode: null,
+    lastConnectedTime: null,
+    clientInfo: null,
+    timestamp: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const pollIntervalRef = useRef(null);
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const fetchStatus = async () => {
+    try {
+      const data = await getWhatsAppStatus();
+      setStatusData((prev) => ({
+        ...prev,
+        ...data,
+      }));
+    } catch (err) {
+      console.error("Failed to fetch WhatsApp status:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+
+    // Setup SSE stream for instant real-time updates
+    let eventSource = null;
+    try {
+      eventSource = new EventSource("http://localhost:5000/api/whatsapp/events");
+      eventSource.addEventListener("status", (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          setStatusData((prev) => ({ ...prev, ...parsed }));
+          setLoading(false);
+        } catch (_) {}
+      });
+      eventSource.addEventListener("qr", (e) => {
+        try {
+          const parsed = JSON.parse(e.data);
+          setStatusData((prev) => ({
+            ...prev,
+            qrCode: parsed.qrDataUrl,
+            status: "QR_READY",
+            isReady: false,
+          }));
+        } catch (_) {}
+      });
+    } catch (err) {
+      console.warn("SSE connection error, falling back to polling:", err);
+    }
+
+    // Fallback periodic poll every 3.5s
+    pollIntervalRef.current = setInterval(fetchStatus, 3500);
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (eventSource) eventSource.close();
+    };
+  }, []);
+
+  const handleRefreshQR = async (forceReset = false) => {
+    setActionLoading(true);
+    try {
+      await refreshWhatsAppQR(forceReset);
+      showToast(
+        forceReset ? "Session reset. Generating fresh QR code..." : "Refreshing QR Code..."
+      );
+      setTimeout(fetchStatus, 1500);
+    } catch (err) {
+      showToast("Failed to refresh QR code. Please check backend connection.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReconnect = async () => {
+    setActionLoading(true);
+    try {
+      await reconnectWhatsApp();
+      showToast("Reconnection triggered. Checking saved session...");
+      setTimeout(fetchStatus, 2000);
+    } catch (err) {
+      showToast("Reconnection request failed.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const isConnected = Boolean(statusData.isReady || statusData.status === "CONNECTED");
+  const isConnecting = statusData.status === "CONNECTING" || statusData.status === "AUTHENTICATED";
+  const hasQR = Boolean(statusData.qrCode && !isConnected);
+
+  const formatTime = (timeStr) => {
+    if (!timeStr) return "Never";
+    try {
+      const date = new Date(timeStr);
+      return date.toLocaleString([], {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return timeStr;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-3 border animate-in fade-in slide-in-from-top-4 ${
+            toast.type === "error"
+              ? "bg-rose-950 border-rose-800 text-rose-200"
+              : "bg-emerald-950 border-emerald-800 text-emerald-200"
+          }`}
+        >
+          {toast.type === "error" ? (
+            <AlertTriangle size={18} className="text-rose-400 shrink-0" />
+          ) : (
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          )}
+          <span className="text-xs font-semibold">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800/80 p-5 rounded-2xl">
+        <div className="flex items-center space-x-3.5">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border shadow-lg ${
+              isConnected
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
+                : isConnecting
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse"
+                : "bg-slate-800 border-slate-700 text-slate-400"
+            }`}
+          >
+            {isConnected ? (
+              <Wifi size={24} className="animate-pulse" />
+            ) : isConnecting ? (
+              <RotateCcw size={24} className="animate-spin" />
+            ) : (
+              <WifiOff size={24} />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                WhatsApp Web Gateway
+              </h2>
+              <Badge
+                variant={isConnected ? "success" : isConnecting ? "warning" : "danger"}
+                className="text-[10px] px-2.5 py-0.5"
+              >
+                {isConnected
+                  ? "Connected & Active"
+                  : isConnecting
+                  ? "Authenticating..."
+                  : hasQR
+                  ? "Scan QR Code"
+                  : "Disconnected"}
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Automated invoice dispatch, student renewal alerts & daily book reminders
+            </p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleRefreshQR(false)}
+            disabled={actionLoading}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+            title="Request new QR code"
+          >
+            <RefreshCw size={14} className={actionLoading ? "animate-spin" : ""} />
+            <span>Refresh QR</span>
+          </button>
+
+          <button
+            onClick={handleReconnect}
+            disabled={actionLoading}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-blue-600/25 transition-all active:scale-95 disabled:opacity-50"
+            title="Reconnect preserving saved session"
+          >
+            <RotateCcw size={14} className={actionLoading ? "animate-spin" : ""} />
+            <span>Reconnect</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Grid: QR Scanner / Connected State + Device Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: QR Area or Connected Success Card */}
+        <div className="lg:col-span-2 space-y-4">
+          <SaaSCard className="p-6 md:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[380px]">
+            {isConnected ? (
+              /* CONNECTED STATE */
+              <div className="space-y-5 max-w-md py-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/20">
+                  <CheckCircle2 size={44} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <h3 className="text-xl font-extrabold text-white">
+                    WhatsApp Connected Successfully!
+                  </h3>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Your session is actively saved with <code className="text-blue-400 font-semibold">LocalAuth</code>. You will remain connected across server restarts.
+                  </p>
+                </div>
+
+                <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 text-left space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Smartphone size={14} className="text-blue-400" /> Account:
+                    </span>
+                    <span className="font-bold text-white">
+                      {statusData.clientInfo?.pushname || "Bhagwat Library Admin"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Clock size={14} className="text-amber-400" /> Last Connected:
+                    </span>
+                    <span className="font-semibold text-slate-300">
+                      {formatTime(statusData.lastConnectedTime)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck size={14} className="text-emerald-400" /> Status:
+                    </span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      Ready to Dispatch
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => handleRefreshQR(true)}
+                    disabled={actionLoading}
+                    className="text-xs text-rose-400 hover:text-rose-300 hover:underline font-semibold transition-colors"
+                  >
+                    Disconnect & Link a Different WhatsApp Account
+                  </button>
+                </div>
+              </div>
+            ) : hasQR ? (
+              /* QR CODE SCANNER DISPLAY */
+              <div className="space-y-6 max-w-md animate-in fade-in duration-300">
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-white flex items-center justify-center gap-2">
+                    <QrCode className="text-blue-400" size={20} /> Scan QR Code with WhatsApp
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Open WhatsApp on your phone to link your library admin device
+                  </p>
+                </div>
+
+                {/* QR Container with Scanner Visual Frame */}
+                <div className="relative inline-block p-3 rounded-2xl bg-white shadow-2xl shadow-blue-500/10 border-4 border-slate-800">
+                  <img
+                    src={statusData.qrCode}
+                    alt="WhatsApp QR Code"
+                    className="w-64 h-64 sm:w-72 sm:h-72 object-contain rounded-lg"
+                  />
+                  {/* Decorative Corner Accents */}
+                  <div className="absolute top-1 left-1 w-4 h-4 border-t-2 border-l-2 border-blue-600"></div>
+                  <div className="absolute top-1 right-1 w-4 h-4 border-t-2 border-r-2 border-blue-600"></div>
+                  <div className="absolute bottom-1 left-1 w-4 h-4 border-b-2 border-l-2 border-blue-600"></div>
+                  <div className="absolute bottom-1 right-1 w-4 h-4 border-b-2 border-r-2 border-blue-600"></div>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 text-[11px] text-amber-400 font-medium bg-amber-500/10 border border-amber-500/20 py-2 px-3 rounded-xl">
+                  <Clock size={13} className="animate-spin" />
+                  <span>QR Code refreshes automatically if not scanned in 30 seconds</span>
+                </div>
+              </div>
+            ) : (
+              /* CONNECTING / INITIALIZING SKELETON */
+              <div className="space-y-4 max-w-sm py-8">
+                <div className="w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
+                  <RotateCcw size={32} className="animate-spin text-blue-400" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-white">
+                    {isConnecting ? "Connecting to WhatsApp..." : "Initializing Gateway..."}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Attempting to load saved session or generate a new QR pairing code
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleRefreshQR(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-all mt-2"
+                >
+                  Force Generate QR Code
+                </button>
+              </div>
+            )}
+          </SaaSCard>
+        </div>
+
+        {/* Right 1 Col: Instructions & Status Overview */}
+        <div className="space-y-4">
+          <SaaSCard className="p-5 space-y-4 bg-slate-900/90">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Info size={15} className="text-blue-400" /> How to Connect
+            </h3>
+
+            <ol className="space-y-3 text-xs text-slate-300">
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                  1
+                </span>
+                <span>Open <strong>WhatsApp</strong> on your phone.</span>
+              </li>
+
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                  2
+                </span>
+                <span>
+                  Tap <strong>Menu</strong> (Android: 3 dots) or <strong>Settings</strong> (iPhone).
+                </span>
+              </li>
+
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                  3
+                </span>
+                <span>
+                  Select <strong>Linked Devices</strong> and tap <strong>Link a Device</strong>.
+                </span>
+              </li>
+
+              <li className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600/20 text-blue-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                  4
+                </span>
+                <span>Point your phone camera at the QR code on the screen.</span>
+              </li>
+            </ol>
+
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-300 flex items-start gap-2">
+              <Sparkles size={16} className="text-blue-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Persistent Session:</strong> Once linked, your session is saved on the server so you won't need to scan again after restarts.
+              </span>
+            </div>
+          </SaaSCard>
+
+          {/* Connection Metadata Summary */}
+          <SaaSCard className="p-5 space-y-3 bg-slate-900/90 text-xs">
+            <h4 className="font-bold text-white text-xs border-b border-slate-800 pb-2">
+              Session Metadata
+            </h4>
+
+            <div className="space-y-2 text-slate-400 text-[11px]">
+              <div className="flex justify-between">
+                <span>Backend Port:</span>
+                <span className="font-mono text-white">5000</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Auth Engine:</span>
+                <span className="font-medium text-slate-200">LocalAuth (Persistent)</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Last Sync Check:</span>
+                <span className="text-slate-300">
+                  {statusData.timestamp ? new Date(statusData.timestamp).toLocaleTimeString() : "Just now"}
+                </span>
+              </div>
+            </div>
+          </SaaSCard>
+        </div>
+      </div>
+    </div>
+  );
+};

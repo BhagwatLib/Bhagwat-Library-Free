@@ -24,7 +24,8 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { getStudents, getBatches } from "../utils/store";
+import { subscribeStudents } from "../services/studentsService";
+import { subscribeBatches } from "../services/batchesService";
 import { getSeatMatrix } from "../utils/seatLogic";
 import { exportToPDF, exportToExcel } from "../utils/exportUtils";
 import { SaaSCard } from "../components/SaaSCard";
@@ -38,15 +39,22 @@ export const Reports = () => {
   const [activeReportTab, setActiveReportTab] = useState("revenue");
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [sList, bList] = await Promise.all([getStudents(), getBatches()]);
+    setLoading(true);
+    const unsubStudents = subscribeStudents((sList) => {
       setStudents(sList);
-      setBatches(bList);
       setLoading(false);
+    });
+
+    const unsubBatches = subscribeBatches((bList) => {
+      setBatches(bList);
+    });
+
+    return () => {
+      unsubStudents();
+      unsubBatches();
     };
-    load();
   }, []);
+
 
   const seatMatrix = useMemo(() => getSeatMatrix(students, 100), [students]);
 
@@ -251,20 +259,34 @@ export const Reports = () => {
       {activeReportTab === "batches" && (
         <div className="space-y-6">
           <SaaSCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-4">Batch Performance Breakdown</h3>
+            <h3 className="text-sm font-bold text-white mb-4">Universal Batch Performance Breakdown</h3>
             <div className="space-y-3">
               {batches.map((b) => {
                 const bStudents = students.filter((s) => {
                   const bStr = Array.isArray(s.batch) ? s.batch.join(" ") : String(s.batch || "");
-                  return bStr.includes(b.time);
+                  return (
+                    bStr.includes(b.name) ||
+                    bStr.includes(b.time) ||
+                    (b.slotKey === "all" && (bStr.includes("All Batch") || bStr.includes("All")))
+                  );
                 });
+                const revenue = bStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+
                 return (
-                  <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex justify-between items-center text-xs">
+                  <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
-                      <p className="font-bold text-white">{b.time}</p>
-                      <p className="text-slate-400 mt-0.5">{bStudents.length} Students enrolled</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-white text-sm">{b.name || b.time}</p>
+                        <Badge variant="purple">{b.duration || "4 Hours"}</Badge>
+                      </div>
+                      <p className="text-slate-400 mt-0.5">{b.time}</p>
+                      <p className="text-slate-500 text-[11px] mt-1">
+                        {bStudents.length} Students enrolled • Total Collected: <span className="text-emerald-400 font-semibold">₹{revenue}</span>
+                      </p>
                     </div>
-                    <Badge variant="purple">₹{b.price} / Month</Badge>
+                    <Badge variant="success" className="text-xs self-start sm:self-auto">
+                      ₹{b.price} / Month
+                    </Badge>
                   </div>
                 );
               })}
@@ -275,3 +297,4 @@ export const Reports = () => {
     </div>
   );
 };
+

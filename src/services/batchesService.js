@@ -13,15 +13,60 @@ import { db } from "../firebase/firebase";
 const BATCHES_COLLECTION = "batches";
 
 export const DEFAULT_BATCHES = [
-  { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", slotKey: "morning", price: 500, seatsUsed: 0 },
-  { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", slotKey: "noon", price: 500, seatsUsed: 0 },
-  { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", slotKey: "afternoon", price: 500, seatsUsed: 0 },
-  { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", slotKey: "evening", price: 500, seatsUsed: 0 },
-  { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", slotKey: "all", price: 1500, seatsUsed: 0 },
+  {
+    id: "batch_a",
+    name: "A Batch",
+    time: "6:00 AM - 10:00 AM",
+    duration: "4 Hours",
+    slotKey: "morning",
+    price: 500,
+    status: "Active",
+    description: "Early morning study shift",
+  },
+  {
+    id: "batch_b",
+    name: "B Batch",
+    time: "10:00 AM - 2:00 PM",
+    duration: "4 Hours",
+    slotKey: "noon",
+    price: 500,
+    status: "Active",
+    description: "Mid-day study shift",
+  },
+  {
+    id: "batch_c",
+    name: "C Batch",
+    time: "2:00 PM - 6:00 PM",
+    duration: "4 Hours",
+    slotKey: "afternoon",
+    price: 500,
+    status: "Active",
+    description: "Afternoon study shift",
+  },
+  {
+    id: "batch_d",
+    name: "D Batch",
+    time: "6:00 PM - 10:00 PM",
+    duration: "4 Hours",
+    slotKey: "evening",
+    price: 500,
+    status: "Active",
+    description: "Evening study shift",
+  },
+  {
+    id: "batch_all",
+    name: "All Batch",
+    time: "6:00 AM - 10:00 PM",
+    duration: "16 Hours (Full Day)",
+    slotKey: "all",
+    price: 1500,
+    status: "Active",
+    description: "Full day dedicated seat access",
+  },
 ];
 
 /**
- * Seed default 5 batches in Firestore
+ * Seed default batches in Firestore if collection is empty
  */
 export const seedDefaultBatchesInFirestore = async () => {
   try {
@@ -38,25 +83,42 @@ export const seedDefaultBatchesInFirestore = async () => {
 };
 
 /**
- * Realtime Subscription for Batches
+ * Realtime Subscription for Batches - Universal Data Source
  */
 export const subscribeBatches = (callback) => {
   const colRef = collection(db, BATCHES_COLLECTION);
-  return onSnapshot(colRef, (snapshot) => {
-    if (snapshot.empty) {
-      seedDefaultBatchesInFirestore().then(() => callback(DEFAULT_BATCHES));
-    } else {
-      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      callback(list);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      if (snapshot.empty) {
+        seedDefaultBatchesInFirestore().then(() => callback(DEFAULT_BATCHES));
+      } else {
+        const list = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: data.name || data.time || "Batch",
+            time: data.time || "",
+            price: Number(data.price) || 0,
+            duration: data.duration || "4 Hours",
+            description: data.description || "",
+            status: data.status || "Active",
+            slotKey: data.slotKey || "custom",
+            ...data,
+          };
+        });
+        callback(list);
+      }
+    },
+    (err) => {
+      console.error("Batches subscription error:", err);
+      callback(DEFAULT_BATCHES);
     }
-  }, (err) => {
-    console.error("Batches subscription error:", err);
-    callback(DEFAULT_BATCHES);
-  });
+  );
 };
 
 /**
- * Fetch all batches
+ * Fetch all batches once
  */
 export const getBatchesFromFirestore = async () => {
   try {
@@ -66,7 +128,20 @@ export const getBatchesFromFirestore = async () => {
       await seedDefaultBatchesInFirestore();
       return DEFAULT_BATCHES;
     }
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: data.name || data.time || "Batch",
+        time: data.time || "",
+        price: Number(data.price) || 0,
+        duration: data.duration || "4 Hours",
+        description: data.description || "",
+        status: data.status || "Active",
+        slotKey: data.slotKey || "custom",
+        ...data,
+      };
+    });
   } catch (error) {
     console.error("Error fetching batches:", error);
     return DEFAULT_BATCHES;
@@ -80,8 +155,19 @@ export const saveBatchInFirestore = async (batchData) => {
   try {
     const docId = batchData.id || `batch_${Date.now()}`;
     const docRef = doc(db, BATCHES_COLLECTION, docId);
-    await setDoc(docRef, { ...batchData, id: docId }, { merge: true });
-    return { id: docId, ...batchData };
+    const cleanData = {
+      ...batchData,
+      id: docId,
+      name: batchData.name || batchData.time,
+      time: batchData.time || "",
+      price: Number(batchData.price) || 0,
+      duration: batchData.duration || "4 Hours",
+      description: batchData.description || "",
+      status: batchData.status || "Active",
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(docRef, cleanData, { merge: true });
+    return cleanData;
   } catch (error) {
     console.error("Error saving batch in Firestore:", error);
     throw error;
@@ -101,3 +187,4 @@ export const deleteBatchFromFirestore = async (batchId) => {
     throw error;
   }
 };
+

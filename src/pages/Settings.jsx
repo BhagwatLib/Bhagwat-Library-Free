@@ -4,14 +4,18 @@ import {
   Save,
   Building,
   Bell,
-  Shield,
-  Palette,
+  QrCode,
   CheckCircle2,
+  Sliders,
+  Shield,
 } from "lucide-react";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
+import { WhatsAppScanner } from "../components/WhatsAppScanner";
+import { ReminderSettings } from "../components/ReminderSettings";
 
-export const Settings = () => {
+export const Settings = ({ initialTab = "profile" }) => {
+  const [activeSubTab, setActiveSubTab] = useState(initialTab);
   const [saved, setSaved] = useState(false);
   const [formData, setFormData] = useState({
     libraryName: "Bhagwat Library",
@@ -19,16 +23,20 @@ export const Settings = () => {
     contactPhone: "+91 9876543210",
     totalCapacity: 100,
     currency: "INR (₹)",
-    autoReminder: true,
-    reminderDays: 3,
     theme: "Dark SaaS",
   });
 
-  const handleSubmit = (e) => {
+  const handleProfileSubmit = (e) => {
     e.preventDefault();
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
+
+  const navTabs = [
+    { id: "profile", label: "Library Profile", icon: Building, desc: "Branding & contact details" },
+    { id: "whatsapp", label: "WhatsApp Scanner", icon: QrCode, desc: "Gateway & QR pairing" },
+    { id: "reminders", label: "Reminder Settings", icon: Bell, desc: "Scheduler & alert rules" },
+  ];
 
   return (
     <div className="space-y-6 pb-12">
@@ -39,7 +47,7 @@ export const Settings = () => {
             <SettingsIcon className="text-blue-400" size={26} /> Admin Settings
           </h1>
           <p className="text-xs text-slate-400">
-            Configure library branding, seat capacity defaults, and automated notification triggers
+            Configure library branding, WhatsApp gateway connectivity, and automated reminder schedules
           </p>
         </div>
 
@@ -50,84 +58,93 @@ export const Settings = () => {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Library Info */}
-        <SaaSCard className="p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Building size={16} className="text-blue-400" /> Library Profile
-          </h3>
+      {/* Sub-Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3 overflow-x-auto custom-scrollbar">
+        {navTabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeSubTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-semibold text-xs transition-all whitespace-nowrap ${
+                isActive
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 border border-blue-500/40"
+                  : "bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-850 border border-slate-800/80"
+              }`}
+            >
+              <Icon size={16} className={isActive ? "text-white" : "text-slate-400"} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1">Library Name</label>
-              <input
-                type="text"
-                value={formData.libraryName}
-                onChange={(e) => setFormData({ ...formData, libraryName: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1">Admin Email</label>
-              <input
-                type="email"
-                value={formData.adminEmail}
-                onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1">Contact Phone</label>
-              <input
-                type="text"
-                value={formData.contactPhone}
-                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-400 font-semibold mb-1">Total Seat Capacity</label>
-              <input
-                type="number"
-                value={formData.totalCapacity}
-                readOnly
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-500 text-sm cursor-not-allowed"
-              />
-            </div>
-          </div>
-        </SaaSCard>
+      {/* TAB CONTENT: WHATSAPP SCANNER */}
+      {activeSubTab === "whatsapp" && <WhatsAppScanner />}
 
-        {/* Notifications & Reminders */}
-        <SaaSCard className="p-6 space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-            <Bell size={16} className="text-amber-400" /> Automated Reminders & Alerts
-          </h3>
+      {/* TAB CONTENT: REMINDER SETTINGS */}
+      {activeSubTab === "reminders" && <ReminderSettings />}
 
-          <div className="space-y-3 text-xs">
-            <label className="flex items-center gap-3 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.autoReminder}
-                onChange={(e) => setFormData({ ...formData, autoReminder: e.target.checked })}
-                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-slate-900 border-slate-700"
-              />
+      {/* TAB CONTENT: LIBRARY PROFILE */}
+      {activeSubTab === "profile" && (
+        <form onSubmit={handleProfileSubmit} className="space-y-6">
+          <SaaSCard className="p-6 space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Building size={16} className="text-blue-400" /> Library Profile & Branding
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
-                <p className="font-bold text-white">Automated SMS & WhatsApp Payment Reminders</p>
-                <p className="text-slate-400 text-[10px]">Automatically notify students before membership validity expires</p>
+                <label className="block text-slate-400 font-semibold mb-1">Library Name</label>
+                <input
+                  type="text"
+                  value={formData.libraryName}
+                  onChange={(e) => setFormData({ ...formData, libraryName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
               </div>
-            </label>
-          </div>
-        </SaaSCard>
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Admin Email</label>
+                <input
+                  type="email"
+                  value={formData.adminEmail}
+                  onChange={(e) => setFormData({ ...formData, adminEmail: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Contact Phone</label>
+                <input
+                  type="text"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Total Seat Capacity</label>
+                <input
+                  type="number"
+                  value={formData.totalCapacity}
+                  readOnly
+                  className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-500 text-sm cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </SaaSCard>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
-          >
-            <Save size={16} /> Save Changes
-          </button>
-        </div>
-      </form>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+            >
+              <Save size={16} /> Save Profile Changes
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 };
+

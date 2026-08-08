@@ -49,8 +49,14 @@ export const PaymentList = () => {
       } else {
         await sendWhatsAppReminder(student);
       }
+      
+      const balance = Math.max(0, (Number(student.totalAmount) || 0) - (Number(student.paidAmount) || 0));
+      setNotificationSent({
+        name: student.name || "",
+        amount: balance
+      });
     } catch (err) {
-      alert("Failed to send WhatsApp message. Please try again.");
+      alert(`WhatsApp Dispatch Failed: ${err.message}`);
     } finally {
       setSendingMap((prev) => ({ ...prev, [student.id]: false }));
     }

@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Save, Camera, Loader2, AlertTriangle, Lock, Filter } from "lucide-react";
 import { clsx } from "clsx";
-import { saveStudent, getBatches, getStudents } from "../utils/store";
+import { saveStudent, getStudents } from "../utils/store";
+import { subscribeBatches } from "../services/batchesService";
+import { subscribeStudents } from "../services/studentsService";
 import { checkSeatConflict, getSlotsFromBatch, BASE_SLOTS } from "../utils/seatLogic";
 import { CameraCapture } from "./CameraCapture";
+
 
 export const StudentForm = ({
   student,
@@ -58,38 +61,60 @@ export const StudentForm = ({
     seatNumber: student?.seatNumber || 0,
   });
 
-  // Fetch batches & students from Firestore
+  // Fetch batches & students from Firestore Universal Data Source
   useEffect(() => {
-    const loadData = async () => {
-      const bList = await getBatches();
-      const sList = await getStudents();
+    let unsubBatches = () => {};
+    let unsubStudents = () => {};
+
+    unsubBatches = subscribeBatches((bList) => {
       setBatches(bList);
+    });
+
+    unsubStudents = subscribeStudents((sList) => {
       setAllStudents(sList);
+    });
+
+    return () => {
+      unsubBatches();
+      unsubStudents();
     };
-    loadData();
   }, []);
 
-  // Standardized 5 batches (strictly name A Batch, B Batch, C Batch, D Batch, All Batch)
-  const displayBatches = useMemo(() => [
-    { id: "batch_a", name: "A Batch", time: "6:00 AM - 10:00 AM", price: 500, code: "A" },
-    { id: "batch_b", name: "B Batch", time: "10:00 AM - 2:00 PM", price: 500, code: "B" },
-    { id: "batch_c", name: "C Batch", time: "2:00 PM - 6:00 PM", price: 500, code: "C" },
-    { id: "batch_d", name: "D Batch", time: "6:00 PM - 10:00 PM", price: 500, code: "D" },
-    { id: "batch_all", name: "All Batch", time: "6:00 AM - 10:00 PM", price: 1500, code: "All" },
-  ], []);
+  // Universal dynamic batches list from Batches Management
+  const displayBatches = useMemo(() => {
+    if (batches && batches.length > 0) {
+      return batches.filter((b) => b.status !== "Inactive");
+    }
+    return [];
+  }, [batches]);
 
-  // Check if All Batch is selected
+  // Check if an "All Batch" or all slots are selected
   const isAllBatchSelected = useMemo(() => {
-    return formData.batch.includes("All Batch") || formData.batch.includes("All");
-  }, [formData.batch]);
+    return (
+      formData.batch.includes("All Batch") ||
+      formData.batch.includes("All") ||
+      (displayBatches.length > 0 &&
+        displayBatches.filter((b) => b.name !== "All Batch").length > 0 &&
+        displayBatches
+          .filter((b) => b.name !== "All Batch")
+          .every((b) => formData.batch.includes(b.name) || formData.batch.includes(b.time)))
+    );
+  }, [formData.batch, displayBatches]);
 
-  // Calculate total fee based on selected batches
+  // Calculate total fee dynamically based on selected batches
   useEffect(() => {
-    if (isAllBatchSelected) {
-      setFormData((prev) => ({ ...prev, totalAmount: 1500 }));
+    if (displayBatches.length === 0) return;
+
+    const allBatchObj = displayBatches.find((b) => b.name === "All Batch" || b.slotKey === "all");
+
+    if (isAllBatchSelected && allBatchObj) {
+      setFormData((prev) => ({ ...prev, totalAmount: Number(allBatchObj.price) || 1500 }));
     } else {
       const selected = displayBatches.filter(
-        (b) => formData.batch.includes(b.name) || formData.batch.includes(b.time)
+        (b) =>
+          formData.batch.includes(b.name) ||
+          formData.batch.includes(b.time) ||
+          formData.batch.includes(b.id)
       );
       const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
       setFormData((prev) => ({ ...prev, totalAmount: total }));
@@ -100,6 +125,7 @@ export const StudentForm = ({
   const targetSlots = useMemo(() => {
     return getSlotsFromBatch(formData.batch);
   }, [formData.batch]);
+
 
   // Compute availability matrix for all 100 seats based on targetSlots
   const seatOccupancyMap = useMemo(() => {
@@ -235,22 +261,24 @@ export const StudentForm = ({
       let currentBatches = [...prev.batch];
 
       if (isAllBatch) {
-        const alreadyHasAll = currentBatches.includes("All Batch");
+        const alreadyHasAll = currentBatches.includes("All Batch") || currentBatches.includes("All");
         if (alreadyHasAll) {
           // Unchecked -> remove all selections
           return { ...prev, batch: [] };
         } else {
-          // Checked -> Automatically select all A, B, C, D and All Batch
+          // Checked -> Automatically select all available batches
+          const allBatchNames = displayBatches.map((b) => b.name);
+          if (!allBatchNames.includes("All Batch")) allBatchNames.push("All Batch");
           return {
             ...prev,
-            batch: ["A Batch", "B Batch", "C Batch", "D Batch", "All Batch"],
+            batch: allBatchNames,
           };
         }
       } else {
         // Individual checkbox toggle
         const exists = currentBatches.includes(batchName);
         if (exists) {
-          currentBatches = currentBatches.filter((b) => b !== batchName);
+          currentBatches = currentBatches.filter((b) => b !== batchName && b !== "All Batch" && b !== "All");
         } else {
           currentBatches.push(batchName);
         }
@@ -258,6 +286,7 @@ export const StudentForm = ({
       }
     });
   };
+
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];

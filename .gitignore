@@ -6,11 +6,19 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+backend/logs
 
 node_modules
+backend/node_modules
 dist
 dist-ssr
 *.local
+
+# WhatsApp Web Session & Cache
+.wwebjs_auth
+.wwebjs_cache
+backend/.wwebjs_auth
+backend/.wwebjs_cache
 
 # Editor directories and files
 .vscode/*
@@ -23,4 +31,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+*.env
+backend/.env
 server/.env
+

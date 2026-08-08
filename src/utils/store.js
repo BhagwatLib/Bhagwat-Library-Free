@@ -204,12 +204,16 @@ export const saveStudent = async (student) => {
     // 2. Atomic Update using writeBatch()
     const batch = writeBatch(db);
 
+    const rawBatches = Array.isArray(student.batch)
+      ? student.batch
+      : (student.batch ? [student.batch] : cleanBatches);
+
     const studentData = {
       ...student,
       id: studentId,
       seatNumber: newSeatNumber,
-      assignedBatches: assignedBatches, // Stores ["A", "B", "C", "D"] - NEVER "All Batch"
-      batch: cleanBatches,
+      assignedBatches: assignedBatches, // Stores ["A", "B", "C", "D"]
+      batch: rawBatches.length > 0 ? rawBatches : cleanBatches,
       paidAmount: Number(student.paidAmount || 0),
       totalAmount: Number(student.totalAmount || 0),
       updatedAt: new Date().toISOString(),
@@ -217,6 +221,7 @@ export const saveStudent = async (student) => {
     if (!student.id) {
       studentData.createdAt = new Date().toISOString();
     }
+
 
     batch.set(studentDocRef, studentData, { merge: true });
 

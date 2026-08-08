@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { subscribeStudents } from "../services/studentsService";
+import { subscribeBatches } from "../services/batchesService";
 import { deleteStudent } from "../utils/store";
 import { StudentForm } from "../components/StudentForm";
 import { StudentProfile } from "../components/StudentProfile";
@@ -24,6 +25,7 @@ import { Badge } from "../components/Badge";
 
 export const StudentList = () => {
   const [students, setStudents] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterBatch, setFilterBatch] = useState("All");
@@ -40,12 +42,21 @@ export const StudentList = () => {
 
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = subscribeStudents((data) => {
+    const unsubStudents = subscribeStudents((data) => {
       setStudents(data);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    const unsubBatches = subscribeBatches((bData) => {
+      setBatches(bData);
+    });
+
+    return () => {
+      unsubStudents();
+      unsubBatches();
+    };
   }, []);
+
 
   const handleDelete = async () => {
     if (studentToDelete) {
@@ -146,24 +157,25 @@ export const StudentList = () => {
           <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
             <Filter size={14} /> Filter:
           </span>
-          {["All", "A Batch", "B Batch", "C Batch", "D Batch", "All Batch"].map((b) => (
+          {["All", ...batches.map((b) => b.name || b.time)].map((bName) => (
             <button
-              key={b}
+              key={bName}
               onClick={() => {
-                setFilterBatch(b);
+                setFilterBatch(bName);
                 setCurrentPage(1);
               }}
               className={clsx(
                 "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
-                filterBatch === b
+                filterBatch === bName
                   ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
                   : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
               )}
             >
-              {b}
+              {bName}
             </button>
           ))}
         </div>
+
       </div>
 
       {/* DESKTOP TABLE VIEW (1024px and above) */}

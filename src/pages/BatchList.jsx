@@ -12,12 +12,18 @@ import {
   X,
   School,
   CheckCircle2,
+  Sparkles,
+  Timer,
+  FileText,
+  Activity,
 } from "lucide-react";
-import { getBatches, saveBatch, deleteBatch, getStudents } from "../utils/store";
+import { subscribeBatches, saveBatchInFirestore, deleteBatchFromFirestore } from "../services/batchesService";
+import { subscribeStudents } from "../services/studentsService";
 import { SaaSCard } from "../components/SaaSCard";
 import { Badge } from "../components/Badge";
 import { SkeletonLoader } from "../components/SkeletonLoader";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { clsx } from "clsx";
 
 export const BatchList = () => {
   const [batches, setBatches] = useState([]);
@@ -25,29 +31,51 @@ export const BatchList = () => {
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState(null);
-  const [formData, setFormData] = useState({ time: "", price: "" });
+  const [formData, setFormData] = useState({
+    name: "",
+    time: "",
+    price: "",
+    duration: "4 Hours",
+    description: "",
+    status: "Active",
+  });
   const [batchToDelete, setBatchToDelete] = useState(null);
 
-  const loadData = async () => {
-    setLoading(true);
-    const [bList, sList] = await Promise.all([getBatches(), getStudents()]);
-    setBatches(bList);
-    setStudents(sList);
-    setLoading(false);
-  };
-
+  // Realtime subscription for Universal Batches & Students Data
   useEffect(() => {
-    loadData();
+    setLoading(true);
+    let unsubBatches = () => {};
+    let unsubStudents = () => {};
+
+    unsubBatches = subscribeBatches((bList) => {
+      setBatches(bList);
+      setLoading(false);
+    });
+
+    unsubStudents = subscribeStudents((sList) => {
+      setStudents(sList);
+    });
+
+    return () => {
+      unsubBatches();
+      unsubStudents();
+    };
   }, []);
 
-  // Compute metrics per batch
+  // Compute live metrics per batch
   const batchMetrics = useMemo(() => {
     return batches.map((batch) => {
-      // Find students in this batch
+      // Find students in this batch matching either name or time
       const assignedStudents = students.filter((s) => {
         if (!s.batch) return false;
-        if (Array.isArray(s.batch)) return s.batch.includes(batch.time);
-        return String(s.batch) === batch.time;
+        const bArray = Array.isArray(s.batch) ? s.batch : [s.batch];
+        return bArray.some(
+          (b) =>
+            b === batch.name ||
+            b === batch.time ||
+            (batch.slotKey === "all" && (b === "All Batch" || b === "All")) ||
+            String(b).toLowerCase().includes(String(batch.name || "").toLowerCase())
+        );
       });
 
       const studentsCount = assignedStudents.length;
@@ -62,7 +90,7 @@ export const BatchList = () => {
         assignedStudents.filter((s) => s.seatNumber > 0).map((s) => s.seatNumber)
       ).size;
 
-      // Estimated max capacity per batch shift
+      // Capacity occupancy percentage
       const occupancyRate = Math.min(100, Math.round((studentsCount / 100) * 100));
 
       return {
@@ -77,27 +105,48 @@ export const BatchList = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await saveBatch({
-      ...formData,
-      id: editingBatch?.id,
-    });
-    setIsFormOpen(false);
-    setEditingBatch(null);
-    setFormData({ time: "", price: "" });
-    loadData();
+    try {
+      await saveBatchInFirestore({
+        ...formData,
+        id: editingBatch?.id,
+        price: Number(formData.price) || 0,
+      });
+      setIsFormOpen(false);
+      setEditingBatch(null);
+      setFormData({
+        name: "",
+        time: "",
+        price: "",
+        duration: "4 Hours",
+        description: "",
+        status: "Active",
+      });
+    } catch (err) {
+      alert("Failed to save batch: " + err.message);
+    }
   };
 
   const handleEdit = (batch) => {
     setEditingBatch(batch);
-    setFormData({ time: batch.time, price: batch.price });
+    setFormData({
+      name: batch.name || batch.time,
+      time: batch.time || "",
+      price: batch.price || "",
+      duration: batch.duration || "4 Hours",
+      description: batch.description || "",
+      status: batch.status || "Active",
+    });
     setIsFormOpen(true);
   };
 
   const handleDelete = async () => {
     if (batchToDelete) {
-      await deleteBatch(batchToDelete);
-      setBatchToDelete(null);
-      loadData();
+      try {
+        await deleteBatchFromFirestore(batchToDelete);
+        setBatchToDelete(null);
+      } catch (err) {
+        alert("Failed to delete batch: " + err.message);
+      }
     }
   };
 
@@ -114,14 +163,21 @@ export const BatchList = () => {
             <School className="text-purple-400" size={26} /> Batches & Time Shifts
           </h1>
           <p className="text-xs text-slate-400">
-            Configure library shift timings, monthly fees, and track occupancy
+            Single universal data source for library shifts, timings, monthly fees, and student enrollment
           </p>
         </div>
 
         <button
           onClick={() => {
             setEditingBatch(null);
-            setFormData({ time: "", price: "" });
+            setFormData({
+              name: "",
+              time: "",
+              price: "",
+              duration: "4 Hours",
+              description: "",
+              status: "Active",
+            });
             setIsFormOpen(true);
           }}
           className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg shadow-purple-500/20 active:scale-95 transition-all"
@@ -135,21 +191,28 @@ export const BatchList = () => {
         {batchMetrics.map((batch) => (
           <SaaSCard key={batch.id} className="p-6 space-y-4">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 text-purple-300 px-3 py-1 rounded-xl text-xs font-semibold">
-                <Clock size={14} />
-                <span>Batch Timing</span>
+              <div className="flex items-center gap-2">
+                <div className="bg-purple-500/10 border border-purple-500/20 text-purple-300 px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                  <Clock size={13} />
+                  <span>{batch.name || batch.time}</span>
+                </div>
+                <Badge variant={batch.status === "Active" ? "success" : "default"}>
+                  {batch.status || "Active"}
+                </Badge>
               </div>
 
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleEdit(batch)}
                   className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Edit Batch"
                 >
                   <Edit2 size={15} />
                 </button>
                 <button
                   onClick={() => setBatchToDelete(batch.id)}
                   className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  title="Delete Batch"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -157,10 +220,20 @@ export const BatchList = () => {
             </div>
 
             <div>
-              <h3 className="text-lg font-extrabold text-white">{batch.time}</h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Monthly Fee: <span className="font-bold text-emerald-400">₹{batch.price}</span>
-              </p>
+              <h3 className="text-base font-extrabold text-white">{batch.time}</h3>
+              <div className="flex items-center justify-between text-xs mt-1">
+                <span className="text-slate-400">
+                  Duration: <span className="font-semibold text-slate-200">{batch.duration || "4 Hours"}</span>
+                </span>
+                <span className="text-slate-400">
+                  Monthly Fee: <span className="font-bold text-emerald-400">₹{batch.price}</span>
+                </span>
+              </div>
+              {batch.description && (
+                <p className="text-[11px] text-slate-500 mt-1.5 line-clamp-1 italic">
+                  {batch.description}
+                </p>
+              )}
             </div>
 
             {/* Metrics Breakdown */}
@@ -217,7 +290,7 @@ export const BatchList = () => {
           <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h2 className="text-base font-bold text-white">
-                {editingBatch ? "Edit Batch Timing" : "Add New Batch Shift"}
+                {editingBatch ? "Edit Batch Details" : "Add New Batch Shift"}
               </h2>
               <button
                 onClick={() => setIsFormOpen(false)}
@@ -227,7 +300,23 @@ export const BatchList = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                  Batch Name (e.g. A Batch, Morning Shift)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  placeholder="e.g. A Batch"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
                   Batch Timing (e.g. 6:00 AM - 10:00 AM)
@@ -244,19 +333,51 @@ export const BatchList = () => {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    Monthly Fee (₹)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    placeholder="500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    Duration
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.duration}
+                    onChange={(e) =>
+                      setFormData({ ...formData, duration: e.target.value })
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    placeholder="4 Hours"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
-                  Monthly Fee (₹)
+                  Description / Notes (Optional)
                 </label>
-                <input
-                  type="number"
-                  required
-                  value={formData.price}
+                <textarea
+                  value={formData.description}
                   onChange={(e) =>
-                    setFormData({ ...formData, price: e.target.value })
+                    setFormData({ ...formData, description: e.target.value })
                   }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-                  placeholder="300"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none h-14"
+                  placeholder="Brief description of this study shift..."
                 />
               </div>
 
@@ -286,9 +407,10 @@ export const BatchList = () => {
         onClose={() => setBatchToDelete(null)}
         onConfirm={handleDelete}
         title="Delete Batch Shift"
-        message="Are you sure you want to delete this batch timing? Enrolled students will retain their batch record."
+        message="Are you sure you want to delete this batch? Enrolled students will retain their existing batch history."
         confirmText="Delete Batch"
       />
     </div>
   );
 };
+
