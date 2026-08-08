@@ -30,8 +30,11 @@ const normalizePhoneNumber = (phone) => {
   return clean;
 };
 
-// LocalAuth session folder
-const authPath = path.join(__dirname, '../.wwebjs_auth');
+// LocalAuth session folder — configurable via WHATSAPP_SESSION_PATH env var
+const authPath = process.env.WHATSAPP_SESSION_PATH
+  ? path.resolve(process.env.WHATSAPP_SESSION_PATH)
+  : path.join(__dirname, '../.wwebjs_auth');
+
 
 // Function to clean LocalAuth folder ONLY when explicitly requested or severe auth failure
 function cleanAuthFolder() {

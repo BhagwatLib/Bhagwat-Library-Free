@@ -179,7 +179,7 @@ export const Dashboard = ({ onTabChange }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
-            Bhagwat Library Dashboard <span className="jewel-dot cyan" />
+            Welcome , Satyam  <span className="jewel-dot cyan" />
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             Realtime occupancy, membership alerts, and operational controls
@@ -230,7 +230,10 @@ export const Dashboard = ({ onTabChange }) => {
         <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
           <div className="flex items-start gap-4">
             <div className="skeuo-dial w-14 h-14 glow-purple flex-shrink-0">
-              <Users size={22} className="text-purple-600 dark:text-purple-400" />
+              <Users
+                size={22}
+                className="text-purple-600 dark:text-purple-400"
+              />
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
@@ -252,7 +255,9 @@ export const Dashboard = ({ onTabChange }) => {
         <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
           <div className="flex items-start gap-4">
             <div className="skeuo-dial w-14 h-14 glow-cyan flex-shrink-0">
-              <span className="text-xl font-bold text-emerald-600 dark:text-cyan-400">₹</span>
+              <span className="text-xl font-bold text-emerald-600 dark:text-cyan-400">
+                ₹
+              </span>
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
@@ -324,11 +329,15 @@ export const Dashboard = ({ onTabChange }) => {
 
         {/* RIGHT: QUICK ADMIN ACTIONS CONTROL PANEL (Physical Tactile Panel Match) */}
         <div>
-          <SaaSCard className="p-5 md:p-6 space-y-5 h-full flex flex-col justify-between relative" withGrip>
+          <SaaSCard
+            className="p-5 md:p-6 space-y-5 h-full flex flex-col justify-between relative"
+            withGrip
+          >
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                 <h3 className="font-extrabold text-xs text-slate-800 dark:text-white tracking-wider uppercase flex items-center gap-2">
-                  <Zap size={16} className="text-amber-400" /> Quick Admin Actions
+                  <Zap size={16} className="text-amber-400" /> Quick Admin
+                  Actions
                 </h3>
               </div>
 
@@ -340,7 +349,10 @@ export const Dashboard = ({ onTabChange }) => {
                   className="skeuo-card p-5 flex flex-col items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 group text-center"
                 >
                   <div className="skeuo-dial w-14 h-14 relative group-hover:scale-105 transition-all">
-                    <UserPlus size={22} className="text-blue-600 dark:text-purple-400" />
+                    <UserPlus
+                      size={22}
+                      className="text-blue-600 dark:text-purple-400"
+                    />
                     <span className="jewel-dot cyan absolute top-1 right-1" />
                   </div>
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
@@ -368,7 +380,9 @@ export const Dashboard = ({ onTabChange }) => {
                   className="skeuo-card p-5 flex flex-col items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 group text-center"
                 >
                   <div className="skeuo-dial w-14 h-14 relative group-hover:scale-105 transition-all">
-                    <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">₹</span>
+                    <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                      ₹
+                    </span>
                     <span className="jewel-dot emerald absolute top-1 right-1" />
                   </div>
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
@@ -411,7 +425,8 @@ export const Dashboard = ({ onTabChange }) => {
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-xs text-slate-800 dark:text-white tracking-wider uppercase flex items-center gap-2">
-                <TrendingUp size={16} className="text-emerald-500" /> Monthly Revenue Trend
+                <TrendingUp size={16} className="text-emerald-500" /> Monthly
+                Revenue Trend
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 Realtime revenue collections & historical growth
@@ -431,7 +446,11 @@ export const Dashboard = ({ onTabChange }) => {
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="month" stroke={isDark ? "#64748b" : "#94a3b8"} fontSize={11} />
+                <XAxis
+                  dataKey="month"
+                  stroke={isDark ? "#64748b" : "#94a3b8"}
+                  fontSize={11}
+                />
                 <YAxis stroke={isDark ? "#64748b" : "#94a3b8"} fontSize={11} />
                 <Tooltip
                   contentStyle={{
@@ -456,11 +475,15 @@ export const Dashboard = ({ onTabChange }) => {
         </SaaSCard>
 
         {/* Right: Today's Tasks */}
-        <SaaSCard className="p-5 md:p-6 space-y-4 flex flex-col justify-between" withGrip>
+        <SaaSCard
+          className="p-5 md:p-6 space-y-4 flex flex-col justify-between"
+          withGrip
+        >
           <div>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <h3 className="font-extrabold text-xs text-slate-800 dark:text-white tracking-wider uppercase flex items-center gap-2">
-                <CheckSquare size={16} className="text-blue-500" /> Today's Action Tasks
+                <CheckSquare size={16} className="text-blue-500" /> Today's
+                Action Tasks
               </h3>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 {todaysTasks.length} Pending
@@ -470,8 +493,13 @@ export const Dashboard = ({ onTabChange }) => {
             <div className="space-y-2.5 mt-4">
               {todaysTasks.length === 0 ? (
                 <div className="p-6 text-center rounded-2xl skeuo-inset text-slate-500 dark:text-slate-400 space-y-2">
-                  <CheckCircle2 size={28} className="mx-auto text-emerald-500" />
-                  <p className="font-bold text-xs text-slate-700 dark:text-slate-300">All Tasks Completed!</p>
+                  <CheckCircle2
+                    size={28}
+                    className="mx-auto text-emerald-500"
+                  />
+                  <p className="font-bold text-xs text-slate-700 dark:text-slate-300">
+                    All Tasks Completed!
+                  </p>
                   <p className="text-[11px] text-slate-500">
                     No pending membership or payment alerts requiring action.
                   </p>
@@ -516,7 +544,9 @@ export const Dashboard = ({ onTabChange }) => {
 
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
             <span>Realtime dynamic synchronization</span>
-            <span className="text-blue-600 dark:text-cyan-400 font-semibold">Click row to open</span>
+            <span className="text-blue-600 dark:text-cyan-400 font-semibold">
+              Click row to open
+            </span>
           </div>
         </SaaSCard>
       </div>

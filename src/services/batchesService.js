@@ -206,7 +206,7 @@ export const getBatchesFromFirestore = async () => {
       const { item, needsFirestoreUpdate } = normalizeBatchData(d.id, d.data());
       list.push(item);
       if (needsFirestoreUpdate) {
-        setDoc(doc(db, BATCHES_COLLECTION, d.id), item, { merge: true }).catch(() => {});
+        setDoc(doc(db, BATCHES_COLLECTION, d.id), item, { merge: true }).catch(() => { });
       }
     });
     return sortBatches(list);

@@ -22,7 +22,12 @@ import { BottomSheet } from "./BottomSheet";
 import { FloatingActionButton } from "./FloatingActionButton";
 import { useTheme } from "../context/ThemeContext";
 
-export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) => {
+export const Layout = ({
+  children,
+  activeTab,
+  onTabChange,
+  onOpenQuickAction,
+}) => {
   const [isMoreSheetOpen, setIsMoreSheetOpen] = useState(false);
   const { theme, setTheme, isDark } = useTheme();
 
@@ -31,7 +36,11 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     { id: "students", label: "Students", icon: Users },
     { id: "seats", label: "Seats & Matrix", icon: Armchair },
     { id: "payments", label: "Payments", icon: CreditCard },
-    { id: "communication", label: "Communication History", icon: MessageSquare },
+    {
+      id: "communication",
+      label: "Communication History",
+      icon: MessageSquare,
+    },
     { id: "batches", label: "Batches & Shifts", icon: School },
     { id: "reports", label: "Reports & Export", icon: FileText },
     { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -46,10 +55,30 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
   ];
 
   const moreMenuItems = [
-    { id: "communication", label: "Communication History", icon: MessageSquare, desc: "Message dispatch logs" },
-    { id: "batches", label: "Batches & Shifts", icon: School, desc: "Manage shift timings & pricing" },
-    { id: "reports", label: "Reports & Export", icon: FileText, desc: "Generate PDF/Excel reports" },
-    { id: "settings", label: "Admin Settings", icon: SettingsIcon, desc: "Library profile & preferences" },
+    {
+      id: "communication",
+      label: "Communication History",
+      icon: MessageSquare,
+      desc: "Message dispatch logs",
+    },
+    {
+      id: "batches",
+      label: "Batches & Shifts",
+      icon: School,
+      desc: "Manage shift timings & pricing",
+    },
+    {
+      id: "reports",
+      label: "Reports & Export",
+      icon: FileText,
+      desc: "Generate PDF/Excel reports",
+    },
+    {
+      id: "settings",
+      label: "Admin Settings",
+      icon: SettingsIcon,
+      desc: "Library profile & preferences",
+    },
   ];
 
   const handleLogout = () => {
@@ -72,12 +101,10 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
               <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-800 dark:text-white tracking-wider leading-none text-sm uppercase">
-                Library Pro
-              </h1>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold tracking-wider uppercase mt-0.5 block">
-                SaaS Dashboard
-              </span>
+              <h3 className="font-extrabold text-slate-800 dark:text-white tracking-wider leading-none text-sm uppercase">
+                Bhagwat Library
+              </h3>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold tracking-wider uppercase mt-0.5 block"></span>
             </div>
           </div>
 
@@ -92,7 +119,9 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                   onClick={() => onTabChange(item.id)}
                   className={clsx(
                     "skeuo-nav-pill w-full px-3.5 py-3 flex items-center justify-between text-xs font-semibold tracking-wide",
-                    isActive ? "active text-[#1A1C1E] dark:text-white" : "text-[#3C4048] dark:text-slate-400"
+                    isActive
+                      ? "active text-[#1A1C1E] dark:text-white"
+                      : "text-[#3C4048] dark:text-slate-400",
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -101,7 +130,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                         "skeuo-dial w-7 h-7 flex items-center justify-center transition-all",
                         isActive
                           ? "text-[#00CEC9] dark:text-cyan-400"
-                          : "text-[#3C4048] dark:text-slate-400"
+                          : "text-[#3C4048] dark:text-slate-400",
                       )}
                     >
                       <Icon size={14} />
@@ -172,9 +201,12 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
             </div>
             <div>
               <h1 className="font-extrabold text-sm text-[#1A1C1E] dark:text-white tracking-tight flex items-center gap-1">
-                Bhagwat Library <Sparkles className="text-amber-400" size={13} />
+                Bhagwat Library{" "}
+                <Sparkles className="text-amber-400" size={13} />
               </h1>
-              <p className="text-[10px] text-[#3C4048] dark:text-slate-400 font-medium">SaaS Dashboard</p>
+              <p className="text-[10px] text-[#3C4048] dark:text-slate-400 font-medium">
+                SaaS Dashboard
+              </p>
             </div>
           </div>
 
@@ -197,9 +229,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
 
         {/* Viewport Content Area */}
         <main className="flex-1 p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 custom-scrollbar overflow-y-auto">
-          <div className="max-w-7xl mx-auto space-y-6">
-            {children}
-          </div>
+          <div className="max-w-7xl mx-auto space-y-6">{children}</div>
         </main>
       </div>
 
@@ -221,7 +251,8 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
           const Icon = tab.icon;
           const isActive =
             tab.id === "more"
-              ? isMoreSheetOpen || ["batches", "reports", "settings"].includes(activeTab)
+              ? isMoreSheetOpen ||
+                ["batches", "reports", "settings"].includes(activeTab)
               : activeTab === tab.id;
 
           return (
@@ -239,18 +270,22 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                 "flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-200 active:scale-95",
                 isActive
                   ? "text-[#00CEC9] dark:text-cyan-400 font-bold"
-                  : "text-[#3C4048] dark:text-slate-400 hover:text-[#1A1C1E] dark:hover:text-slate-200"
+                  : "text-[#3C4048] dark:text-slate-400 hover:text-[#1A1C1E] dark:hover:text-slate-200",
               )}
             >
               <div
                 className={clsx(
                   "p-1.5 rounded-full transition-all",
-                  isActive ? "skeuo-dial text-[#00CEC9] dark:text-cyan-400 scale-110" : ""
+                  isActive
+                    ? "skeuo-dial text-[#00CEC9] dark:text-cyan-400 scale-110"
+                    : "",
                 )}
               >
                 <Icon size={18} />
               </div>
-              <span className="text-[10px] font-semibold tracking-tight mt-0.5">{tab.label}</span>
+              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                {tab.label}
+              </span>
             </button>
           );
         })}
@@ -278,20 +313,26 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                   "p-4 rounded-2xl text-left flex items-center gap-4 transition-all active:scale-98 skeuo-card",
                   isSelected
                     ? "border-[#00CEC9]/50 text-[#00CEC9] dark:text-cyan-400"
-                    : "text-[#1A1C1E] dark:text-slate-300"
+                    : "text-[#1A1C1E] dark:text-slate-300",
                 )}
               >
                 <div
                   className={clsx(
                     "skeuo-dial w-11 h-11 flex items-center justify-center flex-shrink-0",
-                    isSelected ? "text-[#00CEC9] dark:text-cyan-400" : "text-[#3C4048] dark:text-slate-400"
+                    isSelected
+                      ? "text-[#00CEC9] dark:text-cyan-400"
+                      : "text-[#3C4048] dark:text-slate-400",
                   )}
                 >
                   <Icon size={20} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm leading-tight text-[#1A1C1E] dark:text-white">{item.label}</h4>
-                  <p className="text-xs text-[#3C4048] dark:text-slate-400 mt-0.5">{item.desc}</p>
+                  <h4 className="font-bold text-sm leading-tight text-[#1A1C1E] dark:text-white">
+                    {item.label}
+                  </h4>
+                  <p className="text-xs text-[#3C4048] dark:text-slate-400 mt-0.5">
+                    {item.desc}
+                  </p>
                 </div>
               </button>
             );
@@ -301,4 +342,3 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
     </div>
   );
 };
-

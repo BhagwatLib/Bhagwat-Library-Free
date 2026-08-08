@@ -1,0 +1,29 @@
+# Backend .gitignore
+# ============================================================
+
+# Dependencies
+node_modules/
+
+# Environment secrets — NEVER commit real .env
+.env
+
+# WhatsApp browser session files
+.wwebjs_auth/
+.wwebjs_cache/
+.session/
+
+# Log files
+logs/
+*.log
+
+# Generated PDFs and uploaded files
+uploads/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.swp
+*.swo
