@@ -62,7 +62,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
   };
 
   return (
-    <div className="min-h-screen bg-[#ECECEC] dark:bg-[#1A1D24] text-slate-800 dark:text-slate-100 font-sans flex transition-colors duration-300">
+    <div className="min-h-screen bg-[#878B8F] dark:bg-[#1A1D24] text-[#1A1C1E] dark:text-slate-100 font-sans flex transition-colors duration-300">
       {/* DESKTOP SKEUOMORPHIC SIDEBAR */}
       <aside className="hidden lg:flex w-72 flex-col p-4 shrink-0 h-screen sticky top-0 z-30 justify-between">
         <div className="space-y-6">
@@ -92,7 +92,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                   onClick={() => onTabChange(item.id)}
                   className={clsx(
                     "skeuo-nav-pill w-full px-3.5 py-3 flex items-center justify-between text-xs font-semibold tracking-wide",
-                    isActive ? "active text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
+                    isActive ? "active text-[#1A1C1E] dark:text-white" : "text-[#3C4048] dark:text-slate-400"
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -100,8 +100,8 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                       className={clsx(
                         "skeuo-dial w-7 h-7 flex items-center justify-center transition-all",
                         isActive
-                          ? "text-blue-600 dark:text-cyan-400"
-                          : "text-slate-500 dark:text-slate-400"
+                          ? "text-[#00CEC9] dark:text-cyan-400"
+                          : "text-[#3C4048] dark:text-slate-400"
                       )}
                     >
                       <Icon size={14} />
@@ -132,7 +132,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-800 dark:text-white leading-tight">
+                <span className="text-xs font-bold text-[#1A1C1E] dark:text-white leading-tight">
                   Admin Workspace
                 </span>
                 <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold">
@@ -165,16 +165,16 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
       {/* MAIN CONTENT VIEWPORT */}
       <div className="flex-1 min-w-0 pb-20 lg:pb-0 overflow-y-auto">
         {/* Mobile Header Bar */}
-        <header className="lg:hidden px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-[#ECECEC]/90 dark:bg-[#1A1D24]/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
+        <header className="lg:hidden px-4 py-3 border-b border-[#757A7E]/40 dark:border-slate-800/80 flex items-center justify-between bg-[#878B8F]/95 dark:bg-[#1A1D24]/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="skeuo-dial w-9 h-9">
               <Layers className="w-4 h-4 text-purple-500" />
             </div>
             <div>
-              <h1 className="font-extrabold text-sm text-slate-900 dark:text-white tracking-tight flex items-center gap-1">
+              <h1 className="font-extrabold text-sm text-[#1A1C1E] dark:text-white tracking-tight flex items-center gap-1">
                 Bhagwat Library <Sparkles className="text-amber-400" size={13} />
               </h1>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">SaaS Dashboard</p>
+              <p className="text-[10px] text-[#3C4048] dark:text-slate-400 font-medium">SaaS Dashboard</p>
             </div>
           </div>
 
@@ -216,7 +216,7 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#ECECEC]/95 dark:bg-[#1A1D24]/95 border-t border-slate-200 dark:border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#878B8F]/95 dark:bg-[#1A1D24]/95 border-t border-[#757A7E]/40 dark:border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
         {mainBottomTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
@@ -238,14 +238,14 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
               className={clsx(
                 "flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-200 active:scale-95",
                 isActive
-                  ? "text-blue-600 dark:text-cyan-400 font-bold"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  ? "text-[#00CEC9] dark:text-cyan-400 font-bold"
+                  : "text-[#3C4048] dark:text-slate-400 hover:text-[#1A1C1E] dark:hover:text-slate-200"
               )}
             >
               <div
                 className={clsx(
                   "p-1.5 rounded-full transition-all",
-                  isActive ? "skeuo-dial text-blue-600 dark:text-cyan-400 scale-110" : ""
+                  isActive ? "skeuo-dial text-[#00CEC9] dark:text-cyan-400 scale-110" : ""
                 )}
               >
                 <Icon size={18} />
@@ -277,21 +277,21 @@ export const Layout = ({ children, activeTab, onTabChange, onOpenQuickAction }) 
                 className={clsx(
                   "p-4 rounded-2xl text-left flex items-center gap-4 transition-all active:scale-98 skeuo-card",
                   isSelected
-                    ? "border-blue-500/50 text-blue-600 dark:text-cyan-400"
-                    : "text-slate-700 dark:text-slate-300"
+                    ? "border-[#00CEC9]/50 text-[#00CEC9] dark:text-cyan-400"
+                    : "text-[#1A1C1E] dark:text-slate-300"
                 )}
               >
                 <div
                   className={clsx(
                     "skeuo-dial w-11 h-11 flex items-center justify-center flex-shrink-0",
-                    isSelected ? "text-blue-600 dark:text-cyan-400" : "text-slate-500 dark:text-slate-400"
+                    isSelected ? "text-[#00CEC9] dark:text-cyan-400" : "text-[#3C4048] dark:text-slate-400"
                   )}
                 >
                   <Icon size={20} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm leading-tight text-slate-800 dark:text-white">{item.label}</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{item.desc}</p>
+                  <h4 className="font-bold text-sm leading-tight text-[#1A1C1E] dark:text-white">{item.label}</h4>
+                  <p className="text-xs text-[#3C4048] dark:text-slate-400 mt-0.5">{item.desc}</p>
                 </div>
               </button>
             );
