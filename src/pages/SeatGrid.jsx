@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 import { saveStudent } from "../utils/store";
 import { subscribeStudents } from "../services/studentsService";
+import { subscribeBatches } from "../services/batchesService";
 import { checkSeatSlotConflict } from "../services/seatsService";
 import { getSeatMatrix, BASE_SLOTS } from "../utils/seatLogic";
 import { Badge } from "../components/Badge";
@@ -28,6 +29,7 @@ import { BottomSheet } from "../components/BottomSheet";
 
 export const SeatGrid = () => {
   const [students, setStudents] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
@@ -37,14 +39,22 @@ export const SeatGrid = () => {
   const [conflictError, setConflictError] = useState("");
   const [viewMode, setViewMode] = useState("grid"); // "grid" or "list"
 
-  // Realtime Firestore Subscription for instant seat occupancy updates
+  // Realtime Firestore Subscription for instant seat occupancy & dynamic batches
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = subscribeStudents((data) => {
+    const unsubStudents = subscribeStudents((data) => {
       setStudents(data);
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    const unsubBatches = subscribeBatches((bData) => {
+      setBatches(bData);
+    });
+
+    return () => {
+      unsubStudents();
+      unsubBatches();
+    };
   }, []);
 
   // Compute live seat matrix from Firestore students data
@@ -58,25 +68,23 @@ export const SeatGrid = () => {
       const updatedSeat = seatMatrix.find((s) => s.seatNumber === selectedSeat.seatNumber);
       if (updatedSeat) setSelectedSeat(updatedSeat);
     }
-  }, [seatMatrix]);
+  }, [seatMatrix, selectedSeat]);
 
+  // Summary Metrics Calculation
   const stats = useMemo(() => {
-    let totalOccupiedSlots = 0;
     let fullSeats = 0;
     let partialSeats = 0;
     let availableSeats = 0;
+    let totalOccupiedSlots = 0;
 
-    seatMatrix.forEach((s) => {
-      totalOccupiedSlots += s.occupiedSlotsCount;
-      if (s.seatState === "Full") fullSeats++;
-      else if (s.seatState === "Partial") partialSeats++;
+    seatMatrix.forEach((seat) => {
+      totalOccupiedSlots += seat.occupiedSlotsCount;
+      if (seat.occupiedSlotsCount === 4) fullSeats++;
+      else if (seat.occupiedSlotsCount > 0) partialSeats++;
       else availableSeats++;
     });
 
     return {
-      totalSeats: 100,
-      totalSlots: 400,
-      totalOccupiedSlots,
       fullSeats,
       partialSeats,
       availableSeats,
@@ -93,14 +101,18 @@ export const SeatGrid = () => {
         matchesFilter = seat.occupiedSlotsCount > 0;
       } else if (activeFilter === "Full") {
         matchesFilter = seat.occupiedSlotsCount === 4;
-      } else if (activeFilter === "A Batch") {
-        matchesFilter = seat.slots["a"]?.occupied;
-      } else if (activeFilter === "B Batch") {
-        matchesFilter = seat.slots["b"]?.occupied;
-      } else if (activeFilter === "C Batch") {
-        matchesFilter = seat.slots["c"]?.occupied;
-      } else if (activeFilter === "D Batch") {
-        matchesFilter = seat.slots["d"]?.occupied;
+      } else if (activeFilter !== "All") {
+        // Dynamic shift filter match
+        matchesFilter = seat.assignedStudents.some((s) => {
+          const bArr = Array.isArray(s.batch) ? s.batch : [s.batch];
+          const hasAll = bArr.some((b) => String(b).toLowerCase().includes("all"));
+          if (hasAll) return true;
+          return bArr.some(
+            (b) =>
+              String(b).toLowerCase() === activeFilter.toLowerCase() ||
+              String(b).toLowerCase().includes(activeFilter.toLowerCase())
+          );
+        });
       }
 
       if (!matchesFilter) return false;
@@ -205,7 +217,7 @@ export const SeatGrid = () => {
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-          {["All", "Available", "Partial", "Full", "A Batch", "B Batch", "C Batch", "D Batch"].map((filter) => (
+          {["All", "Available", "Partial", "Full", ...batches.map((b) => b.name || b.time)].map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
@@ -220,6 +232,7 @@ export const SeatGrid = () => {
             </button>
           ))}
         </div>
+
       </div>
 
       {/* DESKTOP SEAT GRID VIEW (1024px and above) */}

@@ -70,7 +70,31 @@ export const StudentList = () => {
     }
   };
 
-  // Filtered Students
+  // Compute student count per shift for filter pills
+  const shiftCounts = useMemo(() => {
+    const counts = { All: students.length };
+    batches.forEach((b) => {
+      const bName = b.name || b.time;
+      if (!bName) return;
+      const count = students.filter((s) => {
+        const bArr = Array.isArray(s.batch) ? s.batch : s.batch ? [s.batch] : [];
+        const isAll = bArr.some((item) => {
+          const str = String(item).toLowerCase();
+          return str === "all" || str.includes("all shift") || str.includes("all batch");
+        });
+        if (isAll) return true;
+        return bArr.some((item) => {
+          const str = String(item).toLowerCase();
+          const target = bName.toLowerCase();
+          return str === target || str.includes(target) || target.includes(str);
+        });
+      }).length;
+      counts[bName] = count;
+    });
+    return counts;
+  }, [students, batches]);
+
+  // Filtered Students matching active search, batch shift filter, and payment status
   const filteredStudents = useMemo(() => {
     return students
       .filter((s) => {
@@ -79,12 +103,32 @@ export const StudentList = () => {
           s.phone.includes(searchTerm) ||
           (s.seatNumber && String(s.seatNumber).includes(searchTerm));
 
-        const batchStr = Array.isArray(s.batch)
-          ? s.batch.join(" ")
-          : String(s.batch || "");
+        const batchArr = Array.isArray(s.batch)
+          ? s.batch
+          : s.batch
+          ? [s.batch]
+          : [];
 
-        const matchesBatch =
-          filterBatch === "All" || batchStr.toLowerCase().includes(filterBatch.toLowerCase());
+        let matchesBatch = false;
+        if (filterBatch === "All" || filterBatch === "All Shift" || filterBatch === "All Shifts") {
+          matchesBatch = true;
+        } else {
+          // If student has All Shift, they belong to all individual shifts
+          const hasAll = batchArr.some((b) => {
+            const str = String(b).toLowerCase();
+            return str === "all" || str.includes("all shift") || str.includes("all batch");
+          });
+
+          if (hasAll) {
+            matchesBatch = true;
+          } else {
+            matchesBatch = batchArr.some((b) => {
+              const str = String(b).toLowerCase();
+              const target = filterBatch.toLowerCase();
+              return str === target || str.includes(target) || target.includes(str);
+            });
+          }
+        }
 
         const status =
           s.status ||
@@ -122,7 +166,8 @@ export const StudentList = () => {
             <Users className="text-blue-400" size={26} /> Student Directory
           </h1>
           <p className="text-xs text-slate-400">
-            Manage student registrations, batch shifts, seat numbers, and validity ({students.length} Total)
+            Manage student registrations, batch shifts, seat numbers, and validity (
+            <span className="text-blue-400 font-semibold">{filteredStudents.length}</span> / {students.length} Total)
           </p>
         </div>
 
@@ -137,7 +182,7 @@ export const StudentList = () => {
         </button>
       </div>
 
-      {/* Controls: Search & Filter Chips */}
+      {/* Controls: Search & Shift Filter Chips */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -154,29 +199,44 @@ export const StudentList = () => {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-          <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-            <Filter size={14} /> Filter:
+          <span className="text-xs text-slate-400 font-semibold flex items-center gap-1 shrink-0">
+            <Filter size={14} /> Shift:
           </span>
-          {["All", ...batches.map((b) => b.name || b.time)].map((bName) => (
-            <button
-              key={bName}
-              onClick={() => {
-                setFilterBatch(bName);
-                setCurrentPage(1);
-              }}
-              className={clsx(
-                "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border",
-                filterBatch === bName
-                  ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20"
-                  : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
-              )}
-            >
-              {bName}
-            </button>
-          ))}
-        </div>
+          {["All", ...batches.map((b) => b.name || b.time)].map((bName) => {
+            const count = shiftCounts[bName] ?? 0;
+            const isSelected = filterBatch === bName || (bName === "All" && filterBatch === "All");
 
+            return (
+              <button
+                key={bName}
+                onClick={() => {
+                  setFilterBatch(bName);
+                  setCurrentPage(1);
+                }}
+                className={clsx(
+                  "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border flex items-center gap-1.5",
+                  isSelected
+                    ? "bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20 font-bold"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                )}
+              >
+                <span>{bName === "All" ? "All Shifts" : bName}</span>
+                <span
+                  className={clsx(
+                    "px-1.5 py-0.2 rounded-md text-[10px] font-bold",
+                    isSelected
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-800 text-slate-400"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
+
 
       {/* DESKTOP TABLE VIEW (1024px and above) */}
       <div className="hidden lg:block">

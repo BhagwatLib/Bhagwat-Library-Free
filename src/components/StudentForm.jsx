@@ -88,29 +88,56 @@ export const StudentForm = ({
     return [];
   }, [batches]);
 
-  // Check if an "All Batch" or all slots are selected
-  const isAllBatchSelected = useMemo(() => {
+  // Find the dedicated "All Shift" batch from Batches module
+  const allShiftBatch = useMemo(() => {
     return (
-      formData.batch.includes("All Batch") ||
-      formData.batch.includes("All") ||
-      (displayBatches.length > 0 &&
-        displayBatches.filter((b) => b.name !== "All Batch").length > 0 &&
-        displayBatches
-          .filter((b) => b.name !== "All Batch")
-          .every((b) => formData.batch.includes(b.name) || formData.batch.includes(b.time)))
+      displayBatches.find(
+        (b) =>
+          String(b.name).toLowerCase() === "all shift" ||
+          String(b.name).toLowerCase() === "all batch" ||
+          b.slotKey === "all" ||
+          String(b.name).toLowerCase().includes("all")
+      ) || null
     );
-  }, [formData.batch, displayBatches]);
+  }, [displayBatches]);
 
-  // Calculate total fee dynamically based on selected batches
+  // Individual shifts (excluding All Shift)
+  const individualShifts = useMemo(() => {
+    if (!allShiftBatch) return displayBatches;
+    return displayBatches.filter((b) => b.id !== allShiftBatch.id && b.name !== allShiftBatch.name);
+  }, [displayBatches, allShiftBatch]);
+
+  // Check if All Shift is active
+  const isAllShiftSelected = useMemo(() => {
+    const hasAllKeyword =
+      formData.batch.includes("All Shift") ||
+      formData.batch.includes("All Batch") ||
+      formData.batch.includes("All");
+
+    if (hasAllKeyword) return true;
+
+    // If student selected all individual shifts, it automatically equals All Shift
+    if (
+      individualShifts.length > 0 &&
+      individualShifts.every((s) => formData.batch.includes(s.name) || formData.batch.includes(s.time))
+    ) {
+      return true;
+    }
+
+    return false;
+  }, [formData.batch, individualShifts]);
+
+  // Calculate total fee dynamically
   useEffect(() => {
     if (displayBatches.length === 0) return;
 
-    const allBatchObj = displayBatches.find((b) => b.name === "All Batch" || b.slotKey === "all");
-
-    if (isAllBatchSelected && allBatchObj) {
-      setFormData((prev) => ({ ...prev, totalAmount: Number(allBatchObj.price) || 1500 }));
+    if (isAllShiftSelected) {
+      // If All Shift is selected, charge ONLY the All Shift batch fee
+      const allFee = allShiftBatch ? Number(allShiftBatch.price) : 1500;
+      setFormData((prev) => ({ ...prev, totalAmount: allFee }));
     } else {
-      const selected = displayBatches.filter(
+      // Individual shifts selected: sum their individual prices
+      const selected = individualShifts.filter(
         (b) =>
           formData.batch.includes(b.name) ||
           formData.batch.includes(b.time) ||
@@ -119,48 +146,54 @@ export const StudentForm = ({
       const total = selected.reduce((sum, b) => sum + Number(b.price || 0), 0);
       setFormData((prev) => ({ ...prev, totalAmount: total }));
     }
-  }, [formData.batch, isAllBatchSelected, displayBatches]);
+  }, [formData.batch, isAllShiftSelected, displayBatches, allShiftBatch, individualShifts]);
 
-  // Compute selected batch slots ("a", "b", "c", "d")
+  // Compute selected batch slots / names for seat conflict checks
   const targetSlots = useMemo(() => {
+    if (isAllShiftSelected) {
+      return ["a", "b", "c", "d"];
+    }
     return getSlotsFromBatch(formData.batch);
-  }, [formData.batch]);
+  }, [formData.batch, isAllShiftSelected]);
 
-
-  // Compute availability matrix for all 100 seats based on targetSlots
+  // Compute availability matrix for all 100 seats (🟢 A01 Available, 🔒 A03 Occupied)
   const seatOccupancyMap = useMemo(() => {
     const map = {};
 
     for (let n = 1; n <= 100; n++) {
-      // Find other students on seat n
+      const seatCode = `A${String(n).padStart(2, "0")}`;
+
+      // Find other students assigned to seat n
       const seatStudents = allStudents.filter(
         (s) => Number(s.seatNumber) === n && s.id !== student?.id
       );
 
       let isOccupied = false;
       let conflictingStudent = null;
-      let conflictingSlots = [];
+      let conflictingShifts = [];
       let customStatusText = "";
 
-      // Rule 1: Check if any existing student occupies All Batch (owns all 4 slots)
-      const allBatchStudent = seatStudents.find(st => {
-        const stSlots = getSlotsFromBatch(st.batch);
-        return stSlots.length === 4;
+      // Check if any student occupies All Shift on seat n
+      const allShiftStudent = seatStudents.find((st) => {
+        const sArr = Array.isArray(st.batch) ? st.batch : [st.batch];
+        return (
+          sArr.some((b) => String(b).toLowerCase().includes("all")) ||
+          getSlotsFromBatch(st.batch).length >= 4
+        );
       });
 
-      if (allBatchStudent) {
+      if (allShiftStudent) {
         isOccupied = true;
-        conflictingStudent = allBatchStudent;
-        customStatusText = `🔒 Full (All Batch) occupied by ${allBatchStudent.name}`;
+        conflictingStudent = allShiftStudent;
+        customStatusText = `Occupied (All Shift) by ${allShiftStudent.name}`;
       } else {
-        // Rule 2 & 3: If new student selects All Batch, but seat has ANY student assigned
-        const isNewStudentAllBatch = targetSlots.length === 4;
-        if (isNewStudentAllBatch && seatStudents.length > 0) {
+        // If current student selects All Shift, seat must be completely free
+        if (isAllShiftSelected && seatStudents.length > 0) {
           isOccupied = true;
           conflictingStudent = seatStudents[0];
-          customStatusText = `🔒 Occupied (All Batch requires vacant seat) by ${seatStudents[0].name}`;
+          customStatusText = `Occupied by ${seatStudents[0].name}`;
         } else {
-          // Standard slot overlap check
+          // Check overlap on selected shifts
           for (const st of seatStudents) {
             const stSlots = getSlotsFromBatch(st.batch);
             const overlapping = targetSlots.filter((slot) => stSlots.includes(slot));
@@ -168,43 +201,27 @@ export const StudentForm = ({
             if (overlapping.length > 0) {
               isOccupied = true;
               conflictingStudent = st;
-              overlapping.forEach((sId) => {
-                const bObj = BASE_SLOTS.find((b) => b.id === sId);
-                if (bObj && !conflictingSlots.includes(bObj.name)) {
-                  conflictingSlots.push(bObj.name);
-                }
-              });
+              conflictingShifts.push(Array.isArray(st.batch) ? st.batch.join(", ") : st.batch);
             }
+          }
+          if (isOccupied && conflictingStudent) {
+            customStatusText = `Occupied by ${conflictingStudent.name}`;
           }
         }
       }
 
       map[n] = {
         seatNumber: n,
+        seatCode,
         isOccupied,
         conflictingStudent,
-        conflictingSlots,
-        statusText: customStatusText || (isOccupied
-          ? `🔒 Occupied in ${conflictingSlots.join(", ")} by ${conflictingStudent?.name}`
-          : "✅ Available"),
+        conflictingShifts,
+        statusText: customStatusText || (isOccupied ? `Occupied by ${conflictingStudent?.name}` : "Available"),
       };
     }
 
     return map;
-  }, [allStudents, targetSlots, student?.id]);
-
-  // Filtered seats list based on showAvailableOnly toggle
-  const visibleSeats = useMemo(() => {
-    const list = [];
-    for (let n = 1; n <= 100; n++) {
-      const data = seatOccupancyMap[n];
-      // EDIT Student Exception: The student's current seat remains selectable
-      if (!showAvailableOnly || !data.isOccupied || n === formData.seatNumber) {
-        list.push(data);
-      }
-    }
-    return list;
-  }, [seatOccupancyMap, showAvailableOnly, formData.seatNumber]);
+  }, [allStudents, targetSlots, isAllShiftSelected, student?.id]);
 
   // Conflict warning check for currently selected seat
   useEffect(() => {
@@ -212,7 +229,7 @@ export const StudentForm = ({
       const seatInfo = seatOccupancyMap[formData.seatNumber];
       if (seatInfo && seatInfo.isOccupied && formData.seatNumber !== student?.seatNumber) {
         setConflictWarning(
-          `Seat ${formData.seatNumber} is occupied in ${seatInfo.conflictingSlots.join(", ")} by ${seatInfo.conflictingStudent?.name}. Please choose another seat.`
+          `Seat ${seatInfo.seatCode} is currently occupied by ${seatInfo.conflictingStudent?.name}. Please choose an available seat.`
         );
       } else {
         setConflictWarning("");
@@ -253,32 +270,38 @@ export const StudentForm = ({
     }
   }, [formData.validityFrom]);
 
-  // Handle batch selection & "All Batch" auto-checking rule
+  // Handle batch selection with "All Shift" auto-grant
   const handleBatchToggle = (batchName) => {
-    const isAllBatch = batchName === "All Batch" || batchName === "All";
+    const isAll =
+      batchName === "All Shift" ||
+      batchName === "All Batch" ||
+      batchName === "All" ||
+      (allShiftBatch && batchName === allShiftBatch.name);
 
     setFormData((prev) => {
       let currentBatches = [...prev.batch];
 
-      if (isAllBatch) {
-        const alreadyHasAll = currentBatches.includes("All Batch") || currentBatches.includes("All");
+      if (isAll) {
+        const alreadyHasAll = isAllShiftSelected;
         if (alreadyHasAll) {
-          // Unchecked -> remove all selections
+          // Deselect all
           return { ...prev, batch: [] };
         } else {
-          // Checked -> Automatically select all available batches
-          const allBatchNames = displayBatches.map((b) => b.name);
-          if (!allBatchNames.includes("All Batch")) allBatchNames.push("All Batch");
+          // Select All Shift: includes all available individual shifts
+          const shiftNames = individualShifts.map((s) => s.name);
+          const allName = allShiftBatch ? allShiftBatch.name : "All Shift";
           return {
             ...prev,
-            batch: allBatchNames,
+            batch: [allName, ...shiftNames],
           };
         }
       } else {
-        // Individual checkbox toggle
+        // Individual shift toggle
         const exists = currentBatches.includes(batchName);
         if (exists) {
-          currentBatches = currentBatches.filter((b) => b !== batchName && b !== "All Batch" && b !== "All");
+          currentBatches = currentBatches.filter(
+            (b) => b !== batchName && b !== "All Shift" && b !== "All Batch" && b !== "All"
+          );
         } else {
           currentBatches.push(batchName);
         }
@@ -286,7 +309,6 @@ export const StudentForm = ({
       }
     });
   };
-
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -306,7 +328,7 @@ export const StudentForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Re-validate against fresh Firestore state before saving (excluding current seat)
+    // Re-validate against fresh Firestore state before saving
     if (formData.seatNumber > 0 && formData.batch.length > 0 && formData.seatNumber !== student?.seatNumber) {
       const freshStudents = await getStudents();
       const res = checkSeatConflict(
@@ -316,8 +338,8 @@ export const StudentForm = ({
         freshStudents
       );
       if (res.conflict) {
-        setConflictWarning("This seat has just been assigned to another student. Please choose another seat.");
-        alert("This seat has just been assigned to another student. Please choose another seat.");
+        setConflictWarning(res.message || "This seat is already occupied in the selected shift.");
+        alert(res.message || "This seat is already occupied in the selected shift.");
         return;
       }
     }
@@ -434,7 +456,7 @@ export const StudentForm = ({
                 "w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all",
                 mode === "payment" && "opacity-60 cursor-not-allowed"
               )}
-              placeholder="e.g. Ranu Sharma"
+              placeholder="e.g. Rahul Sharma"
             />
           </div>
 
@@ -472,31 +494,64 @@ export const StudentForm = ({
             </>
           )}
 
-          {/* Batches Selection (Strictly A Batch, B Batch, C Batch, D Batch, All Batch) */}
+          {/* DYNAMIC SHIFT SELECTION FROM BATCHES SECTION */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-semibold text-slate-400">
-                Select Batch Shift(s)
+                Select Shift(s)
               </label>
-              {isAllBatchSelected && (
-                <span className="text-[10px] text-amber-400 font-bold">
-                  ⚡ All Batches Selected
+              {isAllShiftSelected && (
+                <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                  ⭐ All Shift Selected (Access to All Shifts)
                 </span>
               )}
             </div>
 
             <div className="space-y-1.5">
-              {displayBatches.map((b) => {
-                const isAllThis = b.name === "All Batch";
+              {/* Top Option: All Shift Batch */}
+              {allShiftBatch && (
+                <label
+                  className={clsx(
+                    "flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer",
+                    isAllShiftSelected
+                      ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-blue-500/50 text-white font-bold shadow-md shadow-blue-500/10"
+                      : "bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-300",
+                    mode === "payment" && "opacity-60 cursor-not-allowed"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={mode === "payment"}
+                    checked={isAllShiftSelected}
+                    onChange={() => handleBatchToggle(allShiftBatch.name)}
+                    className="w-4 h-4 rounded border-slate-700 text-blue-600 focus:ring-blue-500 bg-slate-900"
+                  />
+                  <div className="flex-1 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold flex items-center gap-1.5 text-sm">
+                        ⭐ {allShiftBatch.name}
+                      </span>
+                      <span className="text-[11px] text-slate-400 block mt-0.5">
+                        Full access to all library shifts ({allShiftBatch.time || "All Day"})
+                      </span>
+                    </div>
+                    <span className="font-bold text-emerald-400 text-sm">₹{allShiftBatch.price}</span>
+                  </div>
+                </label>
+              )}
+
+              {/* Individual Shifts */}
+              {individualShifts.map((b) => {
                 const isChecked =
                   formData.batch.includes(b.name) ||
-                  (isAllBatchSelected && !isAllThis);
-                
-                const isDisabled = mode === "payment" || (isAllBatchSelected && !isAllThis);
+                  formData.batch.includes(b.time) ||
+                  isAllShiftSelected;
+
+                const isDisabled = mode === "payment" || isAllShiftSelected;
 
                 return (
                   <label
-                    key={b.name}
+                    key={b.id || b.name}
                     className={clsx(
                       "flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer",
                       isChecked
@@ -521,43 +576,44 @@ export const StudentForm = ({
                   </label>
                 );
               })}
+
+              {displayBatches.length === 0 && (
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-slate-500 text-xs">
+                  No shifts found. Please create shifts in the Batches section.
+                </div>
+              )}
             </div>
           </div>
 
-          {/* BATCH-AWARE SEAT SELECTOR */}
-          <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+          {/* REDESIGNED SEAT ALLOCATION UI (🟢 A01, 🔒 A03) */}
+          <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <label className="text-xs font-bold text-white flex items-center gap-1.5">
                   Seat Allocation
                   {formData.seatNumber > 0 && (
-                    <span className="text-emerald-400 font-semibold text-[11px]">
-                      (#Seat {formData.seatNumber})
+                    <span className="text-blue-400 font-semibold text-[11px]">
+                      (Selected: {seatOccupancyMap[formData.seatNumber]?.seatCode || `Seat #${formData.seatNumber}`})
                     </span>
                   )}
                 </label>
                 <p className="text-[10px] text-slate-400">
-                  {targetSlots.length > 0
-                    ? `Checking slots for: ${targetSlots.map((s) => s.toUpperCase()).join(", ")}`
-                    : "Choose a batch first"}
+                  {formData.batch.length > 0
+                    ? isAllShiftSelected
+                      ? "All Shifts allocated • Select any vacant seat"
+                      : `Checking availability for: ${formData.batch.join(", ")}`
+                    : "Select a shift above to see live seat availability"}
                 </p>
               </div>
 
-              <button
-                type="button"
-                disabled={mode === "payment"}
-                onClick={() => setShowAvailableOnly(!showAvailableOnly)}
-                className={clsx(
-                  "px-2.5 py-1 rounded-xl text-[11px] font-semibold border flex items-center gap-1 transition-all active:scale-95",
-                  showAvailableOnly
-                    ? "bg-emerald-600/20 border-emerald-500/40 text-emerald-300"
-                    : "bg-slate-900 border-slate-800 text-slate-400",
-                  mode === "payment" && "opacity-60 cursor-not-allowed"
-                )}
-              >
-                <Filter size={12} />
-                <span>{showAvailableOnly ? "Available Only" : "Show All (100)"}</span>
-              </button>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                  🟢 Available
+                </span>
+                <span className="flex items-center gap-1 text-slate-500 font-semibold">
+                  🔒 Occupied
+                </span>
+              </div>
             </div>
 
             {/* Dropdown Selector */}
@@ -567,7 +623,7 @@ export const StudentForm = ({
                 value={formData.seatNumber}
                 onChange={(e) => setFormData({ ...formData, seatNumber: Number(e.target.value) })}
                 className={clsx(
-                  "w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500",
+                  "w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium",
                   mode === "payment" && "opacity-60 cursor-not-allowed"
                 )}
               >
@@ -576,78 +632,88 @@ export const StudentForm = ({
                   const isCurrentSeat = seat.seatNumber === student?.seatNumber;
                   const isOccupied = seat.isOccupied && !isCurrentSeat;
                   return (
-                     <option
+                    <option
                       key={seat.seatNumber}
                       value={seat.seatNumber}
                       disabled={isOccupied}
                     >
-                      Seat #{seat.seatNumber} - {isCurrentSeat ? "✅ Current" : seat.statusText}
+                      {isOccupied ? "🔒" : "🟢"} {seat.seatCode} ({isCurrentSeat ? "Current Seat" : seat.statusText})
                     </option>
                   );
                 })}
               </select>
             </div>
 
-            {/* Scrollable Visual Seat Cards */}
-            <div className="overflow-x-auto custom-scrollbar-hidden py-1 flex gap-2 snap-x">
-              <button
-                type="button"
-                disabled={mode === "payment"}
-                onClick={() => setFormData({ ...formData, seatNumber: 0 })}
-                className={clsx(
-                  "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex items-center justify-center",
-                  formData.seatNumber === 0
-                    ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30 scale-105"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700",
-                  mode === "payment" && "opacity-60 cursor-not-allowed"
-                )}
-              >
-                None
-              </button>
+            {/* FULL 100-SEAT VISUAL GRID (🟢 A01, 🔒 A03) - ALL SEATS ALWAYS VISIBLE */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Visual Seat Map (100 Seats)</span>
+                <button
+                  type="button"
+                  disabled={mode === "payment"}
+                  onClick={() => setFormData({ ...formData, seatNumber: 0 })}
+                  className={clsx(
+                    "px-2.5 py-0.5 rounded-lg text-[10px] font-semibold border transition-all",
+                    formData.seatNumber === 0
+                      ? "bg-blue-600 border-blue-400 text-white font-bold"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                  )}
+                >
+                  Unassign Seat (None)
+                </button>
+              </div>
 
-              {visibleSeats.map((seat) => {
-                const isSelected = formData.seatNumber === seat.seatNumber;
-                const isCurrentSeat = seat.seatNumber === student?.seatNumber;
-                // EDIT Student Exception: current student's seat remains selectable
-                const isOccupied = seat.isOccupied && !isCurrentSeat && !isSelected;
+              <div className="max-h-48 overflow-y-auto custom-scrollbar p-2 bg-slate-900/60 rounded-2xl border border-slate-800/80">
+                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1.5">
+                  {Object.values(seatOccupancyMap).map((seat) => {
+                    const isSelected = formData.seatNumber === seat.seatNumber;
+                    const isCurrentSeat = seat.seatNumber === student?.seatNumber;
+                    const isOccupied = seat.isOccupied && !isCurrentSeat && !isSelected;
 
-                return (
-                  <button
-                    key={seat.seatNumber}
-                    type="button"
-                    disabled={isOccupied || mode === "payment"}
-                    onClick={() => setFormData({ ...formData, seatNumber: seat.seatNumber })}
-                    title={isOccupied ? `Occupied by ${seat.conflictingStudent?.name} (${seat.conflictingSlots.join(", ")})` : seat.statusText}
-                    className={clsx(
-                      "flex-shrink-0 min-w-[56px] h-12 rounded-xl border text-xs font-semibold transition-all snap-center flex flex-col items-center justify-center relative",
-                      isSelected
-                        ? "bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-500/30 scale-105 font-bold"
-                        : (isOccupied || mode === "payment")
-                        ? "bg-slate-950/40 border-slate-800/80 text-slate-600 cursor-not-allowed opacity-60"
-                        : "bg-slate-900 border-emerald-500/30 text-slate-200 hover:border-emerald-500"
-                    )}
-                  >
-                    <span className="flex items-center gap-0.5">
-                      {isOccupied && <Lock size={10} className="text-slate-500" />}
-                      {seat.seatNumber}
-                    </span>
-                    <span className="text-[8px] opacity-80">
-                      {isSelected ? "Selected" : isOccupied ? "Occupied" : "Free"}
-                    </span>
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={seat.seatNumber}
+                        type="button"
+                        disabled={isOccupied || mode === "payment"}
+                        onClick={() => setFormData({ ...formData, seatNumber: seat.seatNumber })}
+                        title={
+                          isOccupied
+                            ? `${seat.seatCode}: ${seat.statusText}`
+                            : isSelected
+                            ? `${seat.seatCode}: Selected`
+                            : `${seat.seatCode}: Available`
+                        }
+                        className={clsx(
+                          "h-10 rounded-xl border text-[11px] font-bold flex flex-col items-center justify-center transition-all relative group",
+                          isSelected
+                            ? "bg-blue-600 text-white border-blue-400 shadow-md shadow-blue-500/30 scale-105 z-10"
+                            : isOccupied
+                            ? "bg-slate-950/80 border-slate-800 text-slate-600 cursor-not-allowed opacity-60"
+                            : "bg-emerald-950/30 border-emerald-500/30 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-900/40 active:scale-95"
+                        )}
+                      >
+                        <span className="flex items-center gap-0.5 text-[10px] leading-tight">
+                          {isSelected ? "🔵" : isOccupied ? "🔒" : "🟢"}
+                        </span>
+                        <span className="text-[10px] font-mono leading-tight">{seat.seatCode}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {/* Hint Line */}
-            {formData.seatNumber > 0 && seatOccupancyMap[formData.seatNumber] && (
-              <p className="text-[10px] text-slate-400 italic">
-                {formData.seatNumber === student?.seatNumber
-                  ? "✅ Currently Assigned to Student"
-                  : seatOccupancyMap[formData.seatNumber].statusText}
-              </p>
-            )}
+            {/* Selected Seat Confirmation Strip */}
+            <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+              <span className="text-slate-400">Selected Allocation:</span>
+              <span className="font-bold text-white">
+                {formData.seatNumber > 0
+                  ? `🟢 ${seatOccupancyMap[formData.seatNumber]?.seatCode || `Seat #${formData.seatNumber}`}`
+                  : "None (Unassigned)"}
+              </span>
+            </div>
           </div>
+
 
           {/* Financials & Dates */}
           <div className="grid grid-cols-2 gap-3">
