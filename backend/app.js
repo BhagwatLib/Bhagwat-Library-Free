@@ -25,24 +25,25 @@ const app = express();
 
 // ---------------------------------------------------------------------------
 // CORS — read allowed origins from environment variable
-// ALLOWED_ORIGINS=http://localhost:5173,https://yourdomain.com
-// If not set, defaults to allow all origins in development only.
+// ALLOWED_ORIGINS=https://bhagwat-library-free.vercel.app,http://localhost:5173
+// Multiple domains separated by commas are supported.
 // ---------------------------------------------------------------------------
 const rawOrigins = process.env.ALLOWED_ORIGINS || '';
 const allowedOrigins = rawOrigins
   .split(',')
-  .map((o) => o.trim())
+  .map((o) => o.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, mobile, curl)
+    // Allow requests with no origin (server-to-server, mobile, curl, health probes)
     if (!origin) return callback(null, true);
 
-    // If no whitelist configured, allow all (useful for open dev environments)
-    if (allowedOrigins.length === 0) return callback(null, true);
+    // If no whitelist configured or wildcard '*' specified, allow
+    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) {
+    const cleanOrigin = origin.replace(/\/+$/, '');
+    if (allowedOrigins.includes(cleanOrigin)) {
       return callback(null, true);
     }
 
@@ -56,6 +57,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Pre-flight for all routes
+
 
 // ---------------------------------------------------------------------------
 // Request body parsing

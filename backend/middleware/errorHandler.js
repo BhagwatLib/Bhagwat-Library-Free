@@ -1,9 +1,9 @@
 const logger = require('../utils/logger');
 
 function errorHandler(err, req, res, next) {
-  logger.error('Unhandled API Error', {
+  logger.error(`API Error: ${err.message}`, {
     message: err.message,
-    stack: process.env.NODE_ENV === 'production' ? undefined : err.stack,
+    stack: err.stack,
     url: req.originalUrl,
     method: req.method,
   });
@@ -13,9 +13,11 @@ function errorHandler(err, req, res, next) {
 
   res.status(statusCode).json({
     success: false,
+    message: message,
     error: message,
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
   });
 }
 
 module.exports = errorHandler;
+

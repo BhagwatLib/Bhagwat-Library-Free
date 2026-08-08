@@ -63,7 +63,8 @@ export const WhatsAppScanner = () => {
     // Setup SSE stream for instant real-time updates
     let eventSource = null;
     try {
-      eventSource = new EventSource("http://localhost:5000/api/whatsapp/events");
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+      eventSource = new EventSource(`${backendUrl}/api/whatsapp/events`);
       eventSource.addEventListener("status", (e) => {
         try {
           const parsed = JSON.parse(e.data);

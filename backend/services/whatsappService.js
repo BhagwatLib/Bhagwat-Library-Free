@@ -246,7 +246,7 @@ async function initializeClient() {
     logger.info('Initializing WhatsApp Web client...');
     await client.initialize();
   } catch (err) {
-    logger.error('Error during WhatsApp Web client initialization:', { error: err.message });
+    logger.warn('WhatsApp Web client initialization deferred/unavailable (REST APIs remain fully active):', { error: err.message });
     connectionStatus = 'DISCONNECTED';
     isReady = false;
     whatsappEvents.emit('status_change', getStatus());
@@ -255,8 +255,15 @@ async function initializeClient() {
   }
 }
 
-// Start initialization on startup
-initializeClient();
+// Start initialization on startup safely without blocking the server
+try {
+  initializeClient().catch((err) => {
+    logger.warn('Initial WhatsApp setup warning (REST APIs remain active):', { error: err.message });
+  });
+} catch (err) {
+  logger.warn('WhatsApp startup exception (REST APIs remain active):', { error: err.message });
+}
+
 
 // Reconnect helper
 async function reconnect() {

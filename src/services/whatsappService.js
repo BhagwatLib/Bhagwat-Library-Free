@@ -1,8 +1,8 @@
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase/firebase";
-
 const COMMUNICATION_COLLECTION = "communicationHistory";
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
 
 /**
  * Creates and logs communication details into Firestore communicationHistory collection
