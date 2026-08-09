@@ -21,7 +21,7 @@ const fs = require('fs');
 const axios = require('axios');
 const EventEmitter = require('events');
 const logger = require('../utils/logger');
-
+const puppeteer = require('puppeteer');
 // Event emitter for broadcasting real-time WhatsApp lifecycle events
 class WhatsAppEventEmitter extends EventEmitter {}
 const whatsappEvents = new WhatsAppEventEmitter();
@@ -90,13 +90,18 @@ function setupClient() {
     puppeteerArgs,
   });
 
-  client = new Client({
-    authStrategy: new NoAuth(),
-    puppeteer: {
-      headless: 'new',
-      args: puppeteerArgs,
-    },
-  });
+ const executablePath = puppeteer.executablePath();
+
+logger.info('[WhatsApp Diagnostics] Chrome Executable:', executablePath);
+
+client = new Client({
+  authStrategy: new NoAuth(),
+  puppeteer: {
+    executablePath,
+    headless: 'new',
+    args: puppeteerArgs,
+  },
+});
 
   client.ready = false;
 
