@@ -577,6 +577,32 @@ async function getMediaFromUrl(url, filename) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Ensures the WhatsApp page and injected scripts (WWebJS/Store) are fully initialized before interacting
+ */
+async function ensurePageReady() {
+  if (!client || !client.pupPage) {
+    throw new Error('Puppeteer page is not available.');
+  }
+
+  if (client.pupPage.isClosed()) {
+    throw new Error('Puppeteer page has crashed or closed.');
+  }
+
+  // Check if window.WWebJS is injected; if not, inject LoadUtils to prevent Runtime.callFunctionOn timeouts
+  try {
+    const isWWebJSDefined = await client.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined').catch(() => false);
+    if (!isWWebJSDefined) {
+      logger.info('[WhatsApp Diagnostics] Injecting missing WWebJS helper scripts into page...');
+      const { LoadUtils } = require('whatsapp-web.js/src/util/Injected/Utils');
+      await client.pupPage.evaluate(LoadUtils);
+      logger.info('[WhatsApp Diagnostics] WWebJS helper scripts injected successfully.');
+    }
+  } catch (err) {
+    logger.warn('[WhatsApp Diagnostics] Warning checking/injecting WWebJS:', { message: err.message });
+  }
+}
+
+/**
  * Sends text message to single recipient
  */
 async function sendTextMessage(phone, message) {
@@ -592,62 +618,68 @@ async function sendTextMessage(phone, message) {
     throw new Error('Message content cannot be empty.');
   }
 
+  // 2. Validate chatId before sending (format: 919876543210@c.us)
+  const chatId = normalizedPhone.endsWith('@c.us') ? normalizedPhone : `${normalizedPhone}@c.us`;
+
+  // 1. Before sendMessage(), log all diagnostics
+  logger.info('[WhatsApp Diagnostics] === Pre-Send Diagnostics ===');
+  logger.info('client.ready:', client.ready);
+  const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
+  logger.info('await client.getState():', stateBeforeCheck);
+  logger.info('connectionStatus:', connectionStatus);
+  logger.info('chatId:', chatId);
+  logger.info('message length:', message.length);
+
+  // 5. Browser diagnostics
+  logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
+
+  // 6. Check whether the page has crashed
+  if (client.pupPage) {
+    logger.info('Page closed:', client.pupPage.isClosed());
+  }
+
+  // 7. Verify that the WhatsApp Web page is fully ready before sending
+  await ensurePageReady();
+
+  // 4. Immediately before sendMessage(), execute getState() and verify CONNECTED
+  const state = await client.getState().catch(() => null);
+  logger.info('State:', state);
+
+  if (state !== 'CONNECTED') {
+    logger.error(`[WhatsApp Diagnostics] Cannot send message: Client state is "${state}", expected "CONNECTED".`);
+    throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
+  }
+
+  // 8. Capture screenshot before call
+  const beforeScreenshotPath = path.join(__dirname, '../before-send.png');
+  if (client.pupPage && !client.pupPage.isClosed()) {
+    await client.pupPage.screenshot({ path: beforeScreenshotPath }).catch(() => {});
+  }
+
+  // 3. Wrap sendMessage() with detailed timing
+  const start = Date.now();
   try {
-    logger.info(`Checking WhatsApp registration for: ${normalizedPhone}...`);
-    const numberId = await client.getNumberId(normalizedPhone);
+    logger.info('Sending message...');
+    const result = await client.sendMessage(chatId, message);
+    logger.info('Message sent successfully');
+    logger.info('Duration:', Date.now() - start, 'ms');
+    logger.info(result);
 
-    if (!numberId) {
-      logger.warn(`Number ${normalizedPhone} is not registered on WhatsApp.`);
-      const error = new Error('This phone number is not registered on WhatsApp.');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const resolvedJid = numberId._serialized;
-
-    // 2. Before every sendMessage(), log state and ready status
-    try {
-      logger.info(await client.getState());
-    } catch (stateErr) {
-      logger.error('Failed to get client state before send:', stateErr);
-    }
-    logger.info(client.ready);
-
-    // 3. Wait 3 seconds before calling sendMessage()
-    logger.info('Waiting 3 seconds before sendMessage()...');
-    await sleep(3000);
-
-    // 5. Log the output of client.getState() immediately before sendMessage()
-    try {
-      const stateBeforeSend = await client.getState();
-      logger.info('State immediately before sendMessage:', stateBeforeSend);
-    } catch (stateErr) {
-      logger.error('State check immediately before sendMessage error:', stateErr);
-    }
-
-    logger.info(`Sending message to ${resolvedJid}...`);
-
-    // 4. Wrap sendMessage() with timing logs
-    const start = Date.now();
-    let response;
-    try {
-      response = await client.sendMessage(resolvedJid, message);
-      logger.info('sendMessage success in', Date.now() - start, 'ms');
-    } catch (err) {
-      logger.error('sendMessage failed after', Date.now() - start, 'ms');
-      logger.error(err);
-      throw err;
-    }
-
-    const messageId = response?.id?.id || `msg-${Date.now()}`;
-    logger.info(`Message sent successfully. ID: ${messageId}`);
+    const messageId = result?.id?.id || `msg-${Date.now()}`;
     return { success: true, messageId };
-  } catch (error) {
-    logger.error(`Failed to send message to ${phone}`, {
-      message: error.message,
-      stack: error.stack,
-    });
-    throw error;
+  } catch (err) {
+    logger.error('sendMessage failed');
+    logger.error('Duration:', Date.now() - start, 'ms');
+    logger.error(err);
+    logger.error(err.stack);
+
+    // 8. Capture screenshot on failure
+    const errorScreenshotPath = path.join(__dirname, '../after-send-error.png');
+    if (client.pupPage && !client.pupPage.isClosed()) {
+      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => {});
+    }
+
+    throw err;
   }
 }
 
@@ -667,65 +699,56 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     throw new Error('Document URL is required.');
   }
 
+  const chatId = normalizedPhone.endsWith('@c.us') ? normalizedPhone : `${normalizedPhone}@c.us`;
+
+  logger.info('[WhatsApp Diagnostics] === Pre-Send Document Diagnostics ===');
+  logger.info('client.ready:', client.ready);
+  const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
+  logger.info('await client.getState():', stateBeforeCheck);
+  logger.info('connectionStatus:', connectionStatus);
+  logger.info('chatId:', chatId);
+  logger.info('documentUrl:', documentUrl);
+  logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
+
+  if (client.pupPage) {
+    logger.info('Page closed:', client.pupPage.isClosed());
+  }
+
+  await ensurePageReady();
+
+  const state = await client.getState().catch(() => null);
+  logger.info('State:', state);
+
+  if (state !== 'CONNECTED') {
+    logger.error(`[WhatsApp Diagnostics] Cannot send document: Client state is "${state}", expected "CONNECTED".`);
+    throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
+  }
+
+  logger.info(`Resolving media from URL: ${documentUrl}...`);
+  const media = await getMediaFromUrl(documentUrl, filename);
+
+  const start = Date.now();
   try {
-    logger.info(`Checking WhatsApp registration for: ${normalizedPhone}...`);
-    const numberId = await client.getNumberId(normalizedPhone);
+    logger.info(`Sending document [${filename}] to ${chatId}...`);
+    const result = await client.sendMessage(chatId, media, { caption });
+    logger.info('Message sent successfully');
+    logger.info('Duration:', Date.now() - start, 'ms');
+    logger.info(result);
 
-    if (!numberId) {
-      logger.warn(`Number ${normalizedPhone} is not registered on WhatsApp.`);
-      const error = new Error('This phone number is not registered on WhatsApp.');
-      error.statusCode = 400;
-      throw error;
-    }
-
-    const resolvedJid = numberId._serialized;
-
-    // 2. Before every sendMessage(), log state and ready status
-    try {
-      logger.info(await client.getState());
-    } catch (stateErr) {
-      logger.error('Failed to get client state before sendDocument:', stateErr);
-    }
-    logger.info(client.ready);
-
-    logger.info(`Resolving media from URL: ${documentUrl}...`);
-    const media = await getMediaFromUrl(documentUrl, filename);
-
-    // 3. Wait 3 seconds before calling sendMessage()
-    logger.info('Waiting 3 seconds before sendMessage(media)...');
-    await sleep(3000);
-
-    // 5. Log the output of client.getState() immediately before sendMessage()
-    try {
-      const stateBeforeSend = await client.getState();
-      logger.info('State immediately before sendMessage(media):', stateBeforeSend);
-    } catch (stateErr) {
-      logger.error('State check immediately before sendMessage(media) error:', stateErr);
-    }
-
-    logger.info(`Sending document [${filename}] to ${resolvedJid}...`);
-
-    // 4. Wrap sendMessage() with timing logs
-    const start = Date.now();
-    let response;
-    try {
-      response = await client.sendMessage(resolvedJid, media, { caption });
-      logger.info('sendMessage success in', Date.now() - start, 'ms');
-    } catch (err) {
-      logger.error('sendMessage failed after', Date.now() - start, 'ms');
-      logger.error(err);
-      throw err;
-    }
-
-    const messageId = response?.id?.id || `doc-${Date.now()}`;
-    logger.info(`Document sent successfully. ID: ${messageId}`);
+    const messageId = result?.id?.id || `doc-${Date.now()}`;
     return { success: true, messageId };
-  } catch (error) {
-    logger.error(`Failed to send document [${filename}] to ${phone}`, {
-      message: error.message,
-      stack: error.stack,
-    });
-    throw error;
+  } catch (err) {
+    logger.error('sendMessage failed');
+    logger.error('Duration:', Date.now() - start, 'ms');
+    logger.error(err);
+    logger.error(err.stack);
+
+    const errorScreenshotPath = path.join(__dirname, '../after-send-doc-error.png');
+    if (client.pupPage && !client.pupPage.isClosed()) {
+      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => {});
+    }
+
+    throw err;
   }
 }
 
