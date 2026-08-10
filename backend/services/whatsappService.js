@@ -231,23 +231,115 @@ function setupClient(customExecutablePath = null) {
 
   client.ready = false;
 
+  let loadingCheckTimeout = null;
+
+  async function handleClientReady() {
+    if (isReady && client?.ready) return;
+
+    logger.info('[WA] READY - Transitioning connection status to CONNECTED');
+    isReady = true;
+    if (client) client.ready = true;
+    connectionStatus = 'CONNECTED';
+    latestQrRaw = null;
+    latestQrDataUrl = null;
+    lastConnectedTime = new Date().toISOString();
+    lastError = null;
+
+    try {
+      clientInfo = {
+        pushname: client?.info?.pushname || 'Bhagwat Library Admin',
+        wid: client?.info?.wid?.user || '',
+        platform: client?.info?.platform || 'web',
+      };
+      logger.info('[WhatsApp Diagnostics] Connected Account Info:', clientInfo);
+    } catch (_) {
+      clientInfo = { pushname: 'Bhagwat Library Admin' };
+    }
+
+    whatsappEvents.emit('status_change', getStatus());
+  }
+
   // --- Detailed Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
-    logger.info(`Loading ${percent}% : ${message}`);
-    logger.info(`[WhatsApp Diagnostics] LOADING ${percent}% - ${message}`);
+    logger.info(`[WA] LOADING ${percent}% - ${message}`);
+
+    // If loading reaches 100%, wait 10 seconds and check state
+    if (Number(percent) === 100) {
+      logger.info('[WA] Loading reached 100%. Scheduling 10-second state check fallback...');
+      if (loadingCheckTimeout) clearTimeout(loadingCheckTimeout);
+      loadingCheckTimeout = setTimeout(async () => {
+        try {
+          if (!client) return;
+          const state = await client.getState();
+          logger.info('CLIENT STATE:', state);
+
+          if (state === 'CONNECTED' && (!isReady || !client.ready)) {
+            logger.info('[WA] State is CONNECTED but ready event did not fire. Manually invoking ready handler...');
+            await handleClientReady();
+          }
+        } catch (err) {
+          logger.error('[WA] Error during 100% loading state check:', err);
+        }
+      }, 10000);
+    }
+  });
+
+  client.on('authenticated', () => {
+    logger.info('[WA] AUTHENTICATED');
+    connectionStatus = 'AUTHENTICATED';
+    latestQrRaw = null;
+    latestQrDataUrl = null;
+    lastError = null;
+    whatsappEvents.emit('status_change', getStatus());
+  });
+
+  client.on('auth_failure', (msg) => {
+    logger.error('[WA] AUTH FAILURE', msg);
+    isReady = false;
+    client.ready = false;
+    connectionStatus = 'DISCONNECTED';
+    latestQrRaw = null;
+    latestQrDataUrl = null;
+    lastError = {
+      message: `Authentication failed: ${msg}`,
+      timestamp: new Date().toISOString(),
+    };
+    whatsappEvents.emit('status_change', getStatus());
+  });
+
+  client.on('ready', async () => {
+    logger.info('[WA] READY');
+
+    try {
+      logger.info(await client.getState());
+    } catch (e) {
+      logger.error(e);
+    }
+
+    await handleClientReady();
   });
 
   client.on('change_state', (state) => {
-    logger.info(`===== STATE ===== ${state}`);
-    logger.info(`[WhatsApp Diagnostics] STATE CHANGED: ${state}`);
+    logger.info('[WA] STATE:', state);
+  });
+
+  client.on('disconnected', (reason) => {
+    logger.warn('[WA] DISCONNECTED:', reason);
+    isReady = false;
+    client.ready = false;
+    connectionStatus = 'DISCONNECTED';
+    latestQrRaw = null;
+    latestQrDataUrl = null;
+    whatsappEvents.emit('status_change', getStatus());
+    destroyClient().catch(() => { });
   });
 
   client.on('remote_session_saved', () => {
-    logger.info('[WhatsApp Diagnostics] ===== REMOTE SESSION SAVED =====');
+    logger.info('[WA] REMOTE SESSION SAVED');
   });
 
-  client.on('message', (msg) => {
-    logger.info(`[WhatsApp Diagnostics] Message received from ${msg.from}: ${msg.body ? msg.body.substring(0, 30) : ''}`);
+  client.on('message', () => {
+    logger.info('[WA] MESSAGE EVENT');
   });
 
   // Event: QR Code Received
@@ -284,77 +376,6 @@ function setupClient(customExecutablePath = null) {
 
     whatsappEvents.emit('qr', { qrRaw: latestQrRaw, qrDataUrl: latestQrDataUrl });
     whatsappEvents.emit('status_change', getStatus());
-  });
-
-  // Event: Authenticated
-  client.on('authenticated', () => {
-    logger.info('===== AUTHENTICATED =====');
-    logger.info('[WhatsApp Diagnostics] Authenticated! WhatsApp Web session established.');
-    connectionStatus = 'AUTHENTICATED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    lastError = null;
-    whatsappEvents.emit('status_change', getStatus());
-  });
-
-  // Event: Ready
-  client.on('ready', () => {
-    logger.info('===== READY =====');
-    logger.info('[WhatsApp Diagnostics] Ready! WhatsApp Web client is ready and connected!');
-    logger.info('[WhatsApp Diagnostics] client.info:', client.info);
-    logger.info('[WhatsApp Diagnostics] client.pupBrowser:', Boolean(client.pupBrowser));
-    logger.info('[WhatsApp Diagnostics] client.pupPage:', Boolean(client.pupPage));
-    isReady = true;
-    client.ready = true;
-    connectionStatus = 'CONNECTED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    lastConnectedTime = new Date().toISOString();
-    lastError = null;
-
-    try {
-      clientInfo = {
-        pushname: client.info?.pushname || 'Bhagwat Library Admin',
-        wid: client.info?.wid?.user || '',
-        platform: client.info?.platform || 'web',
-      };
-      logger.info('[WhatsApp Diagnostics] Connected Account Info:', clientInfo);
-    } catch (_) {
-      clientInfo = { pushname: 'Bhagwat Library Admin' };
-    }
-
-    whatsappEvents.emit('status_change', getStatus());
-  });
-
-  // Event: Auth Failure
-  client.on('auth_failure', (msg) => {
-    logger.error('===== AUTH FAILURE =====');
-    logger.error(msg);
-    logger.error('[WhatsApp Diagnostics] Authentication failed', { message: msg });
-    isReady = false;
-    client.ready = false;
-    connectionStatus = 'DISCONNECTED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    lastError = {
-      message: `Authentication failed: ${msg}`,
-      timestamp: new Date().toISOString(),
-    };
-    whatsappEvents.emit('status_change', getStatus());
-  });
-
-  // Event: Disconnected
-  client.on('disconnected', (reason) => {
-    logger.error('===== DISCONNECTED =====');
-    logger.error(reason);
-    logger.error(`[WhatsApp Diagnostics] DISCONNECTED: ${reason}`);
-    isReady = false;
-    client.ready = false;
-    connectionStatus = 'DISCONNECTED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    whatsappEvents.emit('status_change', getStatus());
-    destroyClient().catch(() => { });
   });
 }
 
@@ -414,13 +435,19 @@ async function startClient() {
     if (client.pupPage) {
       logger.info('[WhatsApp Diagnostics] client.pupPage attached successfully.');
       client.pupPage.on('console', (msg) => {
-        logger.info(`[Browser] ${msg.text()}`);
+        logger.info('[Browser]', msg.text());
       });
       client.pupPage.on('pageerror', (err) => {
-        logger.error('[Browser PageError]', err);
+        logger.error('[Browser Page Error]', err);
       });
       client.pupPage.on('error', (err) => {
         logger.error('[Browser Error]', err);
+      });
+      client.pupPage.on('requestfailed', (req) => {
+        logger.warn('[Browser Request Failed]', {
+          url: req.url(),
+          error: req.failure()?.errorText,
+        });
       });
     }
   } catch (err) {
