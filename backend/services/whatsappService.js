@@ -91,16 +91,16 @@ function setupClient() {
   });
 
   const executablePath = puppeteer.executablePath();
-  const fs = require("fs");
+ logger.info("Puppeteer version:", require("puppeteer/package.json").version);
 
-  logger.info(`Executable Path: ${executablePath}`);
-  logger.info(`Exists: ${fs.existsSync(executablePath)}`);
+logger.info("Executable:", puppeteer.executablePath());
 
-  if (fs.existsSync(executablePath)) {
-    logger.info(`Size: ${fs.statSync(executablePath).size}`);
-  }
+const fs = require("fs");
 
-  logger.info('[WhatsApp Diagnostics] Chrome Executable:', executablePath);
+logger.info(
+  "Exists:",
+  fs.existsSync(puppeteer.executablePath())
+);
 
   client = new Client({
     authStrategy: new NoAuth(),
