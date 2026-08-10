@@ -187,7 +187,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--no-zygote',
-    '--single-process',
     '--disable-gpu',
     '--disable-software-rasterizer',
     '--disable-extensions',
@@ -250,8 +249,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.ready = false;
 
-  let loadingCheckTimeout = null;
-
   async function handleClientReady() {
     if (isReady && client?.ready) return;
 
@@ -282,26 +279,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   // --- Detailed Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
     logger.info(`[WA] LOADING ${percent}% - ${message}`);
-
-    // If loading reaches 100%, wait 10 seconds and check state
-    if (Number(percent) === 100) {
-      logger.info('[WA] Loading reached 100%. Scheduling 10-second state check fallback...');
-      if (loadingCheckTimeout) clearTimeout(loadingCheckTimeout);
-      loadingCheckTimeout = setTimeout(async () => {
-        try {
-          if (!client) return;
-          const state = await client.getState();
-          logger.info('CLIENT STATE:', state);
-
-          if (state === 'CONNECTED' && (!isReady || !client.ready)) {
-            logger.info('[WA] State is CONNECTED but ready event did not fire. Manually invoking ready handler...');
-            await handleClientReady();
-          }
-        } catch (err) {
-          logger.error('[WA] Error during 100% loading state check:', err);
-        }
-      }, 10000);
-    }
   });
 
   client.on('authenticated', async () => {
@@ -665,28 +642,34 @@ async function getMediaFromUrl(url, filename) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Ensures the WhatsApp page and injected scripts (WWebJS/Store) are fully initialized before interacting
+ * Verifies that the WhatsApp client, browser, and page are healthy and open.
+ * If the page was closed or crashed, re-initializes client automatically.
  */
-async function ensurePageReady() {
-  if (!client || !client.pupPage) {
-    throw new Error('Puppeteer page is not available.');
+async function verifyClientHealth() {
+  if (!client || !isReady || !client.ready) {
+    logger.warn('[WhatsApp Health] Client not ready. Triggering startClient()...');
+    await startClient();
   }
 
-  if (client.pupPage.isClosed()) {
-    throw new Error('Puppeteer page has crashed or closed.');
+  const browserConnected = Boolean(client?.pupBrowser?.isConnected());
+  const pageClosed = client?.pupPage ? client.pupPage.isClosed() : true;
+
+  logger.info('[WhatsApp Health Check]:', {
+    browserConnected,
+    pageClosed,
+    isReady: Boolean(isReady && client?.ready),
+  });
+
+  if (!browserConnected || pageClosed) {
+    logger.warn('[WhatsApp Health] Page is closed or browser is disconnected. Recreating client from remote session...');
+    isReady = false;
+    if (client) client.ready = false;
+    connectionStatus = 'DISCONNECTED';
+    await startClient();
   }
 
-  // Check if window.WWebJS is injected; if not, inject LoadUtils to prevent Runtime.callFunctionOn timeouts
-  try {
-    const isWWebJSDefined = await client.pupPage.evaluate(() => typeof window.WWebJS !== 'undefined').catch(() => false);
-    if (!isWWebJSDefined) {
-      logger.info('[WhatsApp Diagnostics] Injecting missing WWebJS helper scripts into page...');
-      const { LoadUtils } = require('whatsapp-web.js/src/util/Injected/Utils');
-      await client.pupPage.evaluate(LoadUtils);
-      logger.info('[WhatsApp Diagnostics] WWebJS helper scripts injected successfully.');
-    }
-  } catch (err) {
-    logger.warn('[WhatsApp Diagnostics] Warning checking/injecting WWebJS:', { message: err.message });
+  if (!client || !client.pupPage || client.pupPage.isClosed()) {
+    throw new Error('WhatsApp browser page is closed or unavailable. Please retry shortly.');
   }
 }
 
@@ -694,9 +677,7 @@ async function ensurePageReady() {
  * Sends text message to single recipient
  */
 async function sendTextMessage(phone, message) {
-  if (!isReady || !client || !client.ready) {
-    throw new Error('WhatsApp client is not connected. Please scan the QR code first in Settings → WhatsApp Gateway.');
-  }
+  await verifyClientHealth();
 
   // 1. Log original and sanitized numbers
   const normalizedPhone = normalizePhoneNumber(phone);
@@ -720,19 +701,16 @@ async function sendTextMessage(phone, message) {
     throw new Error('Message content cannot be empty.');
   }
 
-  logger.info('client.ready:', client.ready);
-  const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.info('await client.getState():', stateBeforeCheck);
-  logger.info('connectionStatus:', connectionStatus);
-  logger.info('message length:', message.length);
-  logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
-
-  if (client.pupPage) {
-    logger.info('Page closed:', client.pupPage.isClosed());
-  }
-
-  // Verify page readiness & ensure WWebJS helper scripts are loaded
-  await ensurePageReady();
+  // Pre-send diagnostic logging
+  const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
+  logger.info('[WhatsApp Pre-Send Diagnostics]:', {
+    state: currentState,
+    'client.ready': client.ready,
+    'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
+    'client.pupPage.isClosed': Boolean(client.pupPage?.isClosed()),
+    chatId: rawChatId,
+    messageLength: message.length,
+  });
 
   // 3 & 4. Resolve recipient number via getNumberId before sending
   logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
@@ -799,9 +777,7 @@ async function sendTextMessage(phone, message) {
  * Sends PDF or image document
  */
 async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', caption = '') {
-  if (!isReady || !client || !client.ready) {
-    throw new Error('WhatsApp client is not connected. Please scan the QR code first in Settings → WhatsApp Gateway.');
-  }
+  await verifyClientHealth();
 
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
@@ -824,17 +800,14 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     throw new Error('Document URL is required.');
   }
 
-  logger.info('client.ready:', client.ready);
-  const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.info('await client.getState():', stateBeforeCheck);
-  logger.info('connectionStatus:', connectionStatus);
-  logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
-
-  if (client.pupPage) {
-    logger.info('Page closed:', client.pupPage.isClosed());
-  }
-
-  await ensurePageReady();
+  const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
+  logger.info('[WhatsApp Pre-Send Document Diagnostics]:', {
+    state: currentState,
+    'client.ready': client.ready,
+    'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
+    'client.pupPage.isClosed': Boolean(client.pupPage?.isClosed()),
+    chatId: rawChatId,
+  });
 
   // 3 & 4. Resolve recipient number via getNumberId before sending
   logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
