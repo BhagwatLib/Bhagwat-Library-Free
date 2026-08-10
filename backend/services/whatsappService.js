@@ -389,10 +389,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
     } else if (pct > 0) {
       isAuthenticating = true;
-      const calculatedProgress = Math.round(35 + (pct * 0.39));
-      emitProgress(calculatedProgress, 'loading_whatsapp', `Loading WhatsApp ${pct}% - ${message || 'Syncing'}`);
+      emitProgress(50, 'loading_whatsapp', `WhatsApp loading ${pct}%...`);
     } else {
-      emitProgress(10, 'qr_scanned', 'QR scanned by phone. Loading...');
+      emitProgress(50, 'loading_whatsapp', 'WhatsApp loading...');
     }
   });
 
@@ -401,7 +400,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     isAuthenticating = true;
     logger.info(`[WA Event] [${timestamp}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
     logger.info(`[RemoteAuth] [${timestamp}] Session restored & authenticated`);
-    emitProgress(85, 'authenticated', 'Authentication complete');
+    emitProgress(85, 'authenticated', 'Authenticated');
 
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
@@ -462,7 +461,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     const timestamp = new Date().toISOString();
     logger.info(`[WA Event] [${timestamp}] CHANGE_STATE:`, state);
     if (state === 'CONNECTED' && currentProgress.progress < 95) {
-      emitProgress(95, 'client_state_connected', 'Client state CONNECTED');
+      emitProgress(95, 'session_backup', 'Session backup syncing to MongoDB');
     }
   });
 
@@ -482,9 +481,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   client.on('remote_session_saved', async () => {
     const timestamp = new Date().toISOString();
     logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_SAVED`);
-    if (currentProgress.progress < 90) {
-      emitProgress(90, 'remote_auth_connected', 'RemoteAuth session synced');
-    }
+    emitProgress(95, 'session_backup', 'Session backup synced to MongoDB');
 
     try {
       const details = await sessionStore.inspectSessionDetails();
@@ -506,8 +503,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   client.on('qr', async (qr) => {
     const timestamp = new Date().toISOString();
 
-    // 1. Guard against duplicate QR events during active authentication
-    if (isReady || connectionStatus === 'AUTHENTICATED' || connectionStatus === 'CONNECTED' || isAuthenticating) {
+    // 1. Guard against duplicate QR events during active authentication or loading
+    if (isReady || connectionStatus === 'AUTHENTICATED' || connectionStatus === 'CONNECTED' || isAuthenticating || currentProgress.progress > 70) {
       logger.info(`[WA Event] [${timestamp}] QR received while authenticating/connected. Suppressing redundant QR event.`);
       return;
     }
@@ -541,7 +538,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     isReady = false;
     if (client) client.ready = false;
     lastError = null;
-    emitProgress(0, 'qr_generated', 'QR code generated. Scan with phone.');
+    emitProgress(70, 'qr_generated', 'QR code generated. Scan with phone.');
 
     console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
     qrcodeTerminal.generate(qr, { small: true });
@@ -589,7 +586,7 @@ async function startClient() {
     };
     connectionStatus = 'CONNECTING';
     lastError = null;
-    emitProgress(20, 'browser_launching', 'Browser launching...');
+    emitProgress(10, 'mongo_connected', 'MongoDB connected');
     startStateMonitor();
 
     try {
@@ -609,6 +606,7 @@ async function startClient() {
       if (!mongoStore) {
         throw new Error('[RemoteAuth] MongoDB connection could not be established. Startup aborted.');
       }
+      emitProgress(10, 'mongo_connected', 'MongoDB connected');
 
       const sessionClientId = sessionStore.getSessionName();
       logger.info(`[RemoteAuth] Active clientId: "${sessionClientId}" (Session Name: "RemoteAuth-${sessionClientId}")`);
@@ -623,6 +621,7 @@ async function startClient() {
       }
 
       // Resolve browser executable
+      emitProgress(20, 'browser_launching', 'Browser launching...');
       const resolvedExecutablePath = await ensureBrowserAvailable();
 
       // Configure client with resolved browser and MongoStore
