@@ -196,6 +196,7 @@ function setupClient(customExecutablePath = null) {
     headless: 'new',
     dumpio: true,
     ignoreHTTPSErrors: true,
+    protocolTimeout: 300000,
     args: [
       ...puppeteerArgs,
       '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -215,6 +216,7 @@ function setupClient(customExecutablePath = null) {
     headless: 'new',
     dumpio: true,
     ignoreHTTPSErrors: true,
+    protocolTimeout: 300000,
     executablePath: puppeteerOptions.executablePath || 'DEFAULT_RESOLUTION',
     puppeteerArgs: puppeteerOptions.args,
   });
@@ -572,6 +574,8 @@ async function getMediaFromUrl(url, filename) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Sends text message to single recipient
  */
@@ -600,8 +604,40 @@ async function sendTextMessage(phone, message) {
     }
 
     const resolvedJid = numberId._serialized;
+
+    // 2. Before every sendMessage(), log state and ready status
+    try {
+      logger.info(await client.getState());
+    } catch (stateErr) {
+      logger.error('Failed to get client state before send:', stateErr);
+    }
+    logger.info(client.ready);
+
+    // 3. Wait 3 seconds before calling sendMessage()
+    logger.info('Waiting 3 seconds before sendMessage()...');
+    await sleep(3000);
+
+    // 5. Log the output of client.getState() immediately before sendMessage()
+    try {
+      const stateBeforeSend = await client.getState();
+      logger.info('State immediately before sendMessage:', stateBeforeSend);
+    } catch (stateErr) {
+      logger.error('State check immediately before sendMessage error:', stateErr);
+    }
+
     logger.info(`Sending message to ${resolvedJid}...`);
-    const response = await client.sendMessage(resolvedJid, message);
+
+    // 4. Wrap sendMessage() with timing logs
+    const start = Date.now();
+    let response;
+    try {
+      response = await client.sendMessage(resolvedJid, message);
+      logger.info('sendMessage success in', Date.now() - start, 'ms');
+    } catch (err) {
+      logger.error('sendMessage failed after', Date.now() - start, 'ms');
+      logger.error(err);
+      throw err;
+    }
 
     const messageId = response?.id?.id || `msg-${Date.now()}`;
     logger.info(`Message sent successfully. ID: ${messageId}`);
@@ -643,11 +679,43 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     }
 
     const resolvedJid = numberId._serialized;
+
+    // 2. Before every sendMessage(), log state and ready status
+    try {
+      logger.info(await client.getState());
+    } catch (stateErr) {
+      logger.error('Failed to get client state before sendDocument:', stateErr);
+    }
+    logger.info(client.ready);
+
     logger.info(`Resolving media from URL: ${documentUrl}...`);
     const media = await getMediaFromUrl(documentUrl, filename);
 
+    // 3. Wait 3 seconds before calling sendMessage()
+    logger.info('Waiting 3 seconds before sendMessage(media)...');
+    await sleep(3000);
+
+    // 5. Log the output of client.getState() immediately before sendMessage()
+    try {
+      const stateBeforeSend = await client.getState();
+      logger.info('State immediately before sendMessage(media):', stateBeforeSend);
+    } catch (stateErr) {
+      logger.error('State check immediately before sendMessage(media) error:', stateErr);
+    }
+
     logger.info(`Sending document [${filename}] to ${resolvedJid}...`);
-    const response = await client.sendMessage(resolvedJid, media, { caption });
+
+    // 4. Wrap sendMessage() with timing logs
+    const start = Date.now();
+    let response;
+    try {
+      response = await client.sendMessage(resolvedJid, media, { caption });
+      logger.info('sendMessage success in', Date.now() - start, 'ms');
+    } catch (err) {
+      logger.error('sendMessage failed after', Date.now() - start, 'ms');
+      logger.error(err);
+      throw err;
+    }
 
     const messageId = response?.id?.id || `doc-${Date.now()}`;
     logger.info(`Document sent successfully. ID: ${messageId}`);
@@ -670,8 +738,6 @@ async function sendReminderTemplate(phone, studentName, dueAmount, dueDate) {
   const msg = `Dear ${studentName},\n\nThis is a payment reminder from Bhagwat Library. You have a pending fee of INR ${formattedAmount} which is due on ${dueDate}.\n\nPlease clear the dues to ensure uninterrupted library access.\n\nThank you!`;
   return sendTextMessage(phone, msg);
 }
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function sendBulkMessages(phones, message, delayMs = 1000) {
   if (!Array.isArray(phones) || phones.length === 0) {
