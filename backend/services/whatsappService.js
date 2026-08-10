@@ -327,26 +327,14 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     lastError = null;
     whatsappEvents.emit('status_change', getStatus());
 
-    // Trigger proactive session backup to MongoDB after authentication
+    // Proactively backup session to MongoDB shortly after authentication
     setTimeout(async () => {
-      try {
-        if (client?.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
-          logger.info('[RemoteAuth] Initiating proactive session backup to MongoDB...');
-          await client.authStrategy.storeRemoteSession({ emit: true });
-          const details = await sessionStore.inspectSessionDetails();
-          if (details && details.filesCount > 0) {
-            logger.info(`[RemoteAuth] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file record, ${details.chunksCount} chunks).`);
-          } else {
-            logger.warn('[RemoteAuth] No session found in MongoDB after initial backup attempt.');
-          }
-        }
-      } catch (saveErr) {
-        logger.error('[RemoteAuth] Session upload failed with exception:', {
-          message: saveErr.message,
-          stack: saveErr.stack,
-        });
-      }
-    }, 15000);
+      await forceSaveRemoteSession('post_authenticated_5s');
+    }, 5000);
+
+    setTimeout(async () => {
+      await forceSaveRemoteSession('post_authenticated_20s');
+    }, 20000);
   });
 
   client.on('auth_failure', async (msg) => {
@@ -379,6 +367,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     }
 
     await handleClientReady();
+
+    // Trigger backup once client is fully ready and stable
+    setTimeout(async () => {
+      await forceSaveRemoteSession('post_ready_5s');
+    }, 5000);
   });
 
   client.on('change_state', (state) => {
@@ -976,23 +969,53 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
 }
 
 /**
+ * Explicitly triggers RemoteAuth session compression and upload to MongoDB
+ */
+async function forceSaveRemoteSession(trigger = 'manual') {
+  if (!client || !client.authStrategy || typeof client.authStrategy.storeRemoteSession !== 'function') {
+    logger.debug(`[RemoteAuth] Cannot execute forceSaveRemoteSession (${trigger}): RemoteAuth strategy is not active.`);
+    return false;
+  }
+
+  logger.info(`[RemoteAuth] Triggering forceSaveRemoteSession (trigger: "${trigger}")...`);
+  try {
+    await client.authStrategy.storeRemoteSession({ emit: true });
+    const details = await sessionStore.inspectSessionDetails();
+    if (details && details.filesCount > 0) {
+      logger.info(`[RemoteAuth] Verification confirmed: Session document exists in MongoDB!`, {
+        trigger,
+        database: details.databaseName,
+        collection: `${details.bucketName}.files`,
+        filesCount: details.filesCount,
+        latestFileId: details.files[0]?.id,
+        uploadDate: details.files[0]?.uploadDate,
+      });
+      return true;
+    } else {
+      logger.warn(`[RemoteAuth] Notice: Session store inspected after "${trigger}" but 0 files found.`);
+      return false;
+    }
+  } catch (err) {
+    logger.error(`[RemoteAuth] Session backup failed during trigger "${trigger}":`, {
+      message: err.message,
+      stack: err.stack,
+    });
+    return false;
+  }
+}
+
+/**
  * Saves current session before graceful server shutdown
  */
 async function persistSessionBeforeExit() {
-  if (client && isReady && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
-    logger.info('[RemoteAuth] Flushing and saving WhatsApp session to MongoDB before shutdown...');
-    try {
-      await client.authStrategy.storeRemoteSession();
-      logger.info('[RemoteAuth] Session flushed to MongoDB successfully.');
-    } catch (err) {
-      logger.warn('[RemoteAuth] Error saving session during shutdown:', err.message);
-    }
-  }
+  logger.info('[RemoteAuth] Flushing and saving WhatsApp session to MongoDB before shutdown...');
+  await forceSaveRemoteSession('graceful_shutdown');
 }
 
 module.exports = {
   startClient,
   destroyClient,
+  forceSaveRemoteSession,
   persistSessionBeforeExit,
   getQr,
   getStatus,
