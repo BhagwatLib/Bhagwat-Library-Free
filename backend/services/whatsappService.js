@@ -4,11 +4,11 @@
  * Architecture:
  * - Idle / DISCONNECTED on server startup (0 Puppeteer memory overhead).
  * - Starts ONLY when requested via /start or /qr.
- * - Single active browser instance enforced.
+ * - Single active browser instance enforced via Promise-based singleton lock.
  * - Uses Puppeteer bundled Chromium automatically (headless: "new").
- * - Temporary QR session (NoAuth) — fully ephemeral, zero file locks.
- * - Full cleanup on logout / destroy (frees browser & memory).
- * - Complete diagnostics & stack trace logging for Render deployment troubleshooting.
+ * - Native WhatsApp Web loading (zero outdated remote cache delays).
+ * - Multi-stage RemoteAuth persistence backed by MongoDB GridFS.
+ * - Strict QR lifecycle management: prevents duplicate QR generation during auth.
  */
 
 'use strict';
@@ -29,6 +29,7 @@ try {
 } catch (e) {
   logger.warn('[WhatsApp Diagnostics] @puppeteer/browsers could not be loaded directly:', { message: e.message });
 }
+
 // Event emitter for broadcasting real-time WhatsApp lifecycle events
 class WhatsAppEventEmitter extends EventEmitter { }
 const whatsappEvents = new WhatsAppEventEmitter();
@@ -36,12 +37,13 @@ const whatsappEvents = new WhatsAppEventEmitter();
 // Singleton State
 let client = null;
 let isReady = false;
+let isAuthenticating = false;
 let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'AUTHENTICATED' | 'CONNECTED'
 let latestQrRaw = null;
 let latestQrDataUrl = null;
 let lastConnectedTime = null;
 let clientInfo = null;
-let isInitializing = false;
+let activeInitPromise = null;
 let lastError = null;
 
 let currentProgress = {
@@ -277,8 +279,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     puppeteer: puppeteerOptions,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     webVersionCache: {
-      type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944813-alpha.html',
+      type: 'none', // Native loading avoids outdated remote HTML timeouts and chunk failures
     },
   });
 
@@ -290,6 +291,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.info('[RemoteAuth] Connected');
     logger.info('[WA] READY - Transitioning connection status to CONNECTED');
     isReady = true;
+    isAuthenticating = false;
     if (client) client.ready = true;
     connectionStatus = 'CONNECTED';
     latestQrRaw = null;
@@ -322,6 +324,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     if (pct === 100) {
       emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
     } else if (pct > 0) {
+      isAuthenticating = true;
       const calculatedProgress = Math.round(35 + (pct * 0.39));
       emitProgress(calculatedProgress, 'loading_whatsapp', `Loading WhatsApp ${pct}% - ${message || 'Syncing'}`);
     } else {
@@ -330,6 +333,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('authenticated', async () => {
+    isAuthenticating = true;
     logger.info('[RemoteAuth] authenticated');
     logger.info('[RemoteAuth] Session restored');
     logger.info('[WA] AUTHENTICATED');
@@ -356,6 +360,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
 
     isReady = false;
+    isAuthenticating = false;
     if (client) client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
@@ -402,6 +407,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.warn('[WA] DISCONNECTED:', reason);
     emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
     isReady = false;
+    isAuthenticating = false;
     if (client) client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
@@ -436,6 +442,17 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   // Event: QR Code Received
   client.on('qr', async (qr) => {
+    // 1. Guard against duplicate QR events during active authentication
+    if (isReady || connectionStatus === 'AUTHENTICATED' || connectionStatus === 'CONNECTED' || isAuthenticating) {
+      logger.info('[WhatsApp Diagnostics] QR received while authenticating/connected. Suppressing redundant QR event.');
+      return;
+    }
+
+    // 2. Ignore identical duplicate QR string if already generated
+    if (latestQrRaw === qr && latestQrDataUrl) {
+      return;
+    }
+
     startupTimers.qrGenerated = Date.now();
     logger.info(`[Startup Metrics] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
     logger.info('[WhatsApp Diagnostics] ===== QR CODE RECEIVED =====');
@@ -449,7 +466,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
           light: '#ffffff',
         },
       });
-      logger.info('[WhatsApp Diagnostics] QR Data URL generated successfully.');
     } catch (err) {
       logger.error('[WhatsApp Diagnostics] Error generating QR Data URL', {
         message: err.message,
@@ -473,137 +489,128 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 }
 
 /**
- * Starts WhatsApp client on-demand (ensures only 1 active instance)
+ * Starts WhatsApp client on-demand (idempotent, single active instance with promise lock)
  */
 async function startClient() {
+  // 1. Return immediately if already fully connected and ready
   if (isReady && client && client.ready) {
     logger.info('[RemoteAuth] Client already connected and ready. Returning existing session.');
     emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
     return getStatus();
   }
 
+  // 2. Return active in-flight initialization promise to prevent double-initialization
+  if (activeInitPromise) {
+    logger.info('[RemoteAuth] Client initialization already in flight. Awaiting existing promise...');
+    return activeInitPromise;
+  }
+
+  // 3. Return existing browser if already connected and running
   if (client && client.pupBrowser && client.pupBrowser.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
     logger.info('[RemoteAuth] Browser already running and connected. Returning existing instance.');
     return getStatus();
   }
 
-  if (isInitializing) {
-    logger.info('[RemoteAuth] Client initialization already in progress. Awaiting completion...');
-    return getStatus();
-  }
+  // 4. Create and lock initialization promise
+  activeInitPromise = (async () => {
+    startupTimers = {
+      start: Date.now(),
+      browserLaunched: 0,
+      waPageLoaded: 0,
+      qrGenerated: 0,
+      ready: 0,
+    };
+    connectionStatus = 'CONNECTING';
+    lastError = null;
+    emitProgress(20, 'browser_launching', 'Browser launching...');
 
-  isInitializing = true;
-  startupTimers = {
-    start: Date.now(),
-    browserLaunched: 0,
-    waPageLoaded: 0,
-    qrGenerated: 0,
-    ready: 0,
-  };
-  connectionStatus = 'CONNECTING';
-  lastError = null;
-  emitProgress(20, 'browser_launching', 'Browser launching...');
+    try {
+      if (client) {
+        logger.info('[WhatsApp Diagnostics] Cleaning up previous client before startup...');
+        try {
+          await client.destroy();
+        } catch (err) {
+          logger.debug('[WhatsApp Diagnostics] Cleanup notice:', { message: err.message });
+        }
+        client = null;
+      }
 
-  try {
-    if (client) {
-      logger.info('[WhatsApp Diagnostics] Destroying previous client instance before new launch...');
-      try {
-        await client.destroy();
-      } catch (err) {
-        logger.debug('[WhatsApp Diagnostics] Previous client cleanup notice:', {
-          message: err.message,
+      // Connect MongoDB and create MongoStore
+      logger.info('[RemoteAuth] Initializing MongoDB connection for WhatsApp session store...');
+      const mongoStore = await sessionStore.connectAndGetStore();
+      if (!mongoStore) {
+        throw new Error('[RemoteAuth] MongoDB connection could not be established. Startup aborted.');
+      }
+
+      const sessionClientId = sessionStore.getSessionName();
+      logger.info(`[RemoteAuth] Active clientId: "${sessionClientId}" (Session Name: "RemoteAuth-${sessionClientId}")`);
+
+      // Check if existing session is present in MongoDB
+      const hasExistingSession = await sessionStore.sessionExists();
+      if (hasExistingSession) {
+        logger.info(`[RemoteAuth] Session found in MongoDB for "${sessionClientId}". Restoring session without QR...`);
+        emitProgress(25, 'restoring_session', 'Restoring session from MongoDB...');
+      } else {
+        logger.info(`[RemoteAuth] No session found in MongoDB for "${sessionClientId}". QR generation will be required.`);
+      }
+
+      // Resolve browser executable
+      const resolvedExecutablePath = await ensureBrowserAvailable();
+
+      // Configure client with resolved browser and MongoStore
+      setupClient(resolvedExecutablePath, mongoStore);
+      logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
+
+      await client.initialize();
+      logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
+
+      if (client.pupBrowser) {
+        startupTimers.browserLaunched = Date.now();
+        logger.info(`[Startup Metrics] ⏱️ Browser Launch Time: ${startupTimers.browserLaunched - startupTimers.start}ms (${((startupTimers.browserLaunched - startupTimers.start) / 1000).toFixed(1)}s)`);
+        emitProgress(35, 'browser_connected', 'Browser connected');
+        client.pupBrowser.on('disconnected', () => {
+          logger.warn('[WhatsApp Diagnostics] Browser disconnected');
+          emitProgress(0, 'browser_disconnected', 'Browser disconnected');
         });
       }
-      client = null;
-    }
 
-    // 1. Connect MongoDB and create MongoStore (fails fast if MongoDB connection fails)
-    logger.info('[RemoteAuth] Initializing MongoDB connection for WhatsApp session store...');
-    const mongoStore = await sessionStore.connectAndGetStore();
-    if (!mongoStore) {
-      throw new Error('[RemoteAuth] MongoDB connection could not be established. Startup aborted.');
-    }
-
-    const sessionClientId = sessionStore.getSessionName();
-    logger.info(`[RemoteAuth] Active clientId: "${sessionClientId}" (Session Name: "RemoteAuth-${sessionClientId}")`);
-
-    // 2. Check if existing session is present in MongoDB
-    const hasExistingSession = await sessionStore.sessionExists();
-    if (hasExistingSession) {
-      logger.info(`[RemoteAuth] Session found in MongoDB for "${sessionClientId}". Initializing client to restore session without QR...`);
-      emitProgress(25, 'restoring_session', 'Restoring session from MongoDB...');
-    } else {
-      logger.info(`[RemoteAuth] No session found in MongoDB for "${sessionClientId}". QR generation will be required.`);
-    }
-
-    // 3. Ensure browser executable is ready
-    const resolvedExecutablePath = await ensureBrowserAvailable();
-
-    // 4. Configure client with resolved browser and MongoStore
-    setupClient(resolvedExecutablePath, mongoStore);
-    logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
-
-    await client.initialize();
-    logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
-
-    // Attach Puppeteer browser and page listeners for full browser visibility
-    if (client.pupBrowser) {
-      startupTimers.browserLaunched = Date.now();
-      logger.info(`[Startup Metrics] ⏱️ Browser Launch Time: ${startupTimers.browserLaunched - startupTimers.start}ms (${((startupTimers.browserLaunched - startupTimers.start) / 1000).toFixed(1)}s)`);
-      emitProgress(35, 'browser_connected', 'Browser connected');
-      client.pupBrowser.on('disconnected', () => {
-        logger.error('[WhatsApp Diagnostics] Browser disconnected');
-        emitProgress(0, 'browser_disconnected', 'Browser disconnected');
-      });
-
-      client.pupBrowser.process()?.on('exit', (code) => {
-        logger.error('[WhatsApp Diagnostics] Chrome exited with code:', code);
-      });
-    }
-
-    if (client.pupPage) {
-      logger.debug('[WhatsApp Diagnostics] client.pupPage attached successfully.');
-      client.pupPage.on('console', (msg) => {
-        logger.debug('[Browser]', msg.text());
-      });
-      client.pupPage.on('pageerror', (err) => {
-        logger.error('[Browser Page Error]', err);
-      });
-      client.pupPage.on('error', (err) => {
-        logger.error('[Browser Error]', err);
-      });
-      client.pupPage.on('requestfailed', (req) => {
-        logger.debug('[Browser Request Failed]', {
-          url: req.url(),
-          error: req.failure()?.errorText,
+      if (client.pupPage) {
+        client.pupPage.on('console', (msg) => {
+          logger.debug('[Browser]', msg.text());
         });
+        client.pupPage.on('pageerror', (err) => {
+          logger.debug('[Browser Page Error]', err.message);
+        });
+      }
+    } catch (err) {
+      lastError = {
+        message: err.message,
+        stack: err.stack,
+        timestamp: new Date().toISOString(),
+      };
+      logger.error('[WhatsApp Diagnostics] WhatsApp initialization failed', {
+        message: err.message,
+        stack: err.stack,
       });
+      connectionStatus = 'DISCONNECTED';
+      isReady = false;
+      isAuthenticating = false;
+      whatsappEvents.emit('status_change', getStatus());
+    } finally {
+      activeInitPromise = null;
     }
-  } catch (err) {
-    lastError = {
-      message: err.message,
-      stack: err.stack,
-      timestamp: new Date().toISOString(),
-    };
-    logger.error('[WhatsApp Diagnostics] WhatsApp initialization failed', {
-      message: err.message,
-      stack: err.stack,
-    });
-    connectionStatus = 'DISCONNECTED';
-    isReady = false;
-    whatsappEvents.emit('status_change', getStatus());
-  } finally {
-    isInitializing = false;
-  }
 
-  return getStatus();
+    return getStatus();
+  })();
+
+  return activeInitPromise;
 }
 
 /**
- * Safely destroys client and frees all browser resources & memory
+ * Gracefully destroys client and frees memory on explicit user logout
  */
 async function destroyClient() {
-  logger.info('[WhatsApp Diagnostics] Destroying client...');
+  logger.info('[WhatsApp Diagnostics] Explicit client destroy/logout requested.');
   if (client) {
     try {
       await client.logout();
@@ -616,7 +623,6 @@ async function destroyClient() {
     } catch (err) {
       logger.warn('[WhatsApp Diagnostics] Warning during client.destroy():', {
         message: err.message,
-        stack: err.stack,
       });
     }
     client = null;
@@ -625,17 +631,18 @@ async function destroyClient() {
   // Delete remote session on explicit logout
   try {
     await sessionStore.deleteSession();
-    logger.info('[RemoteAuth] Session deleted on logout');
+    logger.info('[RemoteAuth] Session deleted on explicit logout');
   } catch (err) {
     logger.warn('[RemoteAuth] Error deleting session on logout:', { message: err.message });
   }
 
   isReady = false;
+  isAuthenticating = false;
   connectionStatus = 'DISCONNECTED';
   latestQrRaw = null;
   latestQrDataUrl = null;
   clientInfo = null;
-  isInitializing = false;
+  activeInitPromise = null;
 
   whatsappEvents.emit('status_change', getStatus());
   logger.info('[WhatsApp Diagnostics] Client destroyed. Browser process closed and memory cleared.');
@@ -643,7 +650,7 @@ async function destroyClient() {
 }
 
 /**
- * Gets or triggers QR code generation
+ * Gets or triggers QR code generation (safe and idempotent)
  */
 async function getQr() {
   if (isReady && client?.ready) {
@@ -655,11 +662,19 @@ async function getQr() {
     };
   }
 
-  if (!client || connectionStatus === 'DISCONNECTED') {
+  if (connectionStatus === 'AUTHENTICATED' || isAuthenticating) {
+    return {
+      status: 'AUTHENTICATED',
+      qrCode: null,
+      rawQr: null,
+      message: 'Authentication in progress...',
+    };
+  }
+
+  if (!client && connectionStatus === 'DISCONNECTED' && !activeInitPromise) {
     startClient().catch((err) => {
       logger.error('[WhatsApp Diagnostics] Error triggering on-demand QR start:', {
         message: err.message,
-        stack: err.stack,
       });
     });
   }
@@ -718,28 +733,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Verifies that the WhatsApp client, browser, and page are healthy and open.
- * If the page was closed or crashed, re-initializes client automatically.
  */
 async function verifyClientHealth() {
-  if (!client || !isReady || !client.ready) {
-    logger.warn('[WhatsApp Health] Client not ready. Triggering startClient()...');
-    await startClient();
+  if (isReady && client && client.ready && client.pupBrowser?.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
+    return;
   }
 
-  const browserConnected = Boolean(client?.pupBrowser?.isConnected());
-  const pageClosed = client?.pupPage ? client.pupPage.isClosed() : true;
-
-  logger.debug('[WhatsApp Health Check]:', {
-    browserConnected,
-    pageClosed,
-    isReady: Boolean(isReady && client?.ready),
-  });
-
-  if (!browserConnected || pageClosed) {
-    logger.warn('[WhatsApp Health] Page is closed or browser is disconnected. Recreating client from remote session...');
-    isReady = false;
-    if (client) client.ready = false;
-    connectionStatus = 'DISCONNECTED';
+  if (activeInitPromise) {
+    logger.info('[WhatsApp Health] Waiting for in-flight initialization...');
+    await activeInitPromise;
+  } else if (!client || !isReady || !client.ready) {
+    logger.info('[WhatsApp Health] Client not ready. Triggering startClient()...');
     await startClient();
   }
 
@@ -754,210 +758,142 @@ async function verifyClientHealth() {
 async function sendTextMessage(phone, message) {
   await verifyClientHealth();
 
-  // 1. Log original and sanitized numbers
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
-  logger.debug('[WhatsApp Diagnostics] === Recipient Resolution Diagnostics ===');
-  logger.debug('Original phone number:', phone);
-  logger.debug('Sanitized phone number:', normalizedPhone);
-  logger.debug('Final chatId:', rawChatId);
-
-  if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
-    throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
-  }
-
-  // 2. Validate chatId format: 91XXXXXXXXXX@c.us
-  if (!/^\d{10,15}@c\.us$/.test(rawChatId)) {
-    throw new Error(`Invalid chatId format: "${rawChatId}". Expected format: 91XXXXXXXXXX@c.us`);
-  }
-
-  if (!message) {
-    throw new Error('Message content cannot be empty.');
-  }
-
-  // Pre-send diagnostic logging
-  const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.debug('[WhatsApp Pre-Send Diagnostics]:', {
-    state: currentState,
-    'client.ready': client.ready,
-    'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
-    'client.pupPage.isClosed': Boolean(client.pupPage?.isClosed()),
+  logger.debug('[WhatsApp Dispatch] Starting send process:', {
+    originalPhone: phone,
+    sanitizedPhone: normalizedPhone,
     chatId: rawChatId,
-    messageLength: message.length,
+    messageLength: message ? message.length : 0,
   });
 
-  // 3 & 4. Resolve recipient number via getNumberId before sending
-  logger.debug(`Executing client.getNumberId("${normalizedPhone}")...`);
-  let numberId = null;
+  if (!normalizedPhone || normalizedPhone.length < 10) {
+    const err = new Error(`Invalid sanitized phone number: "${normalizedPhone}" (original: "${phone}"). Must be at least 10 digits.`);
+    logger.error('[WhatsApp Dispatch Error]', { message: err.message });
+    throw err;
+  }
+
+  if (!rawChatId.endsWith('@c.us') || rawChatId.length < 15) {
+    const err = new Error(`Invalid chatId format: "${rawChatId}". Must match 91XXXXXXXXXX@c.us format.`);
+    logger.error('[WhatsApp Dispatch Error]', { message: err.message });
+    throw err;
+  }
+
+  let resolvedChatId = rawChatId;
   try {
-    numberId = await client.getNumberId(normalizedPhone);
-    logger.debug('NumberId:', numberId);
-  } catch (lookupErr) {
-    logger.error('Error during client.getNumberId lookup:', lookupErr);
-    logger.error(lookupErr.stack);
-  }
-
-  if (!numberId || !numberId._serialized) {
-    logger.error(`[WhatsApp Diagnostics] Recipient ${normalizedPhone} is not registered on WhatsApp (NumberId is null).`);
-    const error = new Error(`Recipient ${normalizedPhone} is not registered on WhatsApp.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const resolvedTargetJid = numberId._serialized;
-  logger.debug(`Resolved target JID for send: "${resolvedTargetJid}"`);
-
-  // Immediately before sendMessage(), verify state is CONNECTED
-  const state = await client.getState().catch(() => null);
-
-  if (state !== 'CONNECTED') {
-    logger.error(`[WhatsApp Diagnostics] Cannot send message: Client state is "${state}", expected "CONNECTED".`);
-    throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
-  }
-
-  const beforeScreenshotPath = path.join(__dirname, '../before-send.png');
-  if (client.pupPage && !client.pupPage.isClosed()) {
-    await client.pupPage.screenshot({ path: beforeScreenshotPath }).catch(() => { });
-  }
-
-  // Wrap sendMessage() with timing logs and exact error stack trace
-  const start = Date.now();
-  try {
-    logger.info(`Sending message to ${resolvedTargetJid}...`);
-    const result = await client.sendMessage(resolvedTargetJid, message);
-    logger.info('Message sent successfully');
-    logger.debug('Duration:', Date.now() - start, 'ms');
-    logger.debug(result);
-
-    const messageId = result?.id?.id || `msg-${Date.now()}`;
-    return { success: true, messageId };
-  } catch (err) {
-    logger.error('sendMessage failed');
-    logger.error('Duration:', Date.now() - start, 'ms');
-    logger.error(err);
-    logger.error(err.stack);
-
-    const errorScreenshotPath = path.join(__dirname, '../after-send-error.png');
-    if (client.pupPage && !client.pupPage.isClosed()) {
-      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => { });
+    const numberId = await client.getNumberId(normalizedPhone);
+    if (numberId && numberId._serialized) {
+      resolvedChatId = numberId._serialized;
+    } else {
+      logger.warn(`[WhatsApp Dispatch] client.getNumberId("${normalizedPhone}") returned null. Fallback to constructed chatId "${rawChatId}".`);
     }
+  } catch (lookupErr) {
+    logger.warn(`[WhatsApp Dispatch] getNumberId failed for "${normalizedPhone}": ${lookupErr.message}. Fallback to constructed chatId "${rawChatId}".`);
+  }
 
+  const startTime = Date.now();
+  try {
+    const result = await client.sendMessage(resolvedChatId, message);
+    const duration = Date.now() - startTime;
+    logger.info(`[WhatsApp Dispatch] Message sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${result.id?.id || result.id?._serialized})`);
+    return {
+      success: true,
+      messageId: result.id?.id || result.id?._serialized,
+      chatId: resolvedChatId,
+      durationMs: duration,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err) {
+    const duration = Date.now() - startTime;
+    logger.error(`[WhatsApp Dispatch Failed] sendMessage failed after ${duration}ms:`, {
+      message: err.message,
+      stack: err.stack,
+    });
     throw err;
   }
 }
 
 /**
- * Sends PDF or image document
+ * Sends document/media attachment to single recipient
  */
-async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', caption = '') {
+async function sendDocument(phone, fileUrl, filename, caption = '') {
   await verifyClientHealth();
 
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
-  logger.debug('[WhatsApp Diagnostics] === Recipient Document Resolution Diagnostics ===');
-  logger.debug('Original phone number:', phone);
-  logger.debug('Sanitized phone number:', normalizedPhone);
-  logger.debug('Final chatId:', rawChatId);
-  logger.debug('documentUrl:', documentUrl);
-
-  if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
-    throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
+  if (!normalizedPhone || normalizedPhone.length < 10) {
+    throw new Error(`Invalid phone number: "${phone}".`);
   }
 
-  if (!/^\d{10,15}@c\.us$/.test(rawChatId)) {
-    throw new Error(`Invalid chatId format: "${rawChatId}". Expected format: 91XXXXXXXXXX@c.us`);
-  }
-
-  if (!documentUrl) {
-    throw new Error('Document URL is required.');
-  }
-
-  const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.debug('[WhatsApp Pre-Send Document Diagnostics]:', {
-    state: currentState,
-    'client.ready': client.ready,
-    'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
-    'client.pupPage.isClosed': Boolean(client.pupPage?.isClosed()),
-    chatId: rawChatId,
-  });
-
-  // 3 & 4. Resolve recipient number via getNumberId before sending
-  logger.debug(`Executing client.getNumberId("${normalizedPhone}")...`);
-  let numberId = null;
+  let resolvedChatId = rawChatId;
   try {
-    numberId = await client.getNumberId(normalizedPhone);
-    logger.debug('NumberId:', numberId);
-  } catch (lookupErr) {
-    logger.error('Error during client.getNumberId lookup:', lookupErr);
-    logger.error(lookupErr.stack);
-  }
-
-  if (!numberId || !numberId._serialized) {
-    logger.error(`[WhatsApp Diagnostics] Recipient ${normalizedPhone} is not registered on WhatsApp (NumberId is null).`);
-    const error = new Error(`Recipient ${normalizedPhone} is not registered on WhatsApp.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  const resolvedTargetJid = numberId._serialized;
-  logger.debug(`Resolved target JID for document send: "${resolvedTargetJid}"`);
-
-  const state = await client.getState().catch(() => null);
-
-  if (state !== 'CONNECTED') {
-    logger.error(`[WhatsApp Diagnostics] Cannot send document: Client state is "${state}", expected "CONNECTED".`);
-    throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
-  }
-
-  logger.debug(`Resolving media from URL: ${documentUrl}...`);
-  const media = await getMediaFromUrl(documentUrl, filename);
-
-  const start = Date.now();
-  try {
-    logger.info(`Sending document [${filename}] to ${resolvedTargetJid}...`);
-    const result = await client.sendMessage(resolvedTargetJid, media, { caption });
-    logger.info('Message sent successfully');
-    logger.debug('Duration:', Date.now() - start, 'ms');
-    logger.debug(result);
-
-    const messageId = result?.id?.id || `doc-${Date.now()}`;
-    return { success: true, messageId };
-  } catch (err) {
-    logger.error('sendMessage failed');
-    logger.error('Duration:', Date.now() - start, 'ms');
-    logger.error(err);
-    logger.error(err.stack);
-
-    const errorScreenshotPath = path.join(__dirname, '../after-send-doc-error.png');
-    if (client.pupPage && !client.pupPage.isClosed()) {
-      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => { });
+    const numberId = await client.getNumberId(normalizedPhone);
+    if (numberId && numberId._serialized) {
+      resolvedChatId = numberId._serialized;
     }
+  } catch (_) {}
 
+  logger.info(`[WhatsApp Dispatch] Downloading media attachment from ${fileUrl}...`);
+  const media = await getMediaFromUrl(fileUrl, filename);
+
+  const startTime = Date.now();
+  try {
+    const result = await client.sendMessage(resolvedChatId, media, { caption });
+    const duration = Date.now() - startTime;
+    logger.info(`[WhatsApp Dispatch] Document sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${result.id?.id || result.id?._serialized})`);
+    return {
+      success: true,
+      messageId: result.id?.id || result.id?._serialized,
+      chatId: resolvedChatId,
+      durationMs: duration,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err) {
+    const duration = Date.now() - startTime;
+    logger.error(`[WhatsApp Dispatch Failed] sendDocument failed after ${duration}ms:`, {
+      message: err.message,
+      stack: err.stack,
+    });
     throw err;
   }
 }
 
-async function sendInvoiceTemplate(phone, invoiceUrl, filename = 'invoice.pdf') {
-  return sendDocument(phone, invoiceUrl, filename, 'Your Bhagwat Library Invoice');
+/**
+ * Helper: Sends Invoice Template Message with PDF Attachment
+ */
+async function sendInvoiceTemplate(phone, invoiceData) {
+  const { studentName, invoiceNumber, amount, dueDate, pdfUrl } = invoiceData;
+  const message = `🧾 *BHAGWAT LIBRARY — INVOICE*\n\nDear *${studentName}*,\nYour fee invoice *#${invoiceNumber}* for INR *${amount}* has been generated.\n\n📅 Due Date: ${dueDate}\n\nPlease find your official invoice PDF attached.\nThank you!`;
+
+  if (pdfUrl) {
+    return sendDocument(phone, pdfUrl, `Invoice_${invoiceNumber || 'receipt'}.pdf`, message);
+  }
+  return sendTextMessage(phone, message);
 }
 
-async function sendReminderTemplate(phone, studentName, dueAmount, dueDate) {
-  const formattedAmount = Number(dueAmount).toFixed(2);
-  const msg = `Dear ${studentName},\n\nThis is a payment reminder from Bhagwat Library. You have a pending fee of INR ${formattedAmount} which is due on ${dueDate}.\n\nPlease clear the dues to ensure uninterrupted library access.\n\nThank you!`;
-  return sendTextMessage(phone, msg);
+/**
+ * Helper: Sends Validity/Fee Reminder Template Message
+ */
+async function sendReminderTemplate(phone, reminderData) {
+  const { studentName, validityDate, seatNumber, dueDays } = reminderData;
+  let urgency = 'due soon';
+  if (dueDays === 0) urgency = 'expires TODAY';
+  else if (dueDays === 1) urgency = 'expires TOMORROW';
+  else if (dueDays < 0) urgency = `is OVERDUE by ${Math.abs(dueDays)} days`;
+
+  const seatText = seatNumber ? ` (Seat #${seatNumber})` : '';
+  const message = `📚 *BHAGWAT LIBRARY — MEMBERSHIP REMINDER*\n\nDear *${studentName}*,\nYour monthly library membership validity${seatText} *${urgency}* on *${validityDate}*.\n\nPlease renew your membership to continue uninterrupted seat access.\n\nThank you!\n*Bhagwat Library*`;
+  return sendTextMessage(phone, message);
 }
 
-async function sendBulkMessages(phones, message, delayMs = 1000) {
-  if (!Array.isArray(phones) || phones.length === 0) {
-    throw new Error('Phones list must be a non-empty array.');
-  }
-  if (!message) {
-    throw new Error('Bulk message content cannot be empty.');
-  }
+/**
+ * Sends batch of text messages sequentially with delay
+ */
+async function sendBulkMessages(phones, message, delayMs = 1500) {
+  await verifyClientHealth();
 
-  logger.info(`Starting bulk dispatch to ${phones.length} recipients...`);
   const results = [];
   let successCount = 0;
   let failureCount = 0;
@@ -965,20 +901,16 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
   for (let i = 0; i < phones.length; i++) {
     const phone = phones[i];
     try {
-      if (i > 0) {
-        await sleep(delayMs);
-      }
-
       const res = await sendTextMessage(phone, message);
       results.push({ phone, success: true, ...res });
       successCount++;
-    } catch (error) {
-      results.push({ phone, success: false, error: error.message });
+    } catch (err) {
+      results.push({ phone, success: false, error: err.message });
       failureCount++;
-      logger.error(`Bulk send error for ${phone}:`, {
-        message: error.message,
-        stack: error.stack,
-      });
+    }
+
+    if (i < phones.length - 1) {
+      await sleep(delayMs);
     }
   }
 
