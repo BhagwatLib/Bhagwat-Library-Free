@@ -93,11 +93,11 @@ function setupClient() {
   const executablePath = puppeteer.executablePath();
   const fs = require("fs");
 
-  logger.info("Executable Path:", executablePath);
-  logger.info("Exists:", fs.existsSync(executablePath));
+  logger.info(`Executable Path: ${executablePath}`);
+  logger.info(`Exists: ${fs.existsSync(executablePath)}`);
 
   if (fs.existsSync(executablePath)) {
-    logger.info("Size:", fs.statSync(executablePath).size);
+    logger.info(`Size: ${fs.statSync(executablePath).size}`);
   }
 
   logger.info('[WhatsApp Diagnostics] Chrome Executable:', executablePath);
