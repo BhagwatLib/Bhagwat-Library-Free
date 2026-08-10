@@ -13,7 +13,8 @@
 
 'use strict';
 
-const { Client, NoAuth, MessageMedia } = require('whatsapp-web.js');
+const { Client, RemoteAuth, NoAuth, MessageMedia } = require('whatsapp-web.js');
+const sessionStore = require('./whatsapp/sessionStore');
 const qrcodeTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
@@ -211,8 +212,24 @@ function setupClient(customExecutablePath = null) {
     logger.info('[WhatsApp Diagnostics] Using default Puppeteer resolution (no custom executablePath passed).');
   }
 
+  const sessionClientId = sessionStore.getSessionName();
+  let authStrategy;
+
+  if (mongoStore) {
+    logger.info(`[RemoteAuth] Configuring RemoteAuth with MongoStore (clientId: "${sessionClientId}")...`);
+    authStrategy = new RemoteAuth({
+      clientId: sessionClientId,
+      store: mongoStore,
+      backupSyncIntervalMs: 60000,
+      dataPath: path.join(__dirname, '../.wwebjs_auth'),
+    });
+  } else {
+    logger.warn('[RemoteAuth] MongoStore is not available. Falling back to NoAuth.');
+    authStrategy = new NoAuth();
+  }
+
   logger.info('[WhatsApp Diagnostics] Puppeteer Launch Configuration:', {
-    authStrategy: 'NoAuth',
+    authStrategy: mongoStore ? `RemoteAuth (${sessionClientId})` : 'NoAuth',
     headless: 'new',
     dumpio: true,
     ignoreHTTPSErrors: true,
@@ -222,7 +239,7 @@ function setupClient(customExecutablePath = null) {
   });
 
   client = new Client({
-    authStrategy: new NoAuth(),
+    authStrategy,
     puppeteer: puppeteerOptions,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     webVersionCache: {
@@ -238,6 +255,7 @@ function setupClient(customExecutablePath = null) {
   async function handleClientReady() {
     if (isReady && client?.ready) return;
 
+    logger.info('[RemoteAuth] Connected');
     logger.info('[WA] READY - Transitioning connection status to CONNECTED');
     isReady = true;
     if (client) client.ready = true;
@@ -287,6 +305,7 @@ function setupClient(customExecutablePath = null) {
   });
 
   client.on('authenticated', () => {
+    logger.info('[RemoteAuth] Session restored');
     logger.info('[WA] AUTHENTICATED');
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
@@ -295,8 +314,16 @@ function setupClient(customExecutablePath = null) {
     whatsappEvents.emit('status_change', getStatus());
   });
 
-  client.on('auth_failure', (msg) => {
+  client.on('auth_failure', async (msg) => {
     logger.error('[WA] AUTH FAILURE', msg);
+    logger.warn('[RemoteAuth] Authentication failed! Deleting invalid session from MongoDB...');
+    try {
+      await sessionStore.deleteSession();
+      logger.info('[RemoteAuth] Session deleted');
+    } catch (delErr) {
+      logger.warn('[RemoteAuth] Failed to delete session after auth_failure:', delErr.message);
+    }
+
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
@@ -310,6 +337,7 @@ function setupClient(customExecutablePath = null) {
   });
 
   client.on('ready', async () => {
+    logger.info('[RemoteAuth] Connected');
     logger.info('[WA] READY');
 
     try {
@@ -337,6 +365,7 @@ function setupClient(customExecutablePath = null) {
   });
 
   client.on('remote_session_saved', () => {
+    logger.info('[RemoteAuth] Session saved');
     logger.info('[WA] REMOTE SESSION SAVED');
   });
 
@@ -415,9 +444,18 @@ async function startClient() {
     }
 
     const resolvedExecutablePath = await ensureBrowserAvailable();
-    setupClient(resolvedExecutablePath);
+    const mongoStore = await sessionStore.initSessionStore();
+    const hasExistingSession = await sessionStore.sessionExists();
+
+    if (hasExistingSession) {
+      logger.info('[RemoteAuth] Existing session found in MongoDB. Initializing client to restore session without QR...');
+    } else {
+      logger.info('[RemoteAuth] No existing session found in MongoDB. QR generation will be required.');
+    }
+
+    setupClient(resolvedExecutablePath, mongoStore);
     logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
-    logger.info('[WhatsApp Diagnostics] Waiting for browser to launch and generate QR...');
+    logger.info('[WhatsApp Diagnostics] Waiting for browser to launch and generate QR / restore session...');
 
     await client.initialize();
     logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
@@ -493,6 +531,14 @@ async function destroyClient() {
       });
     }
     client = null;
+  }
+
+  // Delete remote session on explicit logout
+  try {
+    await sessionStore.deleteSession();
+    logger.info('[RemoteAuth] Session deleted on logout');
+  } catch (err) {
+    logger.warn('[RemoteAuth] Error deleting session on logout:', { message: err.message });
   }
 
   isReady = false;
