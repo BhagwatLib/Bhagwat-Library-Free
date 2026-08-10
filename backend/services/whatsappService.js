@@ -109,40 +109,28 @@ async function ensureBrowserAvailable() {
     return cachedExecutablePath;
   }
 
+  const projectCacheDir = path.join(__dirname, '../.puppeteer-cache');
+
+  // 1. Check PUPPETEER_EXECUTABLE_PATH env var
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath && fs.existsSync(envPath)) {
     cachedExecutablePath = envPath;
-    logger.info(`[Browser Resolver] Found browser via PUPPETEER_EXECUTABLE_PATH: ${cachedExecutablePath}`);
+    logger.info(`[Browser Resolver] Verified PUPPETEER_EXECUTABLE_PATH: "${cachedExecutablePath}"`);
     return cachedExecutablePath;
   }
 
+  // 2. Check standard Puppeteer executablePath (backed by .puppeteerrc.cjs)
   try {
     const defaultPath = puppeteer.executablePath();
     if (defaultPath && fs.existsSync(defaultPath)) {
       cachedExecutablePath = defaultPath;
-      logger.info(`[Browser Resolver] Found standard Puppeteer browser: ${cachedExecutablePath}`);
+      process.env.PUPPETEER_EXECUTABLE_PATH = cachedExecutablePath;
+      logger.info(`[Browser Resolver] Verified standard Puppeteer executable: "${cachedExecutablePath}"`);
       return cachedExecutablePath;
     }
   } catch (_) {}
 
-  const commonSystemPaths = [
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  ];
-
-  for (const sysPath of commonSystemPaths) {
-    if (fs.existsSync(sysPath)) {
-      cachedExecutablePath = sysPath;
-      logger.info(`[Browser Resolver] Found system browser: ${cachedExecutablePath}`);
-      return cachedExecutablePath;
-    }
-  }
-
-  const projectCacheDir = path.join(__dirname, '../.puppeteer-cache');
+  // 3. Check project cache directory (.puppeteer-cache)
   if (fs.existsSync(projectCacheDir)) {
     try {
       const findExecutable = (dir) => {
@@ -162,14 +150,35 @@ async function ensureBrowserAvailable() {
       const foundInCache = findExecutable(projectCacheDir);
       if (foundInCache && fs.existsSync(foundInCache)) {
         cachedExecutablePath = foundInCache;
-        logger.info(`[Browser Resolver] Found cached project browser: ${cachedExecutablePath}`);
+        process.env.PUPPETEER_EXECUTABLE_PATH = cachedExecutablePath;
+        logger.info(`[Browser Resolver] Found browser in project cache: "${cachedExecutablePath}"`);
         return cachedExecutablePath;
       }
     } catch (_) {}
   }
 
+  // 4. Check common Linux / Render / Windows system paths
+  const commonSystemPaths = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+
+  for (const sysPath of commonSystemPaths) {
+    if (fs.existsSync(sysPath)) {
+      cachedExecutablePath = sysPath;
+      process.env.PUPPETEER_EXECUTABLE_PATH = cachedExecutablePath;
+      logger.info(`[Browser Resolver] Found system browser: "${cachedExecutablePath}"`);
+      return cachedExecutablePath;
+    }
+  }
+
+  // 5. Only if absolutely missing anywhere on the system, trigger on-demand installation
   if (browsers) {
-    logger.warn('[Browser Resolver] No existing browser found on disk. Installing Chrome via @puppeteer/browsers...');
+    logger.warn('[Browser Resolver] No existing browser found on disk. Installing Chrome into project cache...');
     try {
       const platform = browsers.detectBrowserPlatform();
       const buildId = '146.0.7680.31';
@@ -180,7 +189,8 @@ async function ensureBrowserAvailable() {
       });
       if (installed?.executablePath && fs.existsSync(installed.executablePath)) {
         cachedExecutablePath = installed.executablePath;
-        logger.info(`[Browser Resolver] Dynamic browser installation completed: ${cachedExecutablePath}`);
+        process.env.PUPPETEER_EXECUTABLE_PATH = cachedExecutablePath;
+        logger.info(`[Browser Resolver] Dynamic browser installation completed: "${cachedExecutablePath}"`);
         return cachedExecutablePath;
       }
     } catch (installErr) {
