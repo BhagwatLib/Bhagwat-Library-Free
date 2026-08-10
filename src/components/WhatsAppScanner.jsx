@@ -115,16 +115,26 @@ export const WhatsAppScanner = () => {
         try {
           sseActive = true;
           const parsed = JSON.parse(e.data);
-          setStatusData((prev) => ({
-            ...prev,
-            qrCode: parsed.qrDataUrl,
-            status: "QR_READY",
-            isReady: false,
-          }));
-          setProgressData({
-            progress: 0,
-            stage: "qr_generated",
-            status: "QR code generated. Scan with phone.",
+          setStatusData((prev) => {
+            if (prev.status === 'AUTHENTICATED' || prev.status === 'CONNECTED' || prev.isReady) {
+              return prev;
+            }
+            return {
+              ...prev,
+              qrCode: parsed.qrDataUrl,
+              status: "QR_READY",
+              isReady: false,
+            };
+          });
+          setProgressData((prev) => {
+            if (prev.progress >= 75 || prev.stage === 'authenticated' || prev.stage === 'ready') {
+              return prev;
+            }
+            return {
+              progress: 0,
+              stage: "qr_generated",
+              status: "QR code generated. Scan with phone.",
+            };
           });
         } catch (_) {}
       });

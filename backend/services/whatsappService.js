@@ -1,14 +1,5 @@
 /**
- * whatsappService.js - Production-ready on-demand WhatsApp gateway with full diagnostics
- *
- * Architecture:
- * - Idle / DISCONNECTED on server startup (0 Puppeteer memory overhead).
- * - Starts ONLY when requested via /start or /qr.
- * - Single active browser instance enforced via Promise-based singleton lock.
- * - Uses Puppeteer bundled Chromium automatically (headless: "new").
- * - Native WhatsApp Web loading (zero outdated remote cache delays).
- * - Multi-stage RemoteAuth persistence backed by MongoDB GridFS.
- * - Strict QR lifecycle management: prevents duplicate QR generation during auth.
+ * whatsappService.js - Production-ready on-demand WhatsApp gateway with full diagnostics & telemetry
  */
 
 'use strict';
@@ -45,6 +36,7 @@ let lastConnectedTime = null;
 let clientInfo = null;
 let activeInitPromise = null;
 let lastError = null;
+let monitorInterval = null;
 
 let currentProgress = {
   progress: 0,
@@ -110,7 +102,6 @@ let cachedExecutablePath = null;
 
 /**
  * Fast-resolves browser executable without redundant disk scans or reinstallations.
- * Reuses existing Chromium binary immediately.
  */
 async function ensureBrowserAvailable() {
   if (cachedExecutablePath && fs.existsSync(cachedExecutablePath)) {
@@ -118,7 +109,6 @@ async function ensureBrowserAvailable() {
     return cachedExecutablePath;
   }
 
-  // 1. Check PUPPETEER_EXECUTABLE_PATH env var
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
   if (envPath && fs.existsSync(envPath)) {
     cachedExecutablePath = envPath;
@@ -126,7 +116,6 @@ async function ensureBrowserAvailable() {
     return cachedExecutablePath;
   }
 
-  // 2. Check standard Puppeteer executable
   try {
     const defaultPath = puppeteer.executablePath();
     if (defaultPath && fs.existsSync(defaultPath)) {
@@ -136,7 +125,6 @@ async function ensureBrowserAvailable() {
     }
   } catch (_) {}
 
-  // 3. Fast check common Linux / Render / Windows system paths
   const commonSystemPaths = [
     '/usr/bin/google-chrome-stable',
     '/usr/bin/google-chrome',
@@ -154,7 +142,6 @@ async function ensureBrowserAvailable() {
     }
   }
 
-  // 4. Check project cache directory (.puppeteer-cache)
   const projectCacheDir = path.join(__dirname, '../.puppeteer-cache');
   if (fs.existsSync(projectCacheDir)) {
     try {
@@ -181,7 +168,6 @@ async function ensureBrowserAvailable() {
     } catch (_) {}
   }
 
-  // 5. Only if absolutely missing anywhere on the system, trigger on-demand installation
   if (browsers) {
     logger.warn('[Browser Resolver] No existing browser found on disk. Installing Chrome via @puppeteer/browsers...');
     try {
@@ -206,12 +192,80 @@ async function ensureBrowserAvailable() {
 }
 
 /**
+ * Starts real-time 1-second diagnostic health monitor during authentication
+ */
+function startStateMonitor() {
+  if (monitorInterval) clearInterval(monitorInterval);
+
+  let lastLoggedState = {};
+  monitorInterval = setInterval(async () => {
+    if (!client || connectionStatus === 'CONNECTED' || connectionStatus === 'DISCONNECTED') {
+      if (connectionStatus === 'CONNECTED' || connectionStatus === 'DISCONNECTED') {
+        clearInterval(monitorInterval);
+        monitorInterval = null;
+      }
+      return;
+    }
+
+    try {
+      let clientState = 'UNKNOWN';
+      try {
+        clientState = await client.getState();
+      } catch (_) {}
+
+      const browserConnected = Boolean(client?.pupBrowser?.isConnected());
+      const pageClosed = client?.pupPage ? client.pupPage.isClosed() : true;
+      let targetCount = 0;
+      let currentUrl = 'N/A';
+
+      try {
+        if (client?.pupBrowser) {
+          const targets = await client.pupBrowser.targets();
+          targetCount = targets.length;
+        }
+        if (client?.pupPage && !pageClosed) {
+          currentUrl = client.pupPage.url();
+        }
+      } catch (_) {}
+
+      const snapshot = {
+        timestamp: new Date().toISOString(),
+        isAuthenticating,
+        hasActiveInitPromise: Boolean(activeInitPromise),
+        clientReady: Boolean(client?.ready),
+        clientState,
+        connectionStatus,
+        browserConnected,
+        pageClosed,
+        targetCount,
+        currentUrl,
+      };
+
+      // Detect unexpected state changes
+      if (lastLoggedState.connectionStatus && lastLoggedState.connectionStatus !== connectionStatus) {
+        logger.warn(`[STATE FLIP DETECTED] connectionStatus transitioned: "${lastLoggedState.connectionStatus}" -> "${connectionStatus}"`);
+      }
+      if (lastLoggedState.browserConnected !== undefined && lastLoggedState.browserConnected !== browserConnected) {
+        logger.warn(`[STATE FLIP DETECTED] browserConnected flipped: ${lastLoggedState.browserConnected} -> ${browserConnected}`);
+      }
+      if (lastLoggedState.pageClosed !== undefined && lastLoggedState.pageClosed !== pageClosed) {
+        logger.warn(`[STATE FLIP DETECTED] pageClosed flipped: ${lastLoggedState.pageClosed} -> ${pageClosed}`);
+      }
+
+      lastLoggedState = snapshot;
+      logger.debug('[Auth State Monitor 1s Snapshot]:', snapshot);
+    } catch (monitorErr) {
+      logger.debug('[Auth State Monitor Error]:', monitorErr.message);
+    }
+  }, 1000);
+}
+
+/**
  * Instantiates and configures single WhatsApp client instance with optimized Puppeteer flags
  */
 function setupClient(customExecutablePath = null, mongoStore = null) {
-  logger.debug('[WhatsApp Diagnostics] Creating WhatsApp Client...');
+  logger.info(`[WhatsApp Diagnostics] [${new Date().toISOString()}] Instantiating new Client with RemoteAuth...`);
 
-  // High performance headless Chrome flags for instant launch
   const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -279,7 +333,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     puppeteer: puppeteerOptions,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     webVersionCache: {
-      type: 'none', // Native loading avoids outdated remote HTML timeouts and chunk failures
+      type: 'none',
     },
   });
 
@@ -288,8 +342,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   async function handleClientReady() {
     if (isReady && client?.ready) return;
 
-    logger.info('[RemoteAuth] Connected');
-    logger.info('[WA] READY - Transitioning connection status to CONNECTED');
+    logger.info(`[WA Event] [${new Date().toISOString()}] READY - Transitioning connection status to CONNECTED`);
     isReady = true;
     isAuthenticating = false;
     if (client) client.ready = true;
@@ -313,13 +366,14 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     whatsappEvents.emit('status_change', getStatus());
   }
 
-  // --- Detailed Diagnostic Lifecycle Event Listeners ---
+  // --- Detailed Diagnostic Lifecycle Event Listeners with Timestamps ---
   client.on('loading_screen', (percent, message) => {
+    const timestamp = new Date().toISOString();
     if (!startupTimers.waPageLoaded) {
       startupTimers.waPageLoaded = Date.now();
-      logger.info(`[Startup Metrics] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
+      logger.info(`[Startup Metrics] [${timestamp}] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
     }
-    logger.info(`[WA] LOADING ${percent}% - ${message}`);
+    logger.info(`[WA Event] [${timestamp}] LOADING ${percent}% - ${message}`);
     const pct = Number(percent) || 0;
     if (pct === 100) {
       emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
@@ -332,11 +386,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     }
   });
 
-  client.on('authenticated', async () => {
+  client.on('authenticated', async (authPayload) => {
+    const timestamp = new Date().toISOString();
     isAuthenticating = true;
-    logger.info('[RemoteAuth] authenticated');
-    logger.info('[RemoteAuth] Session restored');
-    logger.info('[WA] AUTHENTICATED');
+    logger.info(`[WA Event] [${timestamp}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
+    logger.info(`[RemoteAuth] [${timestamp}] Session restored & authenticated`);
     emitProgress(85, 'authenticated', 'Authentication complete');
 
     connectionStatus = 'AUTHENTICATED';
@@ -356,7 +410,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('auth_failure', async (msg) => {
-    logger.error('[WA] AUTH FAILURE', msg);
+    const timestamp = new Date().toISOString();
+    logger.error(`[WA Event] [${timestamp}] AUTH FAILURE:`, msg);
     emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
 
     isReady = false;
@@ -367,24 +422,22 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     latestQrDataUrl = null;
     lastError = {
       message: `Authentication failed: ${msg}`,
-      timestamp: new Date().toISOString(),
+      timestamp,
     };
     whatsappEvents.emit('status_change', getStatus());
   });
 
   client.on('ready', async () => {
+    const timestamp = new Date().toISOString();
     startupTimers.ready = Date.now();
-    logger.info(`[Startup Metrics] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
-    logger.info('[RemoteAuth] ready');
-    logger.info('[RemoteAuth] Connected');
-    logger.info('[RemoteAuth] Session restored');
-    logger.info('[WA] READY');
+    logger.info(`[Startup Metrics] [${timestamp}] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
+    logger.info(`[WA Event] [${timestamp}] READY`);
     emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
 
     try {
-      logger.info(await client.getState());
+      logger.info(`[WA State] [${timestamp}]:`, await client.getState());
     } catch (e) {
-      logger.error(e);
+      logger.error(`[WA State Error] [${timestamp}]:`, e.message);
     }
 
     await handleClientReady();
@@ -396,15 +449,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('change_state', (state) => {
-    logger.info('[WA] STATE:', state);
+    const timestamp = new Date().toISOString();
+    logger.info(`[WA Event] [${timestamp}] CHANGE_STATE:`, state);
     if (state === 'CONNECTED' && currentProgress.progress < 95) {
       emitProgress(95, 'client_state_connected', 'Client state CONNECTED');
     }
   });
 
   client.on('disconnected', (reason) => {
-    logger.warn('[RemoteAuth] disconnected:', reason);
-    logger.warn('[WA] DISCONNECTED:', reason);
+    const timestamp = new Date().toISOString();
+    logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
     emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
     isReady = false;
     isAuthenticating = false;
@@ -416,35 +470,35 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('remote_session_saved', async () => {
-    logger.info('[RemoteAuth] remote_session_saved');
-    logger.info('[RemoteAuth] Session saved');
-    logger.info('[WA] REMOTE SESSION SAVED');
+    const timestamp = new Date().toISOString();
+    logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_SAVED`);
     if (currentProgress.progress < 90) {
       emitProgress(90, 'remote_auth_connected', 'RemoteAuth session synced');
     }
 
-    // Inspect MongoDB GridFS collections and verify document existence
     try {
       const details = await sessionStore.inspectSessionDetails();
       if (details && details.filesCount > 0) {
-        logger.info(`[RemoteAuth] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file, ${details.chunksCount} chunks).`);
+        logger.info(`[RemoteAuth] [${timestamp}] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file, ${details.chunksCount} chunks).`);
       } else {
-        logger.warn('[RemoteAuth] No session found in MongoDB after remote_session_saved event.');
+        logger.warn(`[RemoteAuth] [${timestamp}] No session found in MongoDB after remote_session_saved event.`);
       }
     } catch (inspErr) {
-      logger.debug('[RemoteAuth] Notice inspecting MongoDB session details:', inspErr.message);
+      logger.debug(`[RemoteAuth] [${timestamp}] Notice inspecting MongoDB session details:`, inspErr.message);
     }
   });
 
   client.on('message', () => {
-    logger.info('[WA] MESSAGE EVENT');
+    logger.debug('[WA Event] MESSAGE EVENT');
   });
 
   // Event: QR Code Received
   client.on('qr', async (qr) => {
+    const timestamp = new Date().toISOString();
+
     // 1. Guard against duplicate QR events during active authentication
     if (isReady || connectionStatus === 'AUTHENTICATED' || connectionStatus === 'CONNECTED' || isAuthenticating) {
-      logger.info('[WhatsApp Diagnostics] QR received while authenticating/connected. Suppressing redundant QR event.');
+      logger.info(`[WA Event] [${timestamp}] QR received while authenticating/connected. Suppressing redundant QR event.`);
       return;
     }
 
@@ -454,8 +508,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     }
 
     startupTimers.qrGenerated = Date.now();
-    logger.info(`[Startup Metrics] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
-    logger.info('[WhatsApp Diagnostics] ===== QR CODE RECEIVED =====');
+    logger.info(`[Startup Metrics] [${timestamp}] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
+    logger.info(`[WA Event] [${timestamp}] ===== QR CODE RECEIVED =====`);
     latestQrRaw = qr;
     try {
       latestQrDataUrl = await QRCode.toDataURL(qr, {
@@ -492,6 +546,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
  * Starts WhatsApp client on-demand (idempotent, single active instance with promise lock)
  */
 async function startClient() {
+  const invocationStack = new Error().stack;
+  logger.info(`[startClient Invocation] [${new Date().toISOString()}] Called from:\n${invocationStack}`);
+
   // 1. Return immediately if already fully connected and ready
   if (isReady && client && client.ready) {
     logger.info('[RemoteAuth] Client already connected and ready. Returning existing session.');
@@ -523,6 +580,7 @@ async function startClient() {
     connectionStatus = 'CONNECTING';
     lastError = null;
     emitProgress(20, 'browser_launching', 'Browser launching...');
+    startStateMonitor();
 
     try {
       if (client) {
@@ -559,25 +617,33 @@ async function startClient() {
 
       // Configure client with resolved browser and MongoStore
       setupClient(resolvedExecutablePath, mongoStore);
-      logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
+      logger.info(`[client.initialize() Invocation] [${new Date().toISOString()}] Executing client.initialize()...`);
 
       await client.initialize();
-      logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
+      logger.info(`[client.initialize() Resolved] [${new Date().toISOString()}] WhatsApp client.initialize() promise resolved successfully.`);
 
       if (client.pupBrowser) {
         startupTimers.browserLaunched = Date.now();
         logger.info(`[Startup Metrics] ⏱️ Browser Launch Time: ${startupTimers.browserLaunched - startupTimers.start}ms (${((startupTimers.browserLaunched - startupTimers.start) / 1000).toFixed(1)}s)`);
         emitProgress(35, 'browser_connected', 'Browser connected');
+
         client.pupBrowser.on('disconnected', () => {
-          logger.warn('[WhatsApp Diagnostics] Browser disconnected');
+          const timestamp = new Date().toISOString();
+          logger.warn(`[WA Browser Event] [${timestamp}] Browser disconnected`);
           emitProgress(0, 'browser_disconnected', 'Browser disconnected');
         });
       }
 
       if (client.pupPage) {
+        client.pupPage.on('close', () => {
+          const timestamp = new Date().toISOString();
+          logger.warn(`[WA Page Event] [${timestamp}] Page closed`);
+        });
+
         client.pupPage.on('console', (msg) => {
           logger.debug('[Browser]', msg.text());
         });
+
         client.pupPage.on('pageerror', (err) => {
           logger.debug('[Browser Page Error]', err.message);
         });
@@ -610,7 +676,14 @@ async function startClient() {
  * Gracefully destroys client and frees memory on explicit user logout
  */
 async function destroyClient() {
-  logger.info('[WhatsApp Diagnostics] Explicit client destroy/logout requested.');
+  const invocationStack = new Error().stack;
+  logger.info(`[destroyClient Invocation] [${new Date().toISOString()}] Called from:\n${invocationStack}`);
+
+  if (monitorInterval) {
+    clearInterval(monitorInterval);
+    monitorInterval = null;
+  }
+
   if (client) {
     try {
       await client.logout();
