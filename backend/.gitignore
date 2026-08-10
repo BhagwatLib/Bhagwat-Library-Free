@@ -11,6 +11,7 @@ node_modules/
 .wwebjs_auth/
 .wwebjs_cache/
 .session/
+.puppeteer-cache/
 
 # Log files
 logs/
