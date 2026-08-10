@@ -644,6 +644,15 @@ async function getQr() {
     });
   }
 
+  return {
+    status: connectionStatus,
+    qrCode: latestQrDataUrl,
+    rawQr: latestQrRaw,
+    lastError,
+  };
+}
+
+/**
  * Returns active WhatsApp client instance
  */
 function getClient() {
