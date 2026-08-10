@@ -44,6 +44,28 @@ let clientInfo = null;
 let isInitializing = false;
 let lastError = null;
 
+let currentProgress = {
+  progress: 0,
+  stage: 'idle',
+  status: 'Idle (Disconnected)',
+};
+
+/**
+ * Emits real-time progress update driven by exact backend lifecycle events
+ */
+function emitProgress(progress, stage, status) {
+  currentProgress = {
+    progress: Math.min(100, Math.max(0, Number(progress) || 0)),
+    stage,
+    status,
+    timestamp: new Date().toISOString(),
+  };
+  logger.info(`[WhatsApp Progress] [${currentProgress.progress}%] [${stage}] ${status}`);
+  whatsappEvents.emit('progress', currentProgress);
+  whatsappEvents.emit('wa-progress', currentProgress);
+  whatsappEvents.emit('status_change', getStatus());
+}
+
 /**
  * Normalizes phone number to E.164 without '+' (e.g. 9876543210 -> 919876543210)
  */
@@ -57,12 +79,13 @@ function normalizePhoneNumber(phone) {
 }
 
 /**
- * Returns current status snapshot including last error diagnostics
+ * Returns current status snapshot including last error diagnostics and progress
  */
 function getStatus() {
   return {
     isReady: Boolean(isReady && client?.ready),
     status: connectionStatus,
+    progress: currentProgress,
     qrCode: latestQrDataUrl,
     rawQr: latestQrRaw,
     lastConnectedTime,
@@ -279,12 +302,23 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   // --- Detailed Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
     logger.info(`[WA] LOADING ${percent}% - ${message}`);
+    const pct = Number(percent) || 0;
+    if (pct === 100) {
+      emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
+    } else if (pct > 0) {
+      const calculatedProgress = Math.round(35 + (pct * 0.39));
+      emitProgress(calculatedProgress, 'loading_whatsapp', `Loading WhatsApp ${pct}% - ${message || 'Syncing'}`);
+    } else {
+      emitProgress(10, 'qr_scanned', 'QR scanned by phone. Loading...');
+    }
   });
 
   client.on('authenticated', async () => {
     logger.info('[RemoteAuth] authenticated');
     logger.info('[RemoteAuth] Session restored');
     logger.info('[WA] AUTHENTICATED');
+    emitProgress(85, 'authenticated', 'Authentication complete');
+
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
     latestQrDataUrl = null;
@@ -306,6 +340,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.on('auth_failure', async (msg) => {
     logger.error('[WA] AUTH FAILURE', msg);
+    emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
     logger.warn('[RemoteAuth] Authentication failed! Deleting invalid session from MongoDB...');
     try {
       await sessionStore.deleteSession();
@@ -330,6 +365,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.info('[RemoteAuth] ready');
     logger.info('[RemoteAuth] Connected');
     logger.info('[WA] READY');
+    emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
 
     try {
       logger.info(await client.getState());
@@ -342,11 +378,15 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.on('change_state', (state) => {
     logger.info('[WA] STATE:', state);
+    if (state === 'CONNECTED' && currentProgress.progress < 95) {
+      emitProgress(95, 'client_state_connected', 'Client state CONNECTED');
+    }
   });
 
   client.on('disconnected', (reason) => {
     logger.warn('[RemoteAuth] disconnected:', reason);
     logger.warn('[WA] DISCONNECTED:', reason);
+    emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
@@ -360,6 +400,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.info('[RemoteAuth] remote_session_saved');
     logger.info('[RemoteAuth] Session saved');
     logger.info('[WA] REMOTE SESSION SAVED');
+    if (currentProgress.progress < 90) {
+      emitProgress(90, 'remote_auth_connected', 'RemoteAuth session synced');
+    }
 
     // Inspect MongoDB GridFS collections and log document details
     try {
@@ -409,6 +452,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     isReady = false;
     client.ready = false;
     lastError = null;
+    emitProgress(0, 'qr_generated', 'QR code generated. Scan with phone.');
 
     logger.info('[WhatsApp Diagnostics] Waiting for QR code to be scanned with mobile app...');
     console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
@@ -426,6 +470,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 async function startClient() {
   if (isReady && client && client.ready) {
     logger.info('[WhatsApp Diagnostics] Client already connected and ready.');
+    emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
     return getStatus();
   }
 
@@ -437,7 +482,7 @@ async function startClient() {
   isInitializing = true;
   connectionStatus = 'CONNECTING';
   lastError = null;
-  whatsappEvents.emit('status_change', getStatus());
+  emitProgress(20, 'browser_launching', 'Browser launching...');
 
   try {
     if (client) {
@@ -464,6 +509,7 @@ async function startClient() {
     const hasExistingSession = await sessionStore.sessionExists();
     if (hasExistingSession) {
       logger.info('[RemoteAuth] Existing session found in MongoDB. Initializing client to restore session without QR...');
+      emitProgress(25, 'restoring_session', 'Restoring session from MongoDB...');
     } else {
       logger.info('[RemoteAuth] No existing session found in MongoDB. QR generation will be required.');
     }
@@ -482,8 +528,10 @@ async function startClient() {
     // Attach Puppeteer browser and page listeners for full browser visibility
     if (client.pupBrowser) {
       logger.info('[WhatsApp Diagnostics] client.pupBrowser attached successfully.');
+      emitProgress(35, 'browser_connected', 'Browser connected');
       client.pupBrowser.on('disconnected', () => {
         logger.error('[WhatsApp Diagnostics] Browser disconnected');
+        emitProgress(0, 'browser_disconnected', 'Browser disconnected');
       });
 
       client.pupBrowser.process()?.on('exit', (code) => {

@@ -174,12 +174,23 @@ function eventsStream(req, res) {
     } catch (_) {}
   };
 
+  const onProgress = (progressData) => {
+    try {
+      res.write(`event: wa-progress\ndata: ${JSON.stringify(progressData)}\n\n`);
+      res.write(`event: progress\ndata: ${JSON.stringify(progressData)}\n\n`);
+    } catch (_) {}
+  };
+
   whatsappService.events.on('status_change', onStatusChange);
   whatsappService.events.on('qr', onQr);
+  whatsappService.events.on('progress', onProgress);
+  whatsappService.events.on('wa-progress', onProgress);
 
   req.on('close', () => {
     whatsappService.events.off('status_change', onStatusChange);
     whatsappService.events.off('qr', onQr);
+    whatsappService.events.off('progress', onProgress);
+    whatsappService.events.off('wa-progress', onProgress);
     res.end();
   });
 }
