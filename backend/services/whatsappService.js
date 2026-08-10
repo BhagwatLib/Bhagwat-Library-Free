@@ -220,7 +220,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     authStrategy = new RemoteAuth({
       clientId: sessionClientId,
       store: mongoStore,
-      backupSyncIntervalMs: 60000,
+      backupSyncIntervalMs: 15000,
       dataPath: path.join(__dirname, '../.wwebjs_auth'),
     });
   } else {
@@ -304,7 +304,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     }
   });
 
-  client.on('authenticated', () => {
+  client.on('authenticated', async () => {
+    logger.info('[RemoteAuth] authenticated');
     logger.info('[RemoteAuth] Session restored');
     logger.info('[WA] AUTHENTICATED');
     connectionStatus = 'AUTHENTICATED';
@@ -312,6 +313,18 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     latestQrDataUrl = null;
     lastError = null;
     whatsappEvents.emit('status_change', getStatus());
+
+    // Trigger proactive session backup to MongoDB immediately after authentication
+    setTimeout(async () => {
+      try {
+        if (client?.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+          logger.info('[RemoteAuth] Triggering proactive session backup to MongoDB...');
+          await client.authStrategy.storeRemoteSession({ emit: true });
+        }
+      } catch (saveErr) {
+        logger.warn('[RemoteAuth] Proactive session backup notice:', { message: saveErr.message });
+      }
+    }, 5000);
   });
 
   client.on('auth_failure', async (msg) => {
@@ -337,6 +350,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('ready', async () => {
+    logger.info('[RemoteAuth] ready');
     logger.info('[RemoteAuth] Connected');
     logger.info('[WA] READY');
 
@@ -354,6 +368,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('disconnected', (reason) => {
+    logger.warn('[RemoteAuth] disconnected:', reason);
     logger.warn('[WA] DISCONNECTED:', reason);
     isReady = false;
     client.ready = false;
@@ -364,9 +379,27 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     destroyClient().catch(() => { });
   });
 
-  client.on('remote_session_saved', () => {
+  client.on('remote_session_saved', async () => {
+    logger.info('[RemoteAuth] remote_session_saved');
     logger.info('[RemoteAuth] Session saved');
     logger.info('[WA] REMOTE SESSION SAVED');
+
+    // Inspect MongoDB GridFS collections and log document details
+    try {
+      const details = await sessionStore.inspectSessionDetails();
+      if (details) {
+        logger.info('[RemoteAuth] MongoDB GridFS Inspection Details:', {
+          bucketName: details.bucketName,
+          filesCollection: `${details.bucketName}.files`,
+          chunksCollection: `${details.bucketName}.chunks`,
+          filesCount: details.filesCount,
+          chunksCount: details.chunksCount,
+          files: details.files,
+        });
+      }
+    } catch (inspErr) {
+      logger.warn('[RemoteAuth] Notice inspecting MongoDB session details:', inspErr.message);
+    }
   });
 
   client.on('message', () => {
@@ -733,7 +766,7 @@ async function sendTextMessage(phone, message) {
 
   const beforeScreenshotPath = path.join(__dirname, '../before-send.png');
   if (client.pupPage && !client.pupPage.isClosed()) {
-    await client.pupPage.screenshot({ path: beforeScreenshotPath }).catch(() => {});
+    await client.pupPage.screenshot({ path: beforeScreenshotPath }).catch(() => { });
   }
 
   // Wrap sendMessage() with timing logs and exact error stack trace
@@ -755,7 +788,7 @@ async function sendTextMessage(phone, message) {
 
     const errorScreenshotPath = path.join(__dirname, '../after-send-error.png');
     if (client.pupPage && !client.pupPage.isClosed()) {
-      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => {});
+      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => { });
     }
 
     throw err;
@@ -853,7 +886,7 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
 
     const errorScreenshotPath = path.join(__dirname, '../after-send-doc-error.png');
     if (client.pupPage && !client.pupPage.isClosed()) {
-      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => {});
+      await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => { });
     }
 
     throw err;
@@ -912,9 +945,25 @@ async function sendBulkMessages(phones, message, delayMs = 1000) {
   };
 }
 
+/**
+ * Saves current session before graceful server shutdown
+ */
+async function persistSessionBeforeExit() {
+  if (client && isReady && client.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
+    logger.info('[RemoteAuth] Flushing and saving WhatsApp session to MongoDB before shutdown...');
+    try {
+      await client.authStrategy.storeRemoteSession();
+      logger.info('[RemoteAuth] Session flushed to MongoDB successfully.');
+    } catch (err) {
+      logger.warn('[RemoteAuth] Error saving session during shutdown:', err.message);
+    }
+  }
+}
+
 module.exports = {
   startClient,
   destroyClient,
+  persistSessionBeforeExit,
   getQr,
   getStatus,
   sendTextMessage,

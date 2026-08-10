@@ -23,24 +23,46 @@ const server = app.listen(PORT, HOST, () => {
   logger.info(`🚀 Bhagwat Library Backend running on ${HOST}:${PORT}`);
   logger.info(`   Environment : ${process.env.NODE_ENV || 'development'}`);
   logger.info(`   Health Check: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/health`);
+
+  // Auto-restore existing WhatsApp session on server boot
+  (async () => {
+    try {
+      if (process.env.MONGODB_URI) {
+        const sessionStore = require('./services/whatsapp/sessionStore');
+        const whatsappService = require('./services/whatsappService');
+        logger.info('[RemoteAuth] Checking for existing WhatsApp session in MongoDB on startup...');
+        const hasSession = await sessionStore.sessionExists();
+        if (hasSession) {
+          logger.info('[RemoteAuth] Found existing session in MongoDB. Restoring RemoteAuth session...');
+          whatsappService.startClient().catch((err) => {
+            logger.error('[RemoteAuth] Auto-restore session error on startup:', { message: err.message });
+          });
+        } else {
+          logger.info('[RemoteAuth] No session found in MongoDB. QR scan will be required when requested.');
+        }
+      }
+    } catch (err) {
+      logger.warn('[RemoteAuth] Startup session check notice:', { message: err.message });
+    }
+  })();
 });
 
-// Graceful shutdown — finish open connections before exit
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received — shutting down gracefully...');
+// Graceful shutdown — save active session and finish open connections before exit
+async function handleGracefulShutdown(signal) {
+  logger.info(`${signal} received — shutting down gracefully...`);
+  try {
+    const whatsappService = require('./services/whatsappService');
+    await whatsappService.persistSessionBeforeExit();
+  } catch (_) {}
+
   server.close(() => {
     logger.info('HTTP server closed.');
     process.exit(0);
   });
-});
+}
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received — shutting down gracefully...');
-  server.close(() => {
-    logger.info('HTTP server closed.');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
 // Catch uncaught exceptions — log and exit so the process manager can restart
 process.on('uncaughtException', (err) => {
