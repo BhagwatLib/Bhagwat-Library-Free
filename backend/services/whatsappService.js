@@ -219,8 +219,18 @@ function setupClient(customExecutablePath = null) {
 
   client.ready = false;
 
+  // --- Diagnostic Lifecycle Event Listeners ---
+  client.on('loading_screen', (percent, message) => {
+    logger.info(`[WhatsApp Diagnostics] LOADING ${percent}% - ${message}`);
+  });
+
+  client.on('change_state', (state) => {
+    logger.info(`[WhatsApp Diagnostics] STATE CHANGED: ${state}`);
+  });
+
   // Event: QR Code Received
   client.on('qr', async (qr) => {
+    logger.info('[WhatsApp Diagnostics] ===== QR CODE RECEIVED =====');
     logger.info('[WhatsApp Diagnostics] QR event received! Generating QR image...');
     latestQrRaw = qr;
     try {
@@ -256,6 +266,7 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Authenticated
   client.on('authenticated', () => {
+    logger.info('[WhatsApp Diagnostics] ===== AUTHENTICATED =====');
     logger.info('[WhatsApp Diagnostics] Authenticated! WhatsApp Web session established.');
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
@@ -266,6 +277,7 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Ready
   client.on('ready', () => {
+    logger.info('[WhatsApp Diagnostics] ===== READY =====');
     logger.info('[WhatsApp Diagnostics] Ready! WhatsApp Web client is ready and connected!');
     isReady = true;
     client.ready = true;
@@ -291,7 +303,9 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Auth Failure
   client.on('auth_failure', (msg) => {
-    logger.error('[WhatsApp Diagnostics] Authentication failed', { message: msg });
+    logger.error('[WhatsApp Diagnostics] ===== AUTH FAILURE =====');
+    logger.error('[WhatsApp Diagnostics] AUTH FAILURE');
+    logger.error(msg);
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
@@ -306,7 +320,7 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Disconnected
   client.on('disconnected', (reason) => {
-    logger.warn('[WhatsApp Diagnostics] Disconnected. Reason:', { reason });
+    logger.error(`[WhatsApp Diagnostics] DISCONNECTED: ${reason}`);
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
