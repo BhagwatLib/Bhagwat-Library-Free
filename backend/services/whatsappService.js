@@ -327,32 +327,34 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     lastError = null;
     whatsappEvents.emit('status_change', getStatus());
 
-    // Trigger proactive session backup to MongoDB immediately after authentication
+    // Trigger proactive session backup to MongoDB after authentication
     setTimeout(async () => {
       try {
         if (client?.authStrategy && typeof client.authStrategy.storeRemoteSession === 'function') {
-          logger.info('[RemoteAuth] Triggering proactive session backup to MongoDB...');
+          logger.info('[RemoteAuth] Initiating proactive session backup to MongoDB...');
           await client.authStrategy.storeRemoteSession({ emit: true });
+          const details = await sessionStore.inspectSessionDetails();
+          if (details && details.filesCount > 0) {
+            logger.info(`[RemoteAuth] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file record, ${details.chunksCount} chunks).`);
+          } else {
+            logger.warn('[RemoteAuth] No session found in MongoDB after initial backup attempt.');
+          }
         }
       } catch (saveErr) {
-        logger.warn('[RemoteAuth] Proactive session backup notice:', { message: saveErr.message });
+        logger.error('[RemoteAuth] Session upload failed with exception:', {
+          message: saveErr.message,
+          stack: saveErr.stack,
+        });
       }
-    }, 5000);
+    }, 15000);
   });
 
   client.on('auth_failure', async (msg) => {
     logger.error('[WA] AUTH FAILURE', msg);
     emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
-    logger.warn('[RemoteAuth] Authentication failed! Deleting invalid session from MongoDB...');
-    try {
-      await sessionStore.deleteSession();
-      logger.info('[RemoteAuth] Session deleted');
-    } catch (delErr) {
-      logger.warn('[RemoteAuth] Failed to delete session after auth_failure:', delErr.message);
-    }
 
     isReady = false;
-    client.ready = false;
+    if (client) client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
@@ -366,6 +368,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   client.on('ready', async () => {
     logger.info('[RemoteAuth] ready');
     logger.info('[RemoteAuth] Connected');
+    logger.info('[RemoteAuth] Session restored');
     logger.info('[WA] READY');
     emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
 
@@ -390,12 +393,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.warn('[WA] DISCONNECTED:', reason);
     emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
     isReady = false;
-    client.ready = false;
+    if (client) client.ready = false;
     connectionStatus = 'DISCONNECTED';
     latestQrRaw = null;
     latestQrDataUrl = null;
     whatsappEvents.emit('status_change', getStatus());
-    destroyClient().catch(() => { });
   });
 
   client.on('remote_session_saved', async () => {
@@ -406,21 +408,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       emitProgress(90, 'remote_auth_connected', 'RemoteAuth session synced');
     }
 
-    // Inspect MongoDB GridFS collections and log document details
+    // Inspect MongoDB GridFS collections and verify document existence
     try {
       const details = await sessionStore.inspectSessionDetails();
-      if (details) {
-        logger.info('[RemoteAuth] MongoDB GridFS Inspection Details:', {
-          bucketName: details.bucketName,
-          filesCollection: `${details.bucketName}.files`,
-          chunksCollection: `${details.bucketName}.chunks`,
-          filesCount: details.filesCount,
-          chunksCount: details.chunksCount,
-          files: details.files,
-        });
+      if (details && details.filesCount > 0) {
+        logger.info(`[RemoteAuth] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file, ${details.chunksCount} chunks).`);
+      } else {
+        logger.warn('[RemoteAuth] No session found in MongoDB after remote_session_saved event.');
       }
     } catch (inspErr) {
-      logger.warn('[RemoteAuth] Notice inspecting MongoDB session details:', inspErr.message);
+      logger.debug('[RemoteAuth] Notice inspecting MongoDB session details:', inspErr.message);
     }
   });
 
@@ -471,13 +468,18 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
  */
 async function startClient() {
   if (isReady && client && client.ready) {
-    logger.info('[WhatsApp Diagnostics] Client already connected and ready.');
+    logger.info('[RemoteAuth] Client already connected and ready. Returning existing session.');
     emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
     return getStatus();
   }
 
+  if (client && client.pupBrowser && client.pupBrowser.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
+    logger.info('[RemoteAuth] Browser already running and connected. Returning existing instance.');
+    return getStatus();
+  }
+
   if (isInitializing) {
-    logger.info('[WhatsApp Diagnostics] Client initialization already in progress...');
+    logger.info('[RemoteAuth] Client initialization already in progress. Awaiting completion...');
     return getStatus();
   }
 
@@ -492,9 +494,8 @@ async function startClient() {
       try {
         await client.destroy();
       } catch (err) {
-        logger.warn('[WhatsApp Diagnostics] Previous client cleanup warning (ignored):', {
+        logger.debug('[WhatsApp Diagnostics] Previous client cleanup notice:', {
           message: err.message,
-          stack: err.stack,
         });
       }
       client = null;
@@ -507,13 +508,16 @@ async function startClient() {
       throw new Error('[RemoteAuth] MongoDB connection could not be established. Startup aborted.');
     }
 
+    const sessionClientId = sessionStore.getSessionName();
+    logger.info(`[RemoteAuth] Active clientId: "${sessionClientId}" (Session Name: "RemoteAuth-${sessionClientId}")`);
+
     // 2. Check if existing session is present in MongoDB
     const hasExistingSession = await sessionStore.sessionExists();
     if (hasExistingSession) {
-      logger.info('[RemoteAuth] Existing session found in MongoDB. Initializing client to restore session without QR...');
+      logger.info(`[RemoteAuth] Session found in MongoDB for "${sessionClientId}". Initializing client to restore session without QR...`);
       emitProgress(25, 'restoring_session', 'Restoring session from MongoDB...');
     } else {
-      logger.info('[RemoteAuth] No existing session found in MongoDB. QR generation will be required.');
+      logger.info(`[RemoteAuth] No session found in MongoDB for "${sessionClientId}". QR generation will be required.`);
     }
 
     // 3. Ensure browser executable is ready

@@ -30,10 +30,19 @@ class RobustMongoStore {
     const sessionName = options.session;
     try {
       const db = this.mongoose.connection.db;
-      if (!db) return false;
+      if (!db) {
+        logger.warn(`[RemoteAuth] MongoDB connection is not active when checking session "${sessionName}".`);
+        return false;
+      }
       const filesCollection = db.collection(`whatsapp-${sessionName}.files`);
       const count = await filesCollection.countDocuments({ filename: `${sessionName}.zip` });
-      return count > 0;
+      const exists = count > 0;
+      if (exists) {
+        logger.info(`[RemoteAuth] Session found: "${sessionName}" exists in MongoDB collection "whatsapp-${sessionName}.files" (${count} file record).`);
+      } else {
+        logger.info(`[RemoteAuth] No session found: "${sessionName}" does not exist in MongoDB collection "whatsapp-${sessionName}.files".`);
+      }
+      return exists;
     } catch (err) {
       logger.error(`[RemoteAuth] Error checking session existence for ${sessionName}:`, err.message);
       return false;
@@ -43,16 +52,20 @@ class RobustMongoStore {
   async save(options) {
     const sessionName = options.session;
     const db = this.mongoose.connection.db;
-    const bucket = new this.mongoose.mongo.GridFSBucket(db, {
-      bucketName: `whatsapp-${sessionName}`,
-    });
+    const bucketName = `whatsapp-${sessionName}`;
+    const bucket = new this.mongoose.mongo.GridFSBucket(db, { bucketName });
 
-    // Resolve zip file location dynamically
+    logger.info(`[RemoteAuth] Initiating session backup upload to MongoDB collection "${bucketName}.files"...`);
+
+    // Dynamically locate the zip file created by RemoteAuth.compressSession()
     const candidatePaths = [
       options.path,
-      path.join(process.cwd(), '.wwebjs_auth', `${sessionName}.zip`),
-      path.join(__dirname, '../../.wwebjs_auth', `${sessionName}.zip`),
-      path.join(process.cwd(), `${sessionName}.zip`),
+      path.resolve('.wwebjs_auth', `${sessionName}.zip`),
+      path.resolve(process.cwd(), '.wwebjs_auth', `${sessionName}.zip`),
+      path.resolve(__dirname, '../../.wwebjs_auth', `${sessionName}.zip`),
+      path.resolve(__dirname, '../../../.wwebjs_auth', `${sessionName}.zip`),
+      path.resolve(process.cwd(), `${sessionName}.zip`),
+      path.resolve(`${sessionName}.zip`),
     ].filter(Boolean);
 
     let zipPath = null;
@@ -63,54 +76,83 @@ class RobustMongoStore {
       }
     }
 
+    // Fallback: search recursively inside any .wwebjs_auth directory
     if (!zipPath) {
-      throw new Error(`[RemoteAuth] Cannot find session zip file for "${sessionName}". Checked candidate paths: ${candidatePaths.join(', ')}`);
+      const searchDirs = [
+        path.resolve('.wwebjs_auth'),
+        path.resolve(process.cwd(), '.wwebjs_auth'),
+        path.resolve(__dirname, '../../.wwebjs_auth'),
+      ];
+      for (const sDir of searchDirs) {
+        if (fs.existsSync(sDir)) {
+          const files = fs.readdirSync(sDir);
+          const match = files.find((f) => f.endsWith('.zip') && f.includes(sessionName));
+          if (match) {
+            zipPath = path.join(sDir, match);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!zipPath) {
+      const err = new Error(`[RemoteAuth] Cannot find session zip file for "${sessionName}". Searched: ${candidatePaths.join(', ')}`);
+      logger.error('[RemoteAuth] Session upload failed:', err);
+      throw err;
     }
 
     const fileSize = fs.statSync(zipPath).size;
-    logger.info(`[RemoteAuth] Uploading session zip (${(fileSize / 1024 / 1024).toFixed(2)} MB) from ${zipPath} to MongoDB GridFS (bucket: whatsapp-${sessionName})...`);
+    const fileSizeMB = (fileSize / 1024 / 1024).toFixed(2);
+    logger.info(`[RemoteAuth] Session zip located (${fileSizeMB} MB at ${zipPath}). Uploading to MongoDB GridFS collection "${bucketName}.files"...`);
 
-    await new Promise((resolve, reject) => {
-      const readStream = fs.createReadStream(zipPath);
-      const uploadStream = bucket.openUploadStream(`${sessionName}.zip`);
-
-      readStream
-        .pipe(uploadStream)
-        .on('error', (err) => {
-          logger.error('[RemoteAuth] Error piping zip stream to GridFS:', err);
-          reject(err);
-        })
-        .on('finish', () => {
-          logger.info(`[RemoteAuth] Session zip successfully written to MongoDB GridFS.`);
-          resolve();
-        });
-    });
-
-    // Delete older sessions in this bucket so only the latest valid session is retained
     try {
-      const documents = await bucket.find({ filename: `${sessionName}.zip` }).toArray();
-      if (documents.length > 1) {
-        documents.sort((a, b) => new Date(a.uploadDate) - new Date(b.uploadDate));
-        const oldDocs = documents.slice(0, documents.length - 1);
-        for (const oldDoc of oldDocs) {
-          await bucket.delete(oldDoc._id).catch(() => {});
+      await new Promise((resolve, reject) => {
+        const readStream = fs.createReadStream(zipPath);
+        const uploadStream = bucket.openUploadStream(`${sessionName}.zip`);
+
+        readStream
+          .pipe(uploadStream)
+          .on('error', (err) => {
+            logger.error('[RemoteAuth] Error piping session zip stream to GridFS:', err);
+            reject(err);
+          })
+          .on('finish', () => {
+            logger.info(`[RemoteAuth] session uploaded: Successfully wrote ${fileSizeMB} MB to MongoDB collection "${bucketName}.files".`);
+            resolve();
+          });
+      });
+
+      // Cleanup older backup files so only latest remains
+      try {
+        const documents = await bucket.find({ filename: `${sessionName}.zip` }).toArray();
+        if (documents.length > 1) {
+          documents.sort((a, b) => new Date(a.uploadDate) - new Date(b.uploadDate));
+          const oldDocs = documents.slice(0, documents.length - 1);
+          for (const oldDoc of oldDocs) {
+            await bucket.delete(oldDoc._id).catch(() => {});
+          }
+          logger.info(`[RemoteAuth] Cleaned up ${oldDocs.length} older session backup(s) from MongoDB.`);
         }
-        logger.info(`[RemoteAuth] Cleaned up ${oldDocs.length} older session backup(s) from MongoDB.`);
+      } catch (cleanErr) {
+        logger.debug('[RemoteAuth] Notice during old session cleanup:', cleanErr.message);
       }
-    } catch (cleanErr) {
-      logger.warn('[RemoteAuth] Notice during old session cleanup:', cleanErr.message);
+    } catch (uploadErr) {
+      logger.error('[RemoteAuth] Session upload failed with exception:', {
+        message: uploadErr.message,
+        stack: uploadErr.stack,
+      });
+      throw uploadErr;
     }
   }
 
   async extract(options) {
     const sessionName = options.session;
     const db = this.mongoose.connection.db;
-    const bucket = new this.mongoose.mongo.GridFSBucket(db, {
-      bucketName: `whatsapp-${sessionName}`,
-    });
+    const bucketName = `whatsapp-${sessionName}`;
+    const bucket = new this.mongoose.mongo.GridFSBucket(db, { bucketName });
 
     const targetPath = options.path;
-    logger.info(`[RemoteAuth] Downloading session zip from MongoDB GridFS into ${targetPath}...`);
+    logger.info(`[RemoteAuth] Session found: Downloading session zip from MongoDB GridFS collection "${bucketName}.files" to ${targetPath}...`);
 
     // Ensure parent directory exists
     const dir = path.dirname(targetPath);
@@ -129,7 +171,7 @@ class RobustMongoStore {
           reject(err);
         })
         .on('finish', () => {
-          logger.info('[RemoteAuth] Session zip download complete.');
+          logger.info(`[RemoteAuth] Session restored: Downloaded session zip from MongoDB successfully.`);
           resolve();
         });
     });
@@ -138,9 +180,8 @@ class RobustMongoStore {
   async delete(options) {
     const sessionName = options.session;
     const db = this.mongoose.connection.db;
-    const bucket = new this.mongoose.mongo.GridFSBucket(db, {
-      bucketName: `whatsapp-${sessionName}`,
-    });
+    const bucketName = `whatsapp-${sessionName}`;
+    const bucket = new this.mongoose.mongo.GridFSBucket(db, { bucketName });
 
     try {
       const documents = await bucket.find({ filename: `${sessionName}.zip` }).toArray();
@@ -194,7 +235,7 @@ async function connectAndGetStore() {
     return mongoStoreInstance;
   }
 
-  logger.info('[RemoteAuth] Connecting to MongoDB...');
+  logger.info('[RemoteAuth] Connecting to MongoDB for WhatsApp session persistence...');
   const maskedUri = cleanUri.replace(/(mongodb(?:\+srv)?:\/\/[^:]+:)([^@]+)(@.+)/, '$1******$3');
   logger.info(`[RemoteAuth] Target MongoDB: ${maskedUri}`);
 
@@ -209,7 +250,8 @@ async function connectAndGetStore() {
     logger.info('[RemoteAuth] MongoDB connection established successfully.');
 
     mongoStoreInstance = new RobustMongoStore({ mongoose });
-    logger.info(`[RemoteAuth] RobustMongoStore created successfully for session "${getSessionName()}".`);
+    const clientId = getSessionName();
+    logger.info(`[RemoteAuth] RobustMongoStore initialized with clientId: "${clientId}". Collection: "whatsapp-RemoteAuth-${clientId}.files"`);
 
     return mongoStoreInstance;
   } catch (err) {
@@ -236,7 +278,6 @@ async function sessionExists(customSessionName) {
     const targetSession = customSessionName || getSessionName();
     const sessionDirName = `RemoteAuth-${targetSession}`;
     const exists = await store.sessionExists({ session: sessionDirName });
-    logger.info(`[RemoteAuth] Checking remote session "${sessionDirName}" in MongoDB: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
     return Boolean(exists);
   } catch (err) {
     logger.error('[RemoteAuth] Error checking session existence in MongoDB:', { message: err.message });
