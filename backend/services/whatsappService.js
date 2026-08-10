@@ -220,7 +220,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     authStrategy = new RemoteAuth({
       clientId: sessionClientId,
       store: mongoStore,
-      backupSyncIntervalMs: 15000,
+      backupSyncIntervalMs: 60000,
       dataPath: path.join(__dirname, '../.wwebjs_auth'),
     });
   } else {
