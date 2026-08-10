@@ -31,7 +31,7 @@ class RobustMongoStore {
     try {
       const db = this.mongoose.connection.db;
       if (!db) {
-        logger.warn(`[RemoteAuth] MongoDB connection is not active when checking session "${sessionName}".`);
+        logger.warn(`[RemoteAuth Lifecycle] [sessionExists] MongoDB connection is not active when checking session "${sessionName}".`);
         return false;
       }
 
@@ -39,11 +39,11 @@ class RobustMongoStore {
       const collectionName = `whatsapp-${sessionName}.files`;
       const filesCollection = db.collection(collectionName);
 
-      logger.info(`[RemoteAuth] Checking session existence in Database: "${dbName}" | Collection: "${collectionName}"...`);
+      logger.info(`[RemoteAuth Lifecycle] [sessionExists] Database: "${dbName}" | Collection: "${collectionName}"`);
       const existingDoc = await filesCollection.findOne({ filename: `${sessionName}.zip` });
 
       if (existingDoc) {
-        logger.info(`[RemoteAuth] Session found: Document exists in MongoDB!`, {
+        logger.info(`[RemoteAuth Lifecycle] [sessionExists] FOUND session document in MongoDB`, {
           database: dbName,
           collection: collectionName,
           documentId: existingDoc._id,
@@ -53,11 +53,11 @@ class RobustMongoStore {
         });
         return true;
       } else {
-        logger.info(`[RemoteAuth] No session found: No document with filename "${sessionName}.zip" in Database: "${dbName}", Collection: "${collectionName}".`);
+        logger.info(`[RemoteAuth Lifecycle] [sessionExists] NOT FOUND: No document "${sessionName}.zip" in "${dbName}.${collectionName}"`);
         return false;
       }
     } catch (err) {
-      logger.error(`[RemoteAuth] Error checking session existence for ${sessionName}:`, {
+      logger.error(`[RemoteAuth Lifecycle] [sessionExists] Error for ${sessionName}:`, {
         message: err.message,
         stack: err.stack,
       });
@@ -67,9 +67,13 @@ class RobustMongoStore {
 
   async save(options) {
     const sessionName = options.session;
+    logger.info(`[RemoteAuth Lifecycle] beforeStore() / beforeBackup() for session: "${sessionName}"`);
+
     const db = this.mongoose.connection.db;
     if (!db) {
-      throw new Error('[RemoteAuth] Cannot save session: MongoDB connection is not active.');
+      const err = new Error('[RemoteAuth Lifecycle] Cannot save session: MongoDB connection is not active.');
+      logger.error('[RemoteAuth Lifecycle] Error:', { message: err.message, stack: err.stack });
+      throw err;
     }
 
     const dbName = db.databaseName || this.mongoose.connection.name;
@@ -77,9 +81,7 @@ class RobustMongoStore {
     const collectionName = `${bucketName}.files`;
     const bucket = new this.mongoose.mongo.GridFSBucket(db, { bucketName });
 
-    logger.info(`[RemoteAuth] === Initiating Session Save to MongoDB ===`);
-    logger.info(`[RemoteAuth] Target Database: "${dbName}"`);
-    logger.info(`[RemoteAuth] Target GridFS Bucket: "${bucketName}" (Collections: "${collectionName}", "${bucketName}.chunks")`);
+    logger.info(`[RemoteAuth Lifecycle] [save] Database: "${dbName}", Collection: "${collectionName}"`);
 
     // Dynamically locate the zip file created by RemoteAuth.compressSession()
     const candidatePaths = [
@@ -122,14 +124,14 @@ class RobustMongoStore {
     }
 
     if (!zipPath) {
-      const err = new Error(`[RemoteAuth] Cannot find session zip file for "${sessionName}". Searched paths: ${candidatePaths.join(', ')}`);
-      logger.error('[RemoteAuth] Session upload aborted: Local ZIP file not found.', { error: err.message });
+      const err = new Error(`[RemoteAuth Lifecycle] Cannot find session zip file for "${sessionName}". Searched paths: ${candidatePaths.join(', ')}`);
+      logger.error('[RemoteAuth Lifecycle] save() failed: Local ZIP file missing', { message: err.message, stack: err.stack });
       throw err;
     }
 
     const fileSize = fs.statSync(zipPath).size;
     const fileSizeMB = (fileSize / 1024 / 1024).toFixed(2);
-    logger.info(`[RemoteAuth] Local session zip found at "${zipPath}" (${fileSizeMB} MB). Uploading to GridFS bucket "${bucketName}"...`);
+    logger.info(`[RemoteAuth Lifecycle] Streaming ZIP (${fileSizeMB} MB at ${zipPath}) into MongoDB GridFS...`);
 
     try {
       const uploadStream = bucket.openUploadStream(`${sessionName}.zip`, {
@@ -148,11 +150,14 @@ class RobustMongoStore {
         readStream
           .pipe(uploadStream)
           .on('error', (err) => {
-            logger.error('[RemoteAuth] Error streaming session zip to MongoDB GridFS:', err);
+            logger.error('[RemoteAuth Lifecycle] Error piping session zip stream to GridFS:', {
+              message: err.message,
+              stack: err.stack,
+            });
             reject(err);
           })
           .on('finish', () => {
-            logger.info(`[RemoteAuth] Session zip write stream finished for document ID: ${insertedDocId}`);
+            logger.info(`[RemoteAuth Lifecycle] afterStore() / afterBackup() - Upload stream closed. Document ID: ${insertedDocId}`);
             resolve();
           });
       });
@@ -162,7 +167,7 @@ class RobustMongoStore {
       const savedDoc = await filesCollection.findOne({ _id: insertedDocId });
 
       if (savedDoc) {
-        logger.info(`[RemoteAuth] ✅ RemoteAuth session successfully persisted to MongoDB!`, {
+        logger.info(`[RemoteAuth Lifecycle] ✅ Session document verified in MongoDB!`, {
           database: dbName,
           collection: collectionName,
           documentId: savedDoc._id,
@@ -171,7 +176,7 @@ class RobustMongoStore {
           uploadDate: savedDoc.uploadDate,
         });
       } else {
-        logger.warn(`[RemoteAuth] ⚠️ Session zip uploaded with ID "${insertedDocId}" but findOne verification returned null.`);
+        logger.warn(`[RemoteAuth Lifecycle] ⚠️ Session zip uploaded with ID "${insertedDocId}" but findOne verification returned null.`);
       }
 
       // Cleanup older backup versions so only the latest valid session is retained
@@ -183,13 +188,13 @@ class RobustMongoStore {
           for (const oldDoc of oldDocs) {
             await bucket.delete(oldDoc._id).catch(() => {});
           }
-          logger.info(`[RemoteAuth] Cleaned up ${oldDocs.length} older session backup(s) from MongoDB.`);
+          logger.info(`[RemoteAuth Lifecycle] Cleaned up ${oldDocs.length} older session backup(s) from MongoDB.`);
         }
       } catch (cleanErr) {
-        logger.debug('[RemoteAuth] Notice during old session cleanup:', cleanErr.message);
+        logger.debug('[RemoteAuth Lifecycle] Notice during old session cleanup:', cleanErr.message);
       }
     } catch (uploadErr) {
-      logger.error('[RemoteAuth] ❌ Session upload failed with exception:', {
+      logger.error('[RemoteAuth Lifecycle] ❌ save() threw exception:', {
         message: uploadErr.message,
         stack: uploadErr.stack,
       });
@@ -199,13 +204,15 @@ class RobustMongoStore {
 
   async extract(options) {
     const sessionName = options.session;
+    logger.info(`[RemoteAuth Lifecycle] beforeExtract() for session: "${sessionName}"`);
+
     const db = this.mongoose.connection.db;
     const dbName = db?.databaseName || this.mongoose.connection.name;
     const bucketName = `whatsapp-${sessionName}`;
     const bucket = new this.mongoose.mongo.GridFSBucket(db, { bucketName });
 
     const targetPath = options.path;
-    logger.info(`[RemoteAuth] Session found: Downloading session zip from Database "${dbName}", Collection "${bucketName}.files" to ${targetPath}...`);
+    logger.info(`[RemoteAuth Lifecycle] [extract] Downloading from Database "${dbName}", Collection "${bucketName}.files" to ${targetPath}...`);
 
     // Ensure parent directory exists
     const dir = path.dirname(targetPath);
@@ -213,21 +220,32 @@ class RobustMongoStore {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    await new Promise((resolve, reject) => {
-      const downloadStream = bucket.openDownloadStreamByName(`${sessionName}.zip`);
-      const writeStream = fs.createWriteStream(targetPath);
+    try {
+      await new Promise((resolve, reject) => {
+        const downloadStream = bucket.openDownloadStreamByName(`${sessionName}.zip`);
+        const writeStream = fs.createWriteStream(targetPath);
 
-      downloadStream
-        .pipe(writeStream)
-        .on('error', (err) => {
-          logger.error('[RemoteAuth] Error downloading session zip from GridFS:', err);
-          reject(err);
-        })
-        .on('finish', () => {
-          logger.info(`[RemoteAuth] Session restored: Downloaded session zip from MongoDB successfully.`);
-          resolve();
-        });
-    });
+        downloadStream
+          .pipe(writeStream)
+          .on('error', (err) => {
+            logger.error('[RemoteAuth Lifecycle] Error downloading session zip from GridFS:', {
+              message: err.message,
+              stack: err.stack,
+            });
+            reject(err);
+          })
+          .on('finish', () => {
+            logger.info(`[RemoteAuth Lifecycle] afterExtract() - Downloaded session zip from MongoDB successfully.`);
+            resolve();
+          });
+      });
+    } catch (extractErr) {
+      logger.error('[RemoteAuth Lifecycle] ❌ extract() threw exception:', {
+        message: extractErr.message,
+        stack: extractErr.stack,
+      });
+      throw extractErr;
+    }
   }
 
   async delete(options) {
@@ -241,9 +259,9 @@ class RobustMongoStore {
       for (const doc of documents) {
         await bucket.delete(doc._id).catch(() => {});
       }
-      logger.info(`[RemoteAuth] Deleted ${documents.length} session file(s) for "${sessionName}" from MongoDB.`);
+      logger.info(`[RemoteAuth Lifecycle] Deleted ${documents.length} session file(s) for "${sessionName}" from MongoDB.`);
     } catch (err) {
-      logger.warn(`[RemoteAuth] Notice deleting session files for ${sessionName}:`, err.message);
+      logger.warn(`[RemoteAuth Lifecycle] Notice deleting session files for ${sessionName}:`, err.message);
     }
   }
 
@@ -281,7 +299,7 @@ async function connectAndGetStore() {
   const uri = process.env.MONGODB_URI;
 
   if (!uri || typeof uri !== 'string' || !uri.trim()) {
-    const errMsg = '[RemoteAuth] MONGODB_URI is not configured in environment variables. Remote session storage requires a valid MongoDB connection string.';
+    const errMsg = '[RemoteAuth] MONGODB_URI is not configured in environment variables.';
     logger.error(errMsg);
     throw new Error(errMsg);
   }
@@ -292,7 +310,7 @@ async function connectAndGetStore() {
     return mongoStoreInstance;
   }
 
-  logger.info('[RemoteAuth] Connecting to MongoDB for WhatsApp session persistence...');
+  logger.info('[RemoteAuth] Connecting to MongoDB...');
   const maskedUri = cleanUri.replace(/(mongodb(?:\+srv)?:\/\/[^:]+:)([^@]+)(@.+)/, '$1******$3');
   logger.info(`[RemoteAuth] Target MongoDB URI: ${maskedUri}`);
 
@@ -309,9 +327,7 @@ async function connectAndGetStore() {
     const clientId = getSessionName();
     const collectionName = `whatsapp-RemoteAuth-${clientId}.files`;
 
-    logger.info(`[RemoteAuth] MongoDB connection established successfully.`);
-    logger.info(`[RemoteAuth] Database Name: "${dbName}"`);
-    logger.info(`[RemoteAuth] Target Collection: "${collectionName}"`);
+    logger.info(`[RemoteAuth] MongoDB connection established successfully. Database: "${dbName}", Collection: "${collectionName}"`);
 
     mongoStoreInstance = new RobustMongoStore({ mongoose });
     return mongoStoreInstance;
@@ -322,7 +338,7 @@ async function connectAndGetStore() {
     });
 
     if (err.message && err.message.includes('bad auth')) {
-      logger.error('[RemoteAuth] HINT: "bad auth: authentication failed" means credentials in MONGODB_URI are incorrect or contain unencoded special characters.');
+      logger.error('[RemoteAuth] HINT: "bad auth: authentication failed" means credentials in MONGODB_URI are incorrect.');
     }
 
     mongoStoreInstance = null;
