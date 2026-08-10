@@ -23,7 +23,7 @@ const EventEmitter = require('events');
 const logger = require('../utils/logger');
 const puppeteer = require('puppeteer');
 // Event emitter for broadcasting real-time WhatsApp lifecycle events
-class WhatsAppEventEmitter extends EventEmitter {}
+class WhatsAppEventEmitter extends EventEmitter { }
 const whatsappEvents = new WhatsAppEventEmitter();
 
 // Singleton State
@@ -90,18 +90,26 @@ function setupClient() {
     puppeteerArgs,
   });
 
- const executablePath = puppeteer.executablePath();
+  const executablePath = puppeteer.executablePath();
+  const fs = require("fs");
 
-logger.info('[WhatsApp Diagnostics] Chrome Executable:', executablePath);
+  logger.info("Executable Path:", executablePath);
+  logger.info("Exists:", fs.existsSync(executablePath));
 
-client = new Client({
-  authStrategy: new NoAuth(),
-  puppeteer: {
-    executablePath,
-    headless: 'new',
-    args: puppeteerArgs,
-  },
-});
+  if (fs.existsSync(executablePath)) {
+    logger.info("Size:", fs.statSync(executablePath).size);
+  }
+
+  logger.info('[WhatsApp Diagnostics] Chrome Executable:', executablePath);
+
+  client = new Client({
+    authStrategy: new NoAuth(),
+    puppeteer: {
+      executablePath,
+      headless: 'new',
+      args: puppeteerArgs,
+    },
+  });
 
   client.ready = false;
 
@@ -199,7 +207,7 @@ client = new Client({
     latestQrRaw = null;
     latestQrDataUrl = null;
     whatsappEvents.emit('status_change', getStatus());
-    destroyClient().catch(() => {});
+    destroyClient().catch(() => { });
   });
 }
 
@@ -271,7 +279,7 @@ async function destroyClient() {
     try {
       await client.logout();
       logger.info('[WhatsApp Diagnostics] Client logged out.');
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       await client.destroy();
