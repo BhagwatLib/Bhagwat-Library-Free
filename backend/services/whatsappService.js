@@ -177,7 +177,7 @@ async function ensureBrowserAvailable() {
 /**
  * Instantiates and configures single WhatsApp client instance with bundled Puppeteer
  */
-function setupClient(customExecutablePath = null) {
+function setupClient(customExecutablePath = null, mongoStore = null) {
   logger.info('[WhatsApp Diagnostics] Creating WhatsApp Client...');
 
   const puppeteerArgs = [
@@ -443,16 +443,25 @@ async function startClient() {
       client = null;
     }
 
-    const resolvedExecutablePath = await ensureBrowserAvailable();
-    const mongoStore = await sessionStore.initSessionStore();
-    const hasExistingSession = await sessionStore.sessionExists();
+    // 1. Connect MongoDB and create MongoStore (fails fast if MongoDB connection fails)
+    logger.info('[RemoteAuth] Initializing MongoDB connection for WhatsApp session store...');
+    const mongoStore = await sessionStore.connectAndGetStore();
+    if (!mongoStore) {
+      throw new Error('[RemoteAuth] MongoDB connection could not be established. Startup aborted.');
+    }
 
+    // 2. Check if existing session is present in MongoDB
+    const hasExistingSession = await sessionStore.sessionExists();
     if (hasExistingSession) {
       logger.info('[RemoteAuth] Existing session found in MongoDB. Initializing client to restore session without QR...');
     } else {
       logger.info('[RemoteAuth] No existing session found in MongoDB. QR generation will be required.');
     }
 
+    // 3. Ensure browser executable is ready
+    const resolvedExecutablePath = await ensureBrowserAvailable();
+
+    // 4. Configure client with resolved browser and MongoStore
     setupClient(resolvedExecutablePath, mongoStore);
     logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
     logger.info('[WhatsApp Diagnostics] Waiting for browser to launch and generate QR / restore session...');
