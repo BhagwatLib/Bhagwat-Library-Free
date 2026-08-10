@@ -118,6 +118,16 @@ app.use((req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// Request Logging (method, path, IP, timestamp)
+// ---------------------------------------------------------------------------
+app.use((req, res, next) => {
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const path = req.originalUrl || req.url;
+  logger.info(`[HTTP Request] ${req.method} ${path} - IP: ${ip}`);
+  next();
+});
+
+// ---------------------------------------------------------------------------
 // Rate limiting
 // ---------------------------------------------------------------------------
 app.use('/api', rateLimiter);
