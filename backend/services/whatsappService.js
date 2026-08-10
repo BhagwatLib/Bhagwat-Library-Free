@@ -201,7 +201,7 @@ async function ensureBrowserAvailable() {
  * Instantiates and configures single WhatsApp client instance with bundled Puppeteer
  */
 function setupClient(customExecutablePath = null, mongoStore = null) {
-  logger.info('[WhatsApp Diagnostics] Creating WhatsApp Client...');
+  logger.debug('[WhatsApp Diagnostics] Creating WhatsApp Client...');
 
   const puppeteerArgs = [
     '--no-sandbox',
@@ -215,9 +215,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--disable-extensions',
   ];
 
+  const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
+
   const puppeteerOptions = {
     headless: 'new',
-    dumpio: true,
+    dumpio: isDebug,
     ignoreHTTPSErrors: true,
     protocolTimeout: 300000,
     args: [
@@ -229,9 +231,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   // 1. Allow Puppeteer default resolution or runtime-installed path
   if (customExecutablePath && fs.existsSync(customExecutablePath)) {
     puppeteerOptions.executablePath = customExecutablePath;
-    logger.info(`[WhatsApp Diagnostics] Using resolved executablePath: ${customExecutablePath}`);
+    logger.debug(`[WhatsApp Diagnostics] Using resolved executablePath: ${customExecutablePath}`);
   } else {
-    logger.info('[WhatsApp Diagnostics] Using default Puppeteer resolution (no custom executablePath passed).');
+    logger.debug('[WhatsApp Diagnostics] Using default Puppeteer resolution (no custom executablePath passed).');
   }
 
   const sessionClientId = sessionStore.getSessionName();
@@ -250,10 +252,10 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     authStrategy = new NoAuth();
   }
 
-  logger.info('[WhatsApp Diagnostics] Puppeteer Launch Configuration:', {
+  logger.debug('[WhatsApp Diagnostics] Puppeteer Launch Configuration:', {
     authStrategy: mongoStore ? `RemoteAuth (${sessionClientId})` : 'NoAuth',
     headless: 'new',
-    dumpio: true,
+    dumpio: isDebug,
     ignoreHTTPSErrors: true,
     protocolTimeout: 300000,
     executablePath: puppeteerOptions.executablePath || 'DEFAULT_RESOLUTION',
@@ -540,9 +542,9 @@ async function startClient() {
     }
 
     if (client.pupPage) {
-      logger.info('[WhatsApp Diagnostics] client.pupPage attached successfully.');
+      logger.debug('[WhatsApp Diagnostics] client.pupPage attached successfully.');
       client.pupPage.on('console', (msg) => {
-        logger.info('[Browser]', msg.text());
+        logger.debug('[Browser]', msg.text());
       });
       client.pupPage.on('pageerror', (err) => {
         logger.error('[Browser Page Error]', err);
@@ -551,7 +553,7 @@ async function startClient() {
         logger.error('[Browser Error]', err);
       });
       client.pupPage.on('requestfailed', (req) => {
-        logger.warn('[Browser Request Failed]', {
+        logger.debug('[Browser Request Failed]', {
           url: req.url(),
           error: req.failure()?.errorText,
         });
@@ -642,30 +644,26 @@ async function getQr() {
     });
   }
 
-  return {
-    status: connectionStatus,
-    qrCode: latestQrDataUrl,
-    rawQr: latestQrRaw,
-    lastError,
-  };
+ * Returns active WhatsApp client instance
+ */
+function getClient() {
+  return client;
 }
 
 /**
- * Downloads media from URL or loads local file
+ * Downloads media from URL and converts to base64 MessageMedia
  */
 async function getMediaFromUrl(url, filename) {
-  if (url.includes('/uploads/')) {
-    const parts = url.split('/uploads/');
-    const localFilename = parts[parts.length - 1];
-    const localPath = path.join(__dirname, '../uploads', localFilename);
-
+  if (url.startsWith('/uploads/') || url.includes('/uploads/')) {
+    const localRelative = url.startsWith('/uploads/') ? url.replace('/uploads/', '') : url.split('/uploads/')[1];
+    const localPath = path.join(__dirname, '../uploads', localRelative);
     if (fs.existsSync(localPath)) {
       try {
-        const data = fs.readFileSync(localPath);
-        const base64Data = data.toString('base64');
-        return new MessageMedia('application/pdf', base64Data, filename || localFilename);
+        const fileData = fs.readFileSync(localPath);
+        const base64Data = fileData.toString('base64');
+        return new MessageMedia('application/pdf', base64Data, filename || 'invoice.pdf');
       } catch (err) {
-        logger.error(`Error reading local file: ${localPath}`, {
+        logger.error(`Failed to read local file: ${localPath}`, {
           message: err.message,
           stack: err.stack,
         });
@@ -702,7 +700,7 @@ async function verifyClientHealth() {
   const browserConnected = Boolean(client?.pupBrowser?.isConnected());
   const pageClosed = client?.pupPage ? client.pupPage.isClosed() : true;
 
-  logger.info('[WhatsApp Health Check]:', {
+  logger.debug('[WhatsApp Health Check]:', {
     browserConnected,
     pageClosed,
     isReady: Boolean(isReady && client?.ready),
@@ -731,10 +729,10 @@ async function sendTextMessage(phone, message) {
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
-  logger.info('[WhatsApp Diagnostics] === Recipient Resolution Diagnostics ===');
-  logger.info('Original phone number:', phone);
-  logger.info('Sanitized phone number:', normalizedPhone);
-  logger.info('Final chatId:', rawChatId);
+  logger.debug('[WhatsApp Diagnostics] === Recipient Resolution Diagnostics ===');
+  logger.debug('Original phone number:', phone);
+  logger.debug('Sanitized phone number:', normalizedPhone);
+  logger.debug('Final chatId:', rawChatId);
 
   if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
     throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
@@ -751,7 +749,7 @@ async function sendTextMessage(phone, message) {
 
   // Pre-send diagnostic logging
   const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.info('[WhatsApp Pre-Send Diagnostics]:', {
+  logger.debug('[WhatsApp Pre-Send Diagnostics]:', {
     state: currentState,
     'client.ready': client.ready,
     'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
@@ -761,11 +759,11 @@ async function sendTextMessage(phone, message) {
   });
 
   // 3 & 4. Resolve recipient number via getNumberId before sending
-  logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
+  logger.debug(`Executing client.getNumberId("${normalizedPhone}")...`);
   let numberId = null;
   try {
     numberId = await client.getNumberId(normalizedPhone);
-    logger.info('NumberId:', numberId);
+    logger.debug('NumberId:', numberId);
   } catch (lookupErr) {
     logger.error('Error during client.getNumberId lookup:', lookupErr);
     logger.error(lookupErr.stack);
@@ -779,11 +777,10 @@ async function sendTextMessage(phone, message) {
   }
 
   const resolvedTargetJid = numberId._serialized;
-  logger.info(`Resolved target JID for send: "${resolvedTargetJid}"`);
+  logger.debug(`Resolved target JID for send: "${resolvedTargetJid}"`);
 
   // Immediately before sendMessage(), verify state is CONNECTED
   const state = await client.getState().catch(() => null);
-  logger.info('State:', state);
 
   if (state !== 'CONNECTED') {
     logger.error(`[WhatsApp Diagnostics] Cannot send message: Client state is "${state}", expected "CONNECTED".`);
@@ -801,8 +798,8 @@ async function sendTextMessage(phone, message) {
     logger.info(`Sending message to ${resolvedTargetJid}...`);
     const result = await client.sendMessage(resolvedTargetJid, message);
     logger.info('Message sent successfully');
-    logger.info('Duration:', Date.now() - start, 'ms');
-    logger.info(result);
+    logger.debug('Duration:', Date.now() - start, 'ms');
+    logger.debug(result);
 
     const messageId = result?.id?.id || `msg-${Date.now()}`;
     return { success: true, messageId };
@@ -830,11 +827,11 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
-  logger.info('[WhatsApp Diagnostics] === Recipient Document Resolution Diagnostics ===');
-  logger.info('Original phone number:', phone);
-  logger.info('Sanitized phone number:', normalizedPhone);
-  logger.info('Final chatId:', rawChatId);
-  logger.info('documentUrl:', documentUrl);
+  logger.debug('[WhatsApp Diagnostics] === Recipient Document Resolution Diagnostics ===');
+  logger.debug('Original phone number:', phone);
+  logger.debug('Sanitized phone number:', normalizedPhone);
+  logger.debug('Final chatId:', rawChatId);
+  logger.debug('documentUrl:', documentUrl);
 
   if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
     throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
@@ -849,7 +846,7 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   }
 
   const currentState = await client.getState().catch((e) => `Error: ${e.message}`);
-  logger.info('[WhatsApp Pre-Send Document Diagnostics]:', {
+  logger.debug('[WhatsApp Pre-Send Document Diagnostics]:', {
     state: currentState,
     'client.ready': client.ready,
     'client.pupBrowser.connected': Boolean(client.pupBrowser?.isConnected()),
@@ -858,11 +855,11 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   });
 
   // 3 & 4. Resolve recipient number via getNumberId before sending
-  logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
+  logger.debug(`Executing client.getNumberId("${normalizedPhone}")...`);
   let numberId = null;
   try {
     numberId = await client.getNumberId(normalizedPhone);
-    logger.info('NumberId:', numberId);
+    logger.debug('NumberId:', numberId);
   } catch (lookupErr) {
     logger.error('Error during client.getNumberId lookup:', lookupErr);
     logger.error(lookupErr.stack);
@@ -876,17 +873,16 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   }
 
   const resolvedTargetJid = numberId._serialized;
-  logger.info(`Resolved target JID for document send: "${resolvedTargetJid}"`);
+  logger.debug(`Resolved target JID for document send: "${resolvedTargetJid}"`);
 
   const state = await client.getState().catch(() => null);
-  logger.info('State:', state);
 
   if (state !== 'CONNECTED') {
     logger.error(`[WhatsApp Diagnostics] Cannot send document: Client state is "${state}", expected "CONNECTED".`);
     throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
   }
 
-  logger.info(`Resolving media from URL: ${documentUrl}...`);
+  logger.debug(`Resolving media from URL: ${documentUrl}...`);
   const media = await getMediaFromUrl(documentUrl, filename);
 
   const start = Date.now();
@@ -894,8 +890,8 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
     logger.info(`Sending document [${filename}] to ${resolvedTargetJid}...`);
     const result = await client.sendMessage(resolvedTargetJid, media, { caption });
     logger.info('Message sent successfully');
-    logger.info('Duration:', Date.now() - start, 'ms');
-    logger.info(result);
+    logger.debug('Duration:', Date.now() - start, 'ms');
+    logger.debug(result);
 
     const messageId = result?.id?.id || `doc-${Date.now()}`;
     return { success: true, messageId };

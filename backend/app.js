@@ -118,12 +118,12 @@ app.use((req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
-// Request Logging (method, path, IP, timestamp)
+// Request Logging (method, path, IP, timestamp) — DEBUG level only
 // ---------------------------------------------------------------------------
 app.use((req, res, next) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const path = req.originalUrl || req.url;
-  logger.info(`[HTTP Request] ${req.method} ${path} - IP: ${ip}`);
+  logger.debug(`[HTTP Request] ${req.method} ${path} - IP: ${ip}`);
   next();
 });
 

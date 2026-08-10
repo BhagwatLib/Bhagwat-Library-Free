@@ -34,6 +34,11 @@ export const WhatsAppScanner = () => {
     clientInfo: null,
     timestamp: null,
   });
+  const [progressData, setProgressData] = useState({
+    progress: 0,
+    stage: "idle",
+    status: "Idle (Disconnected)",
+  });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -51,6 +56,9 @@ export const WhatsAppScanner = () => {
         ...prev,
         ...data,
       }));
+      if (data?.progress) {
+        setProgressData(data.progress);
+      }
     } catch (err) {
       console.error("Failed to fetch WhatsApp status:", err);
     } finally {
@@ -63,18 +71,49 @@ export const WhatsAppScanner = () => {
 
     // Setup SSE stream for instant real-time updates
     let eventSource = null;
+    let sseActive = false;
+
+    const startFallbackPolling = () => {
+      if (pollIntervalRef.current) return;
+      pollIntervalRef.current = setInterval(() => {
+        if (!sseActive) {
+          fetchStatus();
+        }
+      }, 3000);
+    };
+
+    const stopFallbackPolling = () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
       eventSource = new EventSource(`${backendUrl}/api/whatsapp/events`);
+
+      eventSource.onopen = () => {
+        sseActive = true;
+        stopFallbackPolling();
+      };
+
       eventSource.addEventListener("status", (e) => {
         try {
+          sseActive = true;
+          stopFallbackPolling();
           const parsed = JSON.parse(e.data);
           setStatusData((prev) => ({ ...prev, ...parsed }));
+          if (parsed.progress) {
+            setProgressData(parsed.progress);
+          }
           setLoading(false);
         } catch (_) {}
       });
+
       eventSource.addEventListener("qr", (e) => {
         try {
+          sseActive = true;
           const parsed = JSON.parse(e.data);
           setStatusData((prev) => ({
             ...prev,
@@ -82,17 +121,49 @@ export const WhatsAppScanner = () => {
             status: "QR_READY",
             isReady: false,
           }));
+          setProgressData({
+            progress: 0,
+            stage: "qr_generated",
+            status: "QR code generated. Scan with phone.",
+          });
         } catch (_) {}
       });
+
+      eventSource.addEventListener("wa-progress", (e) => {
+        try {
+          sseActive = true;
+          const parsed = JSON.parse(e.data);
+          setProgressData(parsed);
+          if (parsed.progress === 100) {
+            setStatusData((prev) => ({ ...prev, isReady: true, status: "CONNECTED" }));
+            setLoading(false);
+          }
+        } catch (_) {}
+      });
+
+      eventSource.addEventListener("progress", (e) => {
+        try {
+          sseActive = true;
+          const parsed = JSON.parse(e.data);
+          setProgressData(parsed);
+          if (parsed.progress === 100) {
+            setStatusData((prev) => ({ ...prev, isReady: true, status: "CONNECTED" }));
+            setLoading(false);
+          }
+        } catch (_) {}
+      });
+
+      eventSource.onerror = () => {
+        sseActive = false;
+        startFallbackPolling();
+      };
     } catch (err) {
       console.warn("SSE connection error, falling back to polling:", err);
+      startFallbackPolling();
     }
 
-    // Fallback periodic poll every 3.5s
-    pollIntervalRef.current = setInterval(fetchStatus, 3500);
-
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      stopFallbackPolling();
       if (eventSource) eventSource.close();
     };
   }, []);
@@ -273,6 +344,59 @@ export const WhatsAppScanner = () => {
           )}
         </div>
       </div>
+
+      {/* Real-time Connection Progress Banner (Live Backend Driven) */}
+      {(isConnecting || hasQR || (progressData.progress > 0 && progressData.progress < 100)) && (
+        <div className="p-4 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-2xl space-y-3 animate-in fade-in slide-in-from-top-3 duration-300">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className={clsx(
+                "w-2.5 h-2.5 rounded-full shrink-0",
+                progressData.progress === 100
+                  ? "bg-emerald-400"
+                  : progressData.stage === "error"
+                  ? "bg-rose-400"
+                  : "bg-cyan-400 animate-ping"
+              )}></span>
+              <span className="font-bold text-slate-200">
+                {progressData.status || "Connecting to WhatsApp..."}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono uppercase text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50">
+                {progressData.stage}
+              </span>
+              <span className="font-black text-cyan-400 tabular-nums text-sm">
+                {progressData.progress}%
+              </span>
+            </div>
+          </div>
+
+          {/* Animated Progress Bar */}
+          <div className="w-full h-3 rounded-full bg-slate-800/90 overflow-hidden p-0.5 border border-slate-700/60 relative">
+            <div
+              className={clsx(
+                "h-full rounded-full transition-all duration-500 ease-out relative overflow-hidden",
+                progressData.progress === 100
+                  ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30"
+                  : progressData.stage === "error"
+                  ? "bg-gradient-to-r from-rose-600 to-red-400"
+                  : "bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400 shadow-lg shadow-cyan-500/30"
+              )}
+              style={{ width: `${Math.max(4, progressData.progress)}%` }}
+            >
+              {progressData.progress > 0 && progressData.progress < 100 && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-pulse"></div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
+            <span>Real-time backend lifecycle sync</span>
+            <span>{progressData.progress === 100 ? "Ready to dispatch" : "In progress..."}</span>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
