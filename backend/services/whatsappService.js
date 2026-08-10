@@ -95,114 +95,121 @@ function getStatus() {
   };
 }
 
+// Startup timing telemetry
+let startupTimers = {
+  start: 0,
+  browserLaunched: 0,
+  waPageLoaded: 0,
+  qrGenerated: 0,
+  ready: 0,
+};
+
+let cachedExecutablePath = null;
+
 /**
- * Ensures browser executable is resolved, logs comprehensive diagnostics,
- * and dynamically installs Chrome at runtime if missing.
+ * Fast-resolves browser executable without redundant disk scans or reinstallations.
+ * Reuses existing Chromium binary immediately.
  */
 async function ensureBrowserAvailable() {
-  logger.info('[WhatsApp Diagnostics] ========================================');
-  logger.info('[WhatsApp Diagnostics] --- Puppeteer Environment Diagnostics ---');
-
-  // 3. Ensure no PUPPETEER_EXECUTABLE_PATH environment variable overrides runtime if invalid
-  const envExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  if (envExecutablePath) {
-    logger.info(`[WhatsApp Diagnostics] Found PUPPETEER_EXECUTABLE_PATH env var: "${envExecutablePath}"`);
-    if (!fs.existsSync(envExecutablePath)) {
-      logger.warn(`[WhatsApp Diagnostics] PUPPETEER_EXECUTABLE_PATH "${envExecutablePath}" does NOT exist on disk! Deleting env override to allow default resolution.`);
-      delete process.env.PUPPETEER_EXECUTABLE_PATH;
-    } else {
-      logger.info(`[WhatsApp Diagnostics] PUPPETEER_EXECUTABLE_PATH "${envExecutablePath}" is valid and verified on disk.`);
-    }
-  } else {
-    logger.info('[WhatsApp Diagnostics] No PUPPETEER_EXECUTABLE_PATH override detected in environment.');
+  if (cachedExecutablePath && fs.existsSync(cachedExecutablePath)) {
+    logger.debug(`[Browser Resolver] Reusing cached executable: ${cachedExecutablePath}`);
+    return cachedExecutablePath;
   }
 
-  // 2. Log requested diagnostics
-  let defaultExecPath = null;
+  // 1. Check PUPPETEER_EXECUTABLE_PATH env var
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    cachedExecutablePath = envPath;
+    logger.info(`[Browser Resolver] Found browser via PUPPETEER_EXECUTABLE_PATH: ${cachedExecutablePath}`);
+    return cachedExecutablePath;
+  }
+
+  // 2. Check standard Puppeteer executable
   try {
-    defaultExecPath = puppeteer.executablePath();
-  } catch (err) {
-    logger.warn('[WhatsApp Diagnostics] puppeteer.executablePath() threw error:', { message: err.message });
+    const defaultPath = puppeteer.executablePath();
+    if (defaultPath && fs.existsSync(defaultPath)) {
+      cachedExecutablePath = defaultPath;
+      logger.info(`[Browser Resolver] Found standard Puppeteer browser: ${cachedExecutablePath}`);
+      return cachedExecutablePath;
+    }
+  } catch (_) {}
+
+  // 3. Fast check common Linux / Render / Windows system paths
+  const commonSystemPaths = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
+
+  for (const sysPath of commonSystemPaths) {
+    if (fs.existsSync(sysPath)) {
+      cachedExecutablePath = sysPath;
+      logger.info(`[Browser Resolver] Found system browser: ${cachedExecutablePath}`);
+      return cachedExecutablePath;
+    }
   }
 
-  logger.info(`[WhatsApp Diagnostics] puppeteer.executablePath(): ${defaultExecPath}`);
-
-  const execExists = defaultExecPath ? fs.existsSync(defaultExecPath) : false;
-  logger.info(`[WhatsApp Diagnostics] fs.existsSync(executablePath): ${execExists}`);
-
-  const renderCacheDir = '/opt/render/.cache/puppeteer';
-  const renderCacheExists = fs.existsSync(renderCacheDir);
-  logger.info(`[WhatsApp Diagnostics] fs.existsSync("/opt/render/.cache/puppeteer"): ${renderCacheExists}`);
-  if (renderCacheExists) {
+  // 4. Check project cache directory (.puppeteer-cache)
+  const projectCacheDir = path.join(__dirname, '../.puppeteer-cache');
+  if (fs.existsSync(projectCacheDir)) {
     try {
-      const renderCacheContents = fs.readdirSync(renderCacheDir);
-      logger.info(`[WhatsApp Diagnostics] fs.readdirSync("/opt/render/.cache/puppeteer"):`, renderCacheContents);
-    } catch (err) {
-      logger.warn(`[WhatsApp Diagnostics] Failed to read /opt/render/.cache/puppeteer:`, { message: err.message });
-    }
-  }
-
-  if (defaultExecPath) {
-    const parentDir = path.dirname(defaultExecPath);
-    const parentDirExists = fs.existsSync(parentDir);
-    logger.info(`[WhatsApp Diagnostics] fs.existsSync(path.dirname(executablePath)) [${parentDir}]: ${parentDirExists}`);
-    if (parentDirExists) {
-      try {
-        const dirContents = fs.readdirSync(parentDir);
-        logger.info(`[WhatsApp Diagnostics] fs.readdirSync(path.dirname(executablePath)):`, dirContents);
-      } catch (err) {
-        logger.warn(`[WhatsApp Diagnostics] Failed to read path.dirname(executablePath):`, { message: err.message });
+      const findExecutable = (dir) => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const stat = fs.statSync(fullPath);
+          if (stat.isDirectory()) {
+            const found = findExecutable(fullPath);
+            if (found) return found;
+          } else if (file === 'chrome' || file === 'chrome.exe' || file === 'chromium') {
+            return fullPath;
+          }
+        }
+        return null;
+      };
+      const foundInCache = findExecutable(projectCacheDir);
+      if (foundInCache && fs.existsSync(foundInCache)) {
+        cachedExecutablePath = foundInCache;
+        logger.info(`[Browser Resolver] Found cached project browser: ${cachedExecutablePath}`);
+        return cachedExecutablePath;
       }
-    }
+    } catch (_) {}
   }
 
-  // 4 & 5. If browser is missing at runtime, switch to using @puppeteer/browsers to install Chrome during startup
-  let resolvedExecutablePath = (execExists && defaultExecPath) ? defaultExecPath : null;
-
-  if (!resolvedExecutablePath && browsers) {
-    logger.warn('[WhatsApp Diagnostics] Browser executable is missing at runtime! Attempting automatic on-demand installation via @puppeteer/browsers...');
+  // 5. Only if absolutely missing anywhere on the system, trigger on-demand installation
+  if (browsers) {
+    logger.warn('[Browser Resolver] No existing browser found on disk. Installing Chrome via @puppeteer/browsers...');
     try {
       const platform = browsers.detectBrowserPlatform();
-      const projectCacheDir = path.join(__dirname, '../.puppeteer-cache');
-
-      let buildId = '146.0.7680.31';
-      try {
-        buildId = await browsers.resolveBuildId(browsers.Browser.CHROME, platform, browsers.BrowserTag.STABLE);
-      } catch (e) {
-        logger.warn(`[WhatsApp Diagnostics] Could not resolve latest stable buildId (${e.message}), using fallback: ${buildId}`);
-      }
-
-      logger.info(`[WhatsApp Diagnostics] Installing Chrome (build: ${buildId}, platform: ${platform}) to ${projectCacheDir}...`);
-      const installedBrowser = await browsers.install({
+      const buildId = '146.0.7680.31';
+      const installed = await browsers.install({
         browser: browsers.Browser.CHROME,
         buildId,
         cacheDir: projectCacheDir,
       });
-
-      if (installedBrowser && installedBrowser.executablePath && fs.existsSync(installedBrowser.executablePath)) {
-        resolvedExecutablePath = installedBrowser.executablePath;
-        logger.info(`[WhatsApp Diagnostics] Dynamic browser installation completed successfully! Executable: ${resolvedExecutablePath}`);
-      } else {
-        logger.warn('[WhatsApp Diagnostics] Dynamic browser install completed but executablePath could not be verified.');
+      if (installed?.executablePath && fs.existsSync(installed.executablePath)) {
+        cachedExecutablePath = installed.executablePath;
+        logger.info(`[Browser Resolver] Dynamic browser installation completed: ${cachedExecutablePath}`);
+        return cachedExecutablePath;
       }
     } catch (installErr) {
-      logger.error('[WhatsApp Diagnostics] Failed to install browser at runtime:', {
-        message: installErr.message,
-        stack: installErr.stack,
-      });
+      logger.error('[Browser Resolver] Dynamic browser install failed:', installErr);
     }
   }
 
-  logger.info('[WhatsApp Diagnostics] ========================================');
-  return resolvedExecutablePath;
+  return null;
 }
 
 /**
- * Instantiates and configures single WhatsApp client instance with bundled Puppeteer
+ * Instantiates and configures single WhatsApp client instance with optimized Puppeteer flags
  */
 function setupClient(customExecutablePath = null, mongoStore = null) {
   logger.debug('[WhatsApp Diagnostics] Creating WhatsApp Client...');
 
+  // High performance headless Chrome flags for instant launch
   const puppeteerArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -213,6 +220,23 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--disable-gpu',
     '--disable-software-rasterizer',
     '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad',
+    '--disable-component-update',
+    '--disable-default-apps',
+    '--disable-domain-reliability',
+    '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
+    '--disable-ipc-flooding-protection',
+    '--disable-popup-blocking',
+    '--disable-prompt-on-repost',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--disable-translate',
+    '--metrics-recording-only',
+    '--mute-audio',
+    '--safebrowsing-disable-auto-update',
   ];
 
   const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
@@ -228,12 +252,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     ],
   };
 
-  // 1. Allow Puppeteer default resolution or runtime-installed path
   if (customExecutablePath && fs.existsSync(customExecutablePath)) {
     puppeteerOptions.executablePath = customExecutablePath;
-    logger.debug(`[WhatsApp Diagnostics] Using resolved executablePath: ${customExecutablePath}`);
-  } else {
-    logger.debug('[WhatsApp Diagnostics] Using default Puppeteer resolution (no custom executablePath passed).');
   }
 
   const sessionClientId = sessionStore.getSessionName();
@@ -251,16 +271,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     logger.warn('[RemoteAuth] MongoStore is not available. Falling back to NoAuth.');
     authStrategy = new NoAuth();
   }
-
-  logger.debug('[WhatsApp Diagnostics] Puppeteer Launch Configuration:', {
-    authStrategy: mongoStore ? `RemoteAuth (${sessionClientId})` : 'NoAuth',
-    headless: 'new',
-    dumpio: isDebug,
-    ignoreHTTPSErrors: true,
-    protocolTimeout: 300000,
-    executablePath: puppeteerOptions.executablePath || 'DEFAULT_RESOLUTION',
-    puppeteerArgs: puppeteerOptions.args,
-  });
 
   client = new Client({
     authStrategy,
@@ -303,6 +313,10 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   // --- Detailed Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
+    if (!startupTimers.waPageLoaded) {
+      startupTimers.waPageLoaded = Date.now();
+      logger.info(`[Startup Metrics] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
+    }
     logger.info(`[WA] LOADING ${percent}% - ${message}`);
     const pct = Number(percent) || 0;
     if (pct === 100) {
@@ -354,6 +368,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('ready', async () => {
+    startupTimers.ready = Date.now();
+    logger.info(`[Startup Metrics] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
     logger.info('[RemoteAuth] ready');
     logger.info('[RemoteAuth] Connected');
     logger.info('[RemoteAuth] Session restored');
@@ -420,8 +436,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   // Event: QR Code Received
   client.on('qr', async (qr) => {
+    startupTimers.qrGenerated = Date.now();
+    logger.info(`[Startup Metrics] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
     logger.info('[WhatsApp Diagnostics] ===== QR CODE RECEIVED =====');
-    logger.info('[WhatsApp Diagnostics] QR event received! Generating QR image...');
     latestQrRaw = qr;
     try {
       latestQrDataUrl = await QRCode.toDataURL(qr, {
@@ -442,11 +459,10 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
     connectionStatus = 'QR_READY';
     isReady = false;
-    client.ready = false;
+    if (client) client.ready = false;
     lastError = null;
     emitProgress(0, 'qr_generated', 'QR code generated. Scan with phone.');
 
-    logger.info('[WhatsApp Diagnostics] Waiting for QR code to be scanned with mobile app...');
     console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
     qrcodeTerminal.generate(qr, { small: true });
     console.log('-----------------------------------------------------\n');
@@ -477,6 +493,13 @@ async function startClient() {
   }
 
   isInitializing = true;
+  startupTimers = {
+    start: Date.now(),
+    browserLaunched: 0,
+    waPageLoaded: 0,
+    qrGenerated: 0,
+    ready: 0,
+  };
   connectionStatus = 'CONNECTING';
   lastError = null;
   emitProgress(20, 'browser_launching', 'Browser launching...');
@@ -519,14 +542,14 @@ async function startClient() {
     // 4. Configure client with resolved browser and MongoStore
     setupClient(resolvedExecutablePath, mongoStore);
     logger.info('[WhatsApp Diagnostics] Starting client.initialize()...');
-    logger.info('[WhatsApp Diagnostics] Waiting for browser to launch and generate QR / restore session...');
 
     await client.initialize();
     logger.info('[WhatsApp Diagnostics] WhatsApp client.initialize() promise resolved successfully.');
 
     // Attach Puppeteer browser and page listeners for full browser visibility
     if (client.pupBrowser) {
-      logger.info('[WhatsApp Diagnostics] client.pupBrowser attached successfully.');
+      startupTimers.browserLaunched = Date.now();
+      logger.info(`[Startup Metrics] ⏱️ Browser Launch Time: ${startupTimers.browserLaunched - startupTimers.start}ms (${((startupTimers.browserLaunched - startupTimers.start) / 1000).toFixed(1)}s)`);
       emitProgress(35, 'browser_connected', 'Browser connected');
       client.pupBrowser.on('disconnected', () => {
         logger.error('[WhatsApp Diagnostics] Browser disconnected');
