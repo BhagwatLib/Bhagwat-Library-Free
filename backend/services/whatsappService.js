@@ -610,38 +610,64 @@ async function sendTextMessage(phone, message) {
     throw new Error('WhatsApp client is not connected. Please scan the QR code first in Settings → WhatsApp Gateway.');
   }
 
+  // 1. Log original and sanitized numbers
   const normalizedPhone = normalizePhoneNumber(phone);
-  if (!normalizedPhone) {
-    throw new Error('Invalid phone number provided.');
+  const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
+
+  logger.info('[WhatsApp Diagnostics] === Recipient Resolution Diagnostics ===');
+  logger.info('Original phone number:', phone);
+  logger.info('Sanitized phone number:', normalizedPhone);
+  logger.info('Final chatId:', rawChatId);
+
+  if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
+    throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
   }
+
+  // 2. Validate chatId format: 91XXXXXXXXXX@c.us
+  if (!/^\d{10,15}@c\.us$/.test(rawChatId)) {
+    throw new Error(`Invalid chatId format: "${rawChatId}". Expected format: 91XXXXXXXXXX@c.us`);
+  }
+
   if (!message) {
     throw new Error('Message content cannot be empty.');
   }
 
-  // 2. Validate chatId before sending (format: 919876543210@c.us)
-  const chatId = normalizedPhone.endsWith('@c.us') ? normalizedPhone : `${normalizedPhone}@c.us`;
-
-  // 1. Before sendMessage(), log all diagnostics
-  logger.info('[WhatsApp Diagnostics] === Pre-Send Diagnostics ===');
   logger.info('client.ready:', client.ready);
   const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
   logger.info('await client.getState():', stateBeforeCheck);
   logger.info('connectionStatus:', connectionStatus);
-  logger.info('chatId:', chatId);
   logger.info('message length:', message.length);
-
-  // 5. Browser diagnostics
   logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
 
-  // 6. Check whether the page has crashed
   if (client.pupPage) {
     logger.info('Page closed:', client.pupPage.isClosed());
   }
 
-  // 7. Verify that the WhatsApp Web page is fully ready before sending
+  // Verify page readiness & ensure WWebJS helper scripts are loaded
   await ensurePageReady();
 
-  // 4. Immediately before sendMessage(), execute getState() and verify CONNECTED
+  // 3 & 4. Resolve recipient number via getNumberId before sending
+  logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
+  let numberId = null;
+  try {
+    numberId = await client.getNumberId(normalizedPhone);
+    logger.info('NumberId:', numberId);
+  } catch (lookupErr) {
+    logger.error('Error during client.getNumberId lookup:', lookupErr);
+    logger.error(lookupErr.stack);
+  }
+
+  if (!numberId || !numberId._serialized) {
+    logger.error(`[WhatsApp Diagnostics] Recipient ${normalizedPhone} is not registered on WhatsApp (NumberId is null).`);
+    const error = new Error(`Recipient ${normalizedPhone} is not registered on WhatsApp.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const resolvedTargetJid = numberId._serialized;
+  logger.info(`Resolved target JID for send: "${resolvedTargetJid}"`);
+
+  // Immediately before sendMessage(), verify state is CONNECTED
   const state = await client.getState().catch(() => null);
   logger.info('State:', state);
 
@@ -650,17 +676,16 @@ async function sendTextMessage(phone, message) {
     throw new Error(`WhatsApp client is in state "${state}", not CONNECTED.`);
   }
 
-  // 8. Capture screenshot before call
   const beforeScreenshotPath = path.join(__dirname, '../before-send.png');
   if (client.pupPage && !client.pupPage.isClosed()) {
     await client.pupPage.screenshot({ path: beforeScreenshotPath }).catch(() => {});
   }
 
-  // 3. Wrap sendMessage() with detailed timing
+  // Wrap sendMessage() with timing logs and exact error stack trace
   const start = Date.now();
   try {
-    logger.info('Sending message...');
-    const result = await client.sendMessage(chatId, message);
+    logger.info(`Sending message to ${resolvedTargetJid}...`);
+    const result = await client.sendMessage(resolvedTargetJid, message);
     logger.info('Message sent successfully');
     logger.info('Duration:', Date.now() - start, 'ms');
     logger.info(result);
@@ -673,7 +698,6 @@ async function sendTextMessage(phone, message) {
     logger.error(err);
     logger.error(err.stack);
 
-    // 8. Capture screenshot on failure
     const errorScreenshotPath = path.join(__dirname, '../after-send-error.png');
     if (client.pupPage && !client.pupPage.isClosed()) {
       await client.pupPage.screenshot({ path: errorScreenshotPath }).catch(() => {});
@@ -692,22 +716,30 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   }
 
   const normalizedPhone = normalizePhoneNumber(phone);
-  if (!normalizedPhone) {
-    throw new Error('Invalid phone number provided.');
+  const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
+
+  logger.info('[WhatsApp Diagnostics] === Recipient Document Resolution Diagnostics ===');
+  logger.info('Original phone number:', phone);
+  logger.info('Sanitized phone number:', normalizedPhone);
+  logger.info('Final chatId:', rawChatId);
+  logger.info('documentUrl:', documentUrl);
+
+  if (!normalizedPhone || !/^\d{10,15}$/.test(normalizedPhone)) {
+    throw new Error(`Invalid phone number provided: "${phone}". Must be 10-15 digits.`);
   }
+
+  if (!/^\d{10,15}@c\.us$/.test(rawChatId)) {
+    throw new Error(`Invalid chatId format: "${rawChatId}". Expected format: 91XXXXXXXXXX@c.us`);
+  }
+
   if (!documentUrl) {
     throw new Error('Document URL is required.');
   }
 
-  const chatId = normalizedPhone.endsWith('@c.us') ? normalizedPhone : `${normalizedPhone}@c.us`;
-
-  logger.info('[WhatsApp Diagnostics] === Pre-Send Document Diagnostics ===');
   logger.info('client.ready:', client.ready);
   const stateBeforeCheck = await client.getState().catch((e) => `Error: ${e.message}`);
   logger.info('await client.getState():', stateBeforeCheck);
   logger.info('connectionStatus:', connectionStatus);
-  logger.info('chatId:', chatId);
-  logger.info('documentUrl:', documentUrl);
   logger.info('Browser connected:', Boolean(client.pupBrowser?.isConnected()));
 
   if (client.pupPage) {
@@ -715,6 +747,27 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
   }
 
   await ensurePageReady();
+
+  // 3 & 4. Resolve recipient number via getNumberId before sending
+  logger.info(`Executing client.getNumberId("${normalizedPhone}")...`);
+  let numberId = null;
+  try {
+    numberId = await client.getNumberId(normalizedPhone);
+    logger.info('NumberId:', numberId);
+  } catch (lookupErr) {
+    logger.error('Error during client.getNumberId lookup:', lookupErr);
+    logger.error(lookupErr.stack);
+  }
+
+  if (!numberId || !numberId._serialized) {
+    logger.error(`[WhatsApp Diagnostics] Recipient ${normalizedPhone} is not registered on WhatsApp (NumberId is null).`);
+    const error = new Error(`Recipient ${normalizedPhone} is not registered on WhatsApp.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const resolvedTargetJid = numberId._serialized;
+  logger.info(`Resolved target JID for document send: "${resolvedTargetJid}"`);
 
   const state = await client.getState().catch(() => null);
   logger.info('State:', state);
@@ -729,8 +782,8 @@ async function sendDocument(phone, documentUrl, filename = 'invoice.pdf', captio
 
   const start = Date.now();
   try {
-    logger.info(`Sending document [${filename}] to ${chatId}...`);
-    const result = await client.sendMessage(chatId, media, { caption });
+    logger.info(`Sending document [${filename}] to ${resolvedTargetJid}...`);
+    const result = await client.sendMessage(resolvedTargetJid, media, { caption });
     logger.info('Message sent successfully');
     logger.info('Duration:', Date.now() - start, 'ms');
     logger.info(result);
