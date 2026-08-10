@@ -194,11 +194,15 @@ function setupClient(customExecutablePath = null) {
 
   const puppeteerOptions = {
     headless: 'new',
-    args: puppeteerArgs,
     dumpio: true,
+    ignoreHTTPSErrors: true,
+    args: [
+      ...puppeteerArgs,
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    ],
   };
 
-  // 1. Remove hardcoded executablePath temporarily and allow Puppeteer default resolution (or runtime-installed path)
+  // 1. Allow Puppeteer default resolution or runtime-installed path
   if (customExecutablePath && fs.existsSync(customExecutablePath)) {
     puppeteerOptions.executablePath = customExecutablePath;
     logger.info(`[WhatsApp Diagnostics] Using resolved executablePath: ${customExecutablePath}`);
@@ -210,13 +214,15 @@ function setupClient(customExecutablePath = null) {
     authStrategy: 'NoAuth',
     headless: 'new',
     dumpio: true,
+    ignoreHTTPSErrors: true,
     executablePath: puppeteerOptions.executablePath || 'DEFAULT_RESOLUTION',
-    puppeteerArgs,
+    puppeteerArgs: puppeteerOptions.args,
   });
 
   client = new Client({
     authStrategy: new NoAuth(),
     puppeteer: puppeteerOptions,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     webVersionCache: {
       type: 'remote',
       remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944813-alpha.html',
@@ -225,12 +231,14 @@ function setupClient(customExecutablePath = null) {
 
   client.ready = false;
 
-  // --- Diagnostic Lifecycle Event Listeners ---
+  // --- Detailed Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
+    logger.info(`Loading ${percent}% : ${message}`);
     logger.info(`[WhatsApp Diagnostics] LOADING ${percent}% - ${message}`);
   });
 
   client.on('change_state', (state) => {
+    logger.info(`===== STATE ===== ${state}`);
     logger.info(`[WhatsApp Diagnostics] STATE CHANGED: ${state}`);
   });
 
@@ -280,7 +288,7 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Authenticated
   client.on('authenticated', () => {
-    logger.info('[WhatsApp Diagnostics] ===== AUTHENTICATED =====');
+    logger.info('===== AUTHENTICATED =====');
     logger.info('[WhatsApp Diagnostics] Authenticated! WhatsApp Web session established.');
     connectionStatus = 'AUTHENTICATED';
     latestQrRaw = null;
@@ -291,7 +299,7 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Ready
   client.on('ready', () => {
-    logger.info('[WhatsApp Diagnostics] ===== READY =====');
+    logger.info('===== READY =====');
     logger.info('[WhatsApp Diagnostics] Ready! WhatsApp Web client is ready and connected!');
     logger.info('[WhatsApp Diagnostics] client.info:', client.info);
     logger.info('[WhatsApp Diagnostics] client.pupBrowser:', Boolean(client.pupBrowser));
@@ -320,9 +328,9 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Auth Failure
   client.on('auth_failure', (msg) => {
-    logger.error('[WhatsApp Diagnostics] ===== AUTH FAILURE =====');
-    logger.error('[WhatsApp Diagnostics] AUTH FAILURE');
+    logger.error('===== AUTH FAILURE =====');
     logger.error(msg);
+    logger.error('[WhatsApp Diagnostics] Authentication failed', { message: msg });
     isReady = false;
     client.ready = false;
     connectionStatus = 'DISCONNECTED';
@@ -337,6 +345,8 @@ function setupClient(customExecutablePath = null) {
 
   // Event: Disconnected
   client.on('disconnected', (reason) => {
+    logger.error('===== DISCONNECTED =====');
+    logger.error(reason);
     logger.error(`[WhatsApp Diagnostics] DISCONNECTED: ${reason}`);
     isReady = false;
     client.ready = false;
@@ -393,22 +403,24 @@ async function startClient() {
     if (client.pupBrowser) {
       logger.info('[WhatsApp Diagnostics] client.pupBrowser attached successfully.');
       client.pupBrowser.on('disconnected', () => {
-        logger.warn('[WhatsApp Diagnostics] [Puppeteer Browser] Browser process disconnected.');
+        logger.error('[WhatsApp Diagnostics] Browser disconnected');
+      });
+
+      client.pupBrowser.process()?.on('exit', (code) => {
+        logger.error('[WhatsApp Diagnostics] Chrome exited with code:', code);
       });
     }
 
     if (client.pupPage) {
       logger.info('[WhatsApp Diagnostics] client.pupPage attached successfully.');
       client.pupPage.on('console', (msg) => {
-        logger.info(`[WhatsApp Diagnostics] [Browser Page Console] [${msg.type()}] ${msg.text()}`);
+        logger.info(`[Browser] ${msg.text()}`);
       });
       client.pupPage.on('pageerror', (err) => {
-        logger.error(`[WhatsApp Diagnostics] [Browser Page Error] ${err.message}`, {
-          stack: err.stack,
-        });
+        logger.error('[Browser PageError]', err);
       });
       client.pupPage.on('error', (err) => {
-        logger.error(`[WhatsApp Diagnostics] [Browser Page Crash] ${err.message}`);
+        logger.error('[Browser Error]', err);
       });
     }
   } catch (err) {
