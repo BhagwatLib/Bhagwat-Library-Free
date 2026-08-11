@@ -608,13 +608,7 @@ async function startClient() {
     return getStatus();
   }
 
-  // 4. Return existing browser if already connected and running in QR_READY
-  if (client && client.pupBrowser && client.pupBrowser.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
-    logger.info('[RemoteAuth] Browser already running and connected. Returning existing instance.');
-    return getStatus();
-  }
-
-  // 5. Create and lock initialization promise
+  // 4. Create and lock initialization promise (state-driven, never aborted by browser connection check)
   activeInitPromise = (async () => {
     authState = 'INITIALIZING';
     startupTimers = {
@@ -629,7 +623,7 @@ async function startClient() {
     emitProgress(10, 'mongo_connected', 'MongoDB connected');
 
     try {
-      if (client) {
+      if (client && !isAuthenticating && authState !== 'SCANNING' && authState !== 'AUTHENTICATING') {
         logger.info('[WhatsApp Diagnostics] Cleaning up previous client before startup...');
         console.log("Destroy requested from:", new Error().stack);
         try {
