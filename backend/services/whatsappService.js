@@ -257,8 +257,31 @@ async function ensureBrowserAvailable() {
   return null;
 }
 
+let memoryLogInterval = null;
+
 /**
- * Instantiates and configures single WhatsApp client instance with reliable Puppeteer flags
+ * Starts 5-second interval logging of memory usage during QR and authentication
+ */
+function startMemoryLogging() {
+  if (memoryLogInterval) return;
+  memoryLogInterval = setInterval(() => {
+    try {
+      const mem = process.memoryUsage();
+      const toMB = (bytes) => (bytes / 1024 / 1024).toFixed(1);
+      logger.info(`[Memory Diagnostics 5s] RSS: ${toMB(mem.rss)}MB | Heap: ${toMB(mem.heapUsed)}MB / ${toMB(mem.heapTotal)}MB | External: ${toMB(mem.external)}MB | Auth State: ${authState}`);
+    } catch (_) {}
+  }, 5000);
+}
+
+function stopMemoryLogging() {
+  if (memoryLogInterval) {
+    clearInterval(memoryLogInterval);
+    memoryLogInterval = null;
+  }
+}
+
+/**
+ * Instantiates and configures single WhatsApp client instance with memory-optimized Puppeteer flags
  */
 function setupClient(customExecutablePath = null, mongoStore = null) {
   logger.info(`[WhatsApp Diagnostics] [${new Date().toISOString()}] Instantiating new Client with RemoteAuth...`);
@@ -287,7 +310,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--metrics-recording-only',
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
-    '--js-flags=--max-old-space-size=512',
+    '--renderer-process-limit=1',
+    '--js-flags=--max-old-space-size=128',
   ];
 
   const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
@@ -347,6 +371,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     authState = 'READY';
     isReady = true;
     isAuthenticating = false;
+    stopMemoryLogging();
     if (client) client.ready = true;
     connectionStatus = 'CONNECTED';
     latestQrRaw = null;
@@ -368,155 +393,192 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     whatsappEvents.emit('status_change', getStatus());
   }
 
-  // --- Detailed Diagnostic Lifecycle Event Listeners with Timestamps ---
+  // --- Detailed Diagnostic Lifecycle Event Listeners with Safe Try/Catch ---
   client.on('loading_screen', (percent, message) => {
-    const timestamp = new Date().toISOString();
-    const pct = Number(percent) || 0;
+    try {
+      const timestamp = new Date().toISOString();
+      const pct = Number(percent) || 0;
 
-    // Strict Lock: Transition to SCANNING / AUTHENTICATING and cancel all timers
-    if (pct > 0) {
-      authState = 'AUTHENTICATING';
-      isAuthenticating = true;
-      connectionStatus = 'AUTHENTICATING';
-    } else {
-      authState = 'SCANNING';
-      isAuthenticating = true;
-      connectionStatus = 'AUTHENTICATING';
-    }
-    clearAllAuthFallbackTimers();
+      // Strict Lock: Transition to SCANNING / AUTHENTICATING and cancel all timers
+      if (pct > 0) {
+        authState = 'AUTHENTICATING';
+        isAuthenticating = true;
+        connectionStatus = 'AUTHENTICATING';
+      } else {
+        authState = 'SCANNING';
+        isAuthenticating = true;
+        connectionStatus = 'AUTHENTICATING';
+      }
+      clearAllAuthFallbackTimers();
+      startMemoryLogging();
 
-    if (!startupTimers.waPageLoaded) {
-      startupTimers.waPageLoaded = Date.now();
-      logger.info(`[Startup Metrics] [${timestamp}] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
-    }
-    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] LOADING ${percent}% - ${message}`);
+      if (!startupTimers.waPageLoaded) {
+        startupTimers.waPageLoaded = Date.now();
+        logger.info(`[Startup Metrics] [${timestamp}] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
+      }
+      logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] LOADING ${percent}% - ${message}`);
 
-    if (pct === 100) {
-      emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
-    } else if (pct > 0) {
-      emitProgress(50, 'loading_whatsapp', `WhatsApp loading ${pct}%...`);
-    } else {
-      emitProgress(50, 'loading_whatsapp', 'WhatsApp loading...');
+      if (pct === 100) {
+        emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
+      } else if (pct > 0) {
+        emitProgress(50, 'loading_whatsapp', `WhatsApp loading ${pct}%...`);
+      } else {
+        emitProgress(50, 'loading_whatsapp', 'WhatsApp loading...');
+      }
+    } catch (err) {
+      logger.error('[WA Event Error] Error in loading_screen handler:', { message: err?.message, stack: err?.stack });
     }
   });
 
   client.on('authenticated', async (authPayload) => {
-    const timestamp = new Date().toISOString();
-    authState = 'AUTHENTICATING';
-    isAuthenticating = true;
-    connectionStatus = 'AUTHENTICATING';
+    try {
+      const timestamp = new Date().toISOString();
+      authState = 'AUTHENTICATING';
+      isAuthenticating = true;
+      connectionStatus = 'AUTHENTICATING';
+      startMemoryLogging();
 
-    // Strict Lock: Cancel all timers and suppress any further initialization
-    clearAllAuthFallbackTimers();
+      // Strict Lock: Cancel all timers and suppress any further initialization
+      clearAllAuthFallbackTimers();
 
-    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
-    logger.info(`[RemoteAuth] [${timestamp}] Session handshake authenticated. Waiting for client ready event...`);
-    emitProgress(85, 'authenticated', 'Authenticated - Completing handshake...');
+      logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
+      logger.info(`[RemoteAuth] [${timestamp}] Session handshake authenticated. Waiting for client ready event...`);
+      emitProgress(85, 'authenticated', 'Authenticated - Completing handshake...');
 
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    lastError = null;
-    whatsappEvents.emit('status_change', getStatus());
+      latestQrRaw = null;
+      latestQrDataUrl = null;
+      lastError = null;
+      whatsappEvents.emit('status_change', getStatus());
+    } catch (err) {
+      logger.error('[WA Event Error] Error in authenticated handler:', { message: err?.message, stack: err?.stack });
+    }
   });
 
   client.on('auth_failure', async (msg) => {
-    const timestamp = new Date().toISOString();
-    clearAllAuthFallbackTimers();
-    logger.error(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTH FAILURE:`, msg);
-    emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
+    try {
+      const timestamp = new Date().toISOString();
+      clearAllAuthFallbackTimers();
+      stopMemoryLogging();
+      logger.error(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTH FAILURE:`, msg);
+      emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
 
-    authState = 'DISCONNECTED';
-    isReady = false;
-    isAuthenticating = false;
-    if (client) client.ready = false;
-    connectionStatus = 'DISCONNECTED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    lastError = {
-      message: `Authentication failed: ${msg}`,
-      timestamp,
-    };
-    whatsappEvents.emit('status_change', getStatus());
+      authState = 'DISCONNECTED';
+      isReady = false;
+      isAuthenticating = false;
+      if (client) client.ready = false;
+      connectionStatus = 'DISCONNECTED';
+      latestQrRaw = null;
+      latestQrDataUrl = null;
+      lastError = {
+        message: `Authentication failed: ${msg}`,
+        timestamp,
+      };
+      whatsappEvents.emit('status_change', getStatus());
+    } catch (err) {
+      logger.error('[WA Event Error] Error in auth_failure handler:', { message: err?.message, stack: err?.stack });
+    }
   });
 
   client.on('ready', async () => {
-    const timestamp = new Date().toISOString();
-    authState = 'READY';
-    isAuthenticating = false;
-    isReady = true;
-    connectionStatus = 'CONNECTED';
-
-    // Immediately cancel any fallback / status check timers
-    clearAllAuthFallbackTimers();
-
-    startupTimers.ready = Date.now();
-    logger.info(`[Startup Metrics] [${timestamp}] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
-    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] READY`);
-    emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
-
     try {
-      logger.info(`[WA State] [${timestamp}]:`, await client.getState());
-    } catch (e) {
-      logger.error(`[WA State Error] [${timestamp}]:`, e.message);
+      const timestamp = new Date().toISOString();
+      authState = 'READY';
+      isAuthenticating = false;
+      isReady = true;
+      connectionStatus = 'CONNECTED';
+      stopMemoryLogging();
+
+      // Immediately cancel any fallback / status check timers
+      clearAllAuthFallbackTimers();
+
+      startupTimers.ready = Date.now();
+      logger.info(`[Startup Metrics] [${timestamp}] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
+      logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] READY`);
+      emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
+
+      try {
+        logger.info(`[WA State] [${timestamp}]:`, await client.getState());
+      } catch (e) {
+        logger.error(`[WA State Error] [${timestamp}]:`, e.message);
+      }
+
+      await handleClientReady();
+
+      // Trigger backup once client is fully ready and stable
+      startTrackedTimer('post_ready_backup_5s', async () => {
+        await forceSaveRemoteSession('post_ready_5s');
+      }, 5000);
+    } catch (err) {
+      logger.error('[WA Event Error] Error in ready handler:', { message: err?.message, stack: err?.stack });
     }
-
-    await handleClientReady();
-
-    // Trigger backup once client is fully ready and stable
-    startTrackedTimer('post_ready_backup_5s', async () => {
-      await forceSaveRemoteSession('post_ready_5s');
-    }, 5000);
   });
 
   client.on('change_state', (state) => {
-    const timestamp = new Date().toISOString();
-    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] CHANGE_STATE:`, state);
-    if (state === 'CONNECTED' && currentProgress.progress < 95) {
-      emitProgress(95, 'session_backup', 'Session backup syncing to MongoDB');
+    try {
+      const timestamp = new Date().toISOString();
+      logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] CHANGE_STATE:`, state);
+      if (state === 'CONNECTED' && currentProgress.progress < 95) {
+        emitProgress(95, 'session_backup', 'Session backup syncing to MongoDB');
+      }
+    } catch (err) {
+      logger.error('[WA Event Error] Error in change_state handler:', { message: err?.message, stack: err?.stack });
     }
   });
 
   client.on('disconnected', (reason) => {
-    const timestamp = new Date().toISOString();
-    clearAllAuthFallbackTimers();
+    try {
+      const timestamp = new Date().toISOString();
+      clearAllAuthFallbackTimers();
+      stopMemoryLogging();
 
-    if (authState === 'SCANNING' || authState === 'AUTHENTICATING') {
-      logger.error(`[WA Disconnected during Auth] [${timestamp}] Disconnected while in state "${authState}". Reason:`, reason);
-    } else {
-      logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
+      if (authState === 'SCANNING' || authState === 'AUTHENTICATING') {
+        logger.error(`[WA Disconnected during Auth] [${timestamp}] Disconnected while in state "${authState}". Reason:`, reason);
+      } else {
+        logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
+      }
+
+      emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
+      authState = 'DISCONNECTED';
+      isReady = false;
+      isAuthenticating = false;
+      if (client) client.ready = false;
+      connectionStatus = 'DISCONNECTED';
+      latestQrRaw = null;
+      latestQrDataUrl = null;
+      whatsappEvents.emit('status_change', getStatus());
+    } catch (err) {
+      logger.error('[WA Event Error] Error in disconnected handler:', { message: err?.message, stack: err?.stack });
     }
-
-    emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
-    authState = 'DISCONNECTED';
-    isReady = false;
-    isAuthenticating = false;
-    if (client) client.ready = false;
-    connectionStatus = 'DISCONNECTED';
-    latestQrRaw = null;
-    latestQrDataUrl = null;
-    whatsappEvents.emit('status_change', getStatus());
   });
 
   client.on('remote_session_saved', async () => {
-    const timestamp = new Date().toISOString();
-    logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_SAVED`);
-    emitProgress(95, 'session_backup', 'Session backup synced to MongoDB');
-
     try {
-      const details = await sessionStore.inspectSessionDetails();
-      if (details && details.filesCount > 0) {
-        logger.info(`[RemoteAuth] [${timestamp}] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file, ${details.chunksCount} chunks).`);
-      } else {
-        logger.warn(`[RemoteAuth] [${timestamp}] No session found in MongoDB after remote_session_saved event.`);
+      const timestamp = new Date().toISOString();
+      logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_SAVED`);
+      emitProgress(95, 'session_backup', 'Session backup synced to MongoDB');
+
+      try {
+        const details = await sessionStore.inspectSessionDetails();
+        if (details && details.filesCount > 0) {
+          logger.info(`[RemoteAuth] [${timestamp}] Session found in MongoDB! Collection: "${details.bucketName}.files" (${details.filesCount} file, ${details.chunksCount} chunks).`);
+        } else {
+          logger.warn(`[RemoteAuth] [${timestamp}] No session found in MongoDB after remote_session_saved event.`);
+        }
+      } catch (inspErr) {
+        logger.debug(`[RemoteAuth] [${timestamp}] Notice inspecting MongoDB session details:`, inspErr.message);
       }
-    } catch (inspErr) {
-      logger.debug(`[RemoteAuth] [${timestamp}] Notice inspecting MongoDB session details:`, inspErr.message);
+    } catch (err) {
+      logger.error('[WA Event Error] Error in remote_session_saved handler:', { message: err?.message, stack: err?.stack });
     }
   });
 
   client.on('remote_session_loaded', () => {
-    const timestamp = new Date().toISOString();
-    logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_LOADED`);
+    try {
+      const timestamp = new Date().toISOString();
+      logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_LOADED`);
+    } catch (err) {
+      logger.error('[WA Event Error] Error in remote_session_loaded handler:', { message: err?.message, stack: err?.stack });
+    }
   });
 
   client.on('message', () => {
@@ -525,61 +587,66 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   // Event: QR Code Received
   client.on('qr', async (qr) => {
-    const timestamp = new Date().toISOString();
-
-    // 1. Strict Lock: NEVER emit or process QR code during SCANNING, AUTHENTICATING, or READY
-    if (
-      authState === 'SCANNING' ||
-      authState === 'AUTHENTICATING' ||
-      authState === 'READY' ||
-      isReady ||
-      isAuthenticating ||
-      connectionStatus === 'AUTHENTICATED' ||
-      connectionStatus === 'CONNECTED' ||
-      currentProgress.progress > 70
-    ) {
-      logger.info(`[Auth Lock] [${timestamp}] Suppressing QR emission during active state: "${authState}" (isAuthenticating: ${isAuthenticating}). Handshake in progress.`);
-      return;
-    }
-
-    // 2. Ignore identical duplicate QR string if already generated
-    if (latestQrRaw === qr && latestQrDataUrl) {
-      return;
-    }
-
-    authState = 'QR_READY';
-    startupTimers.qrGenerated = Date.now();
-    logger.info(`[Startup Metrics] [${timestamp}] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
-    logger.info(`[WA Event] [${timestamp}] ===== QR CODE RECEIVED =====`);
-    latestQrRaw = qr;
     try {
-      latestQrDataUrl = await QRCode.toDataURL(qr, {
-        margin: 2,
-        width: 320,
-        color: {
-          dark: '#0f172a',
-          light: '#ffffff',
-        },
-      });
+      const timestamp = new Date().toISOString();
+
+      // 1. Strict Lock: NEVER emit or process QR code during SCANNING, AUTHENTICATING, or READY
+      if (
+        authState === 'SCANNING' ||
+        authState === 'AUTHENTICATING' ||
+        authState === 'READY' ||
+        isReady ||
+        isAuthenticating ||
+        connectionStatus === 'AUTHENTICATED' ||
+        connectionStatus === 'CONNECTED' ||
+        currentProgress.progress > 70
+      ) {
+        logger.info(`[Auth Lock] [${timestamp}] Suppressing QR emission during active state: "${authState}" (isAuthenticating: ${isAuthenticating}). Handshake in progress.`);
+        return;
+      }
+
+      // 2. Ignore identical duplicate QR string if already generated
+      if (latestQrRaw === qr && latestQrDataUrl) {
+        return;
+      }
+
+      authState = 'QR_READY';
+      startMemoryLogging();
+      startupTimers.qrGenerated = Date.now();
+      logger.info(`[Startup Metrics] [${timestamp}] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
+      logger.info(`[WA Event] [${timestamp}] ===== QR CODE RECEIVED =====`);
+      latestQrRaw = qr;
+      try {
+        latestQrDataUrl = await QRCode.toDataURL(qr, {
+          margin: 2,
+          width: 320,
+          color: {
+            dark: '#0f172a',
+            light: '#ffffff',
+          },
+        });
+      } catch (err) {
+        logger.error('[WhatsApp Diagnostics] Error generating QR Data URL', {
+          message: err.message,
+          stack: err.stack,
+        });
+      }
+
+      connectionStatus = 'QR_READY';
+      isReady = false;
+      if (client) client.ready = false;
+      lastError = null;
+      emitProgress(70, 'qr_generated', 'QR code generated. Scan with phone.');
+
+      console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
+      qrcodeTerminal.generate(qr, { small: true });
+      console.log('-----------------------------------------------------\n');
+
+      whatsappEvents.emit('qr', { qrRaw: latestQrRaw, qrDataUrl: latestQrDataUrl });
+      whatsappEvents.emit('status_change', getStatus());
     } catch (err) {
-      logger.error('[WhatsApp Diagnostics] Error generating QR Data URL', {
-        message: err.message,
-        stack: err.stack,
-      });
+      logger.error('[WA Event Error] Error in qr handler:', { message: err?.message, stack: err?.stack });
     }
-
-    connectionStatus = 'QR_READY';
-    isReady = false;
-    if (client) client.ready = false;
-    lastError = null;
-    emitProgress(70, 'qr_generated', 'QR code generated. Scan with phone.');
-
-    console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
-    qrcodeTerminal.generate(qr, { small: true });
-    console.log('-----------------------------------------------------\n');
-
-    whatsappEvents.emit('qr', { qrRaw: latestQrRaw, qrDataUrl: latestQrDataUrl });
-    whatsappEvents.emit('status_change', getStatus());
   });
 }
 

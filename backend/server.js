@@ -64,15 +64,22 @@ async function handleGracefulShutdown(signal) {
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
-// Catch uncaught exceptions — log and exit so the process manager can restart
+// Catch uncaught exceptions and unhandled promise rejections with full diagnostic stack traces
 process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception — forcing process restart', { error: err.message, stack: err.stack });
-  process.exit(1);
+  logger.error('[PROCESS] Uncaught Exception:', {
+    message: err?.message,
+    name: err?.name,
+    stack: err?.stack || new Error().stack,
+  });
 });
 
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled Promise Rejection', { reason: String(reason) });
-  process.exit(1);
+process.on('unhandledRejection', (reason, promise) => {
+  const errorObj = reason instanceof Error ? reason : null;
+  logger.error('[PROCESS] Unhandled Promise Rejection:', {
+    message: errorObj ? errorObj.message : String(reason),
+    name: errorObj ? errorObj.name : 'UnhandledRejection',
+    stack: errorObj ? errorObj.stack : new Error().stack,
+  });
 });
 
 module.exports = server;
