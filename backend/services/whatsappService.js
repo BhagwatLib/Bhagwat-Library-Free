@@ -25,6 +25,8 @@ try {
 class WhatsAppEventEmitter extends EventEmitter { }
 const whatsappEvents = new WhatsAppEventEmitter();
 
+const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
+
 // Singleton State & Strict Authentication Lock State Machine
 // Flow: INITIALIZING -> QR_READY -> SCANNING -> AUTHENTICATING -> READY -> DISCONNECTED
 let authState = 'DISCONNECTED';
