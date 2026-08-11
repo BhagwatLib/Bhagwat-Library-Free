@@ -25,7 +25,9 @@ try {
 class WhatsAppEventEmitter extends EventEmitter { }
 const whatsappEvents = new WhatsAppEventEmitter();
 
-// Singleton State
+// Singleton State & Strict Authentication Lock State Machine
+// Flow: INITIALIZING -> QR_READY -> SCANNING -> AUTHENTICATING -> READY -> DISCONNECTED
+let authState = 'DISCONNECTED';
 let client = null;
 let isReady = false;
 let isAuthenticating = false;
@@ -36,7 +38,60 @@ let lastConnectedTime = null;
 let clientInfo = null;
 let activeInitPromise = null;
 let lastError = null;
-let monitorInterval = null;
+
+// --- Tracked Timer Management ---
+const activeTimers = new Map();
+
+/**
+ * Starts a managed timer with detailed timestamp logging
+ */
+function startTrackedTimer(name, callback, delayMs) {
+  clearTrackedTimer(name);
+  const startTime = new Date().toISOString();
+  logger.info(`[Timer] Started [${startTime}] - ${name} (${delayMs}ms)`);
+
+  const timeoutId = setTimeout(async () => {
+    activeTimers.delete(name);
+    const fireTime = new Date().toISOString();
+    logger.info(`[Timer] Fired [${fireTime}] - ${name}`);
+    try {
+      await callback();
+    } catch (err) {
+      logger.error(`[Timer Error] [${fireTime}] - ${name}:`, { message: err.message, stack: err.stack });
+    }
+  }, delayMs);
+
+  activeTimers.set(name, { id: timeoutId, startedAt: startTime, delayMs });
+  return timeoutId;
+}
+
+/**
+ * Cancels a managed timer with detailed timestamp logging
+ */
+function clearTrackedTimer(name) {
+  if (activeTimers.has(name)) {
+    const timerInfo = activeTimers.get(name);
+    clearTimeout(timerInfo.id);
+    activeTimers.delete(name);
+    logger.info(`[Timer] Cancelled [${new Date().toISOString()}] - ${name}`);
+  }
+}
+
+/**
+ * Cancels all authentication fallback / status check timers immediately
+ */
+function clearAllAuthFallbackTimers() {
+  for (const [name] of activeTimers.entries()) {
+    if (
+      name.startsWith('fallback_') ||
+      name.startsWith('qr_') ||
+      name.startsWith('auth_') ||
+      name.startsWith('status_check_')
+    ) {
+      clearTrackedTimer(name);
+    }
+  }
+}
 
 let currentProgress = {
   progress: 0,
@@ -79,6 +134,7 @@ function getStatus() {
   return {
     isReady: Boolean(isReady && client?.ready),
     status: connectionStatus,
+    authState,
     progress: currentProgress,
     qrCode: latestQrDataUrl,
     rawQr: latestQrRaw,
@@ -202,76 +258,7 @@ async function ensureBrowserAvailable() {
 }
 
 /**
- * Starts real-time 1-second diagnostic health monitor during authentication
- */
-function startStateMonitor() {
-  if (monitorInterval) clearInterval(monitorInterval);
-
-  let lastLoggedState = {};
-  monitorInterval = setInterval(async () => {
-    if (!client || connectionStatus === 'CONNECTED' || connectionStatus === 'DISCONNECTED') {
-      if (connectionStatus === 'CONNECTED' || connectionStatus === 'DISCONNECTED') {
-        clearInterval(monitorInterval);
-        monitorInterval = null;
-      }
-      return;
-    }
-
-    try {
-      let clientState = 'UNKNOWN';
-      try {
-        clientState = await client.getState();
-      } catch (_) {}
-
-      const browserConnected = Boolean(client?.pupBrowser?.isConnected());
-      const pageClosed = client?.pupPage ? client.pupPage.isClosed() : true;
-      let targetCount = 0;
-      let currentUrl = 'N/A';
-
-      try {
-        if (client?.pupBrowser) {
-          const targets = await client.pupBrowser.targets();
-          targetCount = targets.length;
-        }
-        if (client?.pupPage && !pageClosed) {
-          currentUrl = client.pupPage.url();
-        }
-      } catch (_) {}
-
-      const snapshot = {
-        timestamp: new Date().toISOString(),
-        isAuthenticating,
-        hasActiveInitPromise: Boolean(activeInitPromise),
-        clientReady: Boolean(client?.ready),
-        clientState,
-        connectionStatus,
-        browserConnected,
-        pageClosed,
-        targetCount,
-        currentUrl,
-      };
-
-      // Detect unexpected state changes
-      if (lastLoggedState.connectionStatus && lastLoggedState.connectionStatus !== connectionStatus) {
-        logger.warn(`[STATE FLIP DETECTED] connectionStatus transitioned: "${lastLoggedState.connectionStatus}" -> "${connectionStatus}"`);
-      }
-      if (lastLoggedState.browserConnected !== undefined && lastLoggedState.browserConnected !== browserConnected) {
-        logger.warn(`[STATE FLIP DETECTED] browserConnected flipped: ${lastLoggedState.browserConnected} -> ${browserConnected}`);
-      }
-      if (lastLoggedState.pageClosed !== undefined && lastLoggedState.pageClosed !== pageClosed) {
-        logger.warn(`[STATE FLIP DETECTED] pageClosed flipped: ${lastLoggedState.pageClosed} -> ${pageClosed}`);
-      }
-
-      lastLoggedState = snapshot;
-      logger.debug('[Auth State Monitor 1s Snapshot]:', snapshot);
-    } catch (monitorErr) {
-      logger.debug('[Auth State Monitor Error]:', monitorErr.message);
-    }
-  }, 1000);
-}
-
-/**
- * Instantiates and configures single WhatsApp client instance with optimized Puppeteer flags
+ * Instantiates and configures single WhatsApp client instance with reliable Puppeteer flags
  */
 function setupClient(customExecutablePath = null, mongoStore = null) {
   logger.info(`[WhatsApp Diagnostics] [${new Date().toISOString()}] Instantiating new Client with RemoteAuth...`);
@@ -287,13 +274,10 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--disable-software-rasterizer',
     '--disable-extensions',
     '--disable-background-networking',
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
     '--disable-breakpad',
     '--disable-component-update',
     '--disable-default-apps',
     '--disable-domain-reliability',
-    '--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
     '--disable-ipc-flooding-protection',
     '--disable-popup-blocking',
     '--disable-prompt-on-repost',
@@ -303,6 +287,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--metrics-recording-only',
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
+    '--js-flags=--max-old-space-size=512',
   ];
 
   const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
@@ -311,7 +296,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     headless: 'new',
     dumpio: isDebug,
     ignoreHTTPSErrors: true,
-    protocolTimeout: 300000,
+    protocolTimeout: 0, // No protocol timeout during authentication
     args: [
       ...puppeteerArgs,
       '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
@@ -330,7 +315,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     authStrategy = new RemoteAuth({
       clientId: sessionClientId,
       store: mongoStore,
-      backupSyncIntervalMs: 60000,
+      backupSyncIntervalMs: 300000, // 5 minutes (prevent premature backup during initial handshake)
       dataPath: path.join(__dirname, '../.wwebjs_auth'),
     });
   } else {
@@ -353,6 +338,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     if (isReady && client?.ready) return;
 
     logger.info(`[WA Event] [${new Date().toISOString()}] READY - Transitioning connection status to CONNECTED`);
+    authState = 'READY';
     isReady = true;
     isAuthenticating = false;
     if (client) client.ready = true;
@@ -379,16 +365,29 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   // --- Detailed Diagnostic Lifecycle Event Listeners with Timestamps ---
   client.on('loading_screen', (percent, message) => {
     const timestamp = new Date().toISOString();
+    const pct = Number(percent) || 0;
+
+    // Strict Lock: Transition to SCANNING / AUTHENTICATING and cancel all timers
+    if (pct > 0) {
+      authState = 'AUTHENTICATING';
+      isAuthenticating = true;
+      connectionStatus = 'AUTHENTICATING';
+    } else {
+      authState = 'SCANNING';
+      isAuthenticating = true;
+      connectionStatus = 'AUTHENTICATING';
+    }
+    clearAllAuthFallbackTimers();
+
     if (!startupTimers.waPageLoaded) {
       startupTimers.waPageLoaded = Date.now();
       logger.info(`[Startup Metrics] [${timestamp}] ⏱️ WhatsApp Web Load Time: ${startupTimers.waPageLoaded - startupTimers.start}ms (${((startupTimers.waPageLoaded - startupTimers.start) / 1000).toFixed(1)}s)`);
     }
-    logger.info(`[WA Event] [${timestamp}] LOADING ${percent}% - ${message}`);
-    const pct = Number(percent) || 0;
+    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] LOADING ${percent}% - ${message}`);
+
     if (pct === 100) {
       emitProgress(75, 'loading_100', 'WhatsApp Web loaded 100%');
     } else if (pct > 0) {
-      isAuthenticating = true;
       emitProgress(50, 'loading_whatsapp', `WhatsApp loading ${pct}%...`);
     } else {
       emitProgress(50, 'loading_whatsapp', 'WhatsApp loading...');
@@ -397,32 +396,30 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.on('authenticated', async (authPayload) => {
     const timestamp = new Date().toISOString();
+    authState = 'AUTHENTICATING';
     isAuthenticating = true;
-    logger.info(`[WA Event] [${timestamp}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
-    logger.info(`[RemoteAuth] [${timestamp}] Session restored & authenticated`);
-    emitProgress(85, 'authenticated', 'Authenticated');
+    connectionStatus = 'AUTHENTICATING';
 
-    connectionStatus = 'AUTHENTICATED';
+    // Strict Lock: Cancel all timers and suppress any further initialization
+    clearAllAuthFallbackTimers();
+
+    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTHENTICATED`, { authPayload: authPayload ? 'PRESENT' : 'DEFAULT' });
+    logger.info(`[RemoteAuth] [${timestamp}] Session handshake authenticated. Waiting for client ready event...`);
+    emitProgress(85, 'authenticated', 'Authenticated - Completing handshake...');
+
     latestQrRaw = null;
     latestQrDataUrl = null;
     lastError = null;
     whatsappEvents.emit('status_change', getStatus());
-
-    // Proactively backup session to MongoDB shortly after authentication
-    setTimeout(async () => {
-      await forceSaveRemoteSession('post_authenticated_5s');
-    }, 5000);
-
-    setTimeout(async () => {
-      await forceSaveRemoteSession('post_authenticated_20s');
-    }, 20000);
   });
 
   client.on('auth_failure', async (msg) => {
     const timestamp = new Date().toISOString();
-    logger.error(`[WA Event] [${timestamp}] AUTH FAILURE:`, msg);
+    clearAllAuthFallbackTimers();
+    logger.error(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] AUTH FAILURE:`, msg);
     emitProgress(currentProgress.progress, 'error', `Authentication failed: ${msg}`);
 
+    authState = 'DISCONNECTED';
     isReady = false;
     isAuthenticating = false;
     if (client) client.ready = false;
@@ -438,9 +435,17 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.on('ready', async () => {
     const timestamp = new Date().toISOString();
+    authState = 'READY';
+    isAuthenticating = false;
+    isReady = true;
+    connectionStatus = 'CONNECTED';
+
+    // Immediately cancel any fallback / status check timers
+    clearAllAuthFallbackTimers();
+
     startupTimers.ready = Date.now();
     logger.info(`[Startup Metrics] [${timestamp}] ⏱️ Client Ready Time: ${startupTimers.ready - startupTimers.start}ms (${((startupTimers.ready - startupTimers.start) / 1000).toFixed(1)}s)`);
-    logger.info(`[WA Event] [${timestamp}] READY`);
+    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] READY`);
     emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
 
     try {
@@ -452,14 +457,14 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     await handleClientReady();
 
     // Trigger backup once client is fully ready and stable
-    setTimeout(async () => {
+    startTrackedTimer('post_ready_backup_5s', async () => {
       await forceSaveRemoteSession('post_ready_5s');
     }, 5000);
   });
 
   client.on('change_state', (state) => {
     const timestamp = new Date().toISOString();
-    logger.info(`[WA Event] [${timestamp}] CHANGE_STATE:`, state);
+    logger.info(`[WA Event] [${timestamp}] [Auth Lock State: ${authState}] CHANGE_STATE:`, state);
     if (state === 'CONNECTED' && currentProgress.progress < 95) {
       emitProgress(95, 'session_backup', 'Session backup syncing to MongoDB');
     }
@@ -467,8 +472,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client.on('disconnected', (reason) => {
     const timestamp = new Date().toISOString();
-    logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
+    clearAllAuthFallbackTimers();
+
+    if (authState === 'SCANNING' || authState === 'AUTHENTICATING') {
+      logger.error(`[WA Disconnected during Auth] [${timestamp}] Disconnected while in state "${authState}". Reason:`, reason);
+    } else {
+      logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
+    }
+
     emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
+    authState = 'DISCONNECTED';
     isReady = false;
     isAuthenticating = false;
     if (client) client.ready = false;
@@ -503,9 +516,18 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   client.on('qr', async (qr) => {
     const timestamp = new Date().toISOString();
 
-    // 1. Guard against duplicate QR events during active authentication or loading
-    if (isReady || connectionStatus === 'AUTHENTICATED' || connectionStatus === 'CONNECTED' || isAuthenticating || currentProgress.progress > 70) {
-      logger.info(`[WA Event] [${timestamp}] QR received while authenticating/connected. Suppressing redundant QR event.`);
+    // 1. Strict Lock: NEVER emit or process QR code during SCANNING, AUTHENTICATING, or READY
+    if (
+      authState === 'SCANNING' ||
+      authState === 'AUTHENTICATING' ||
+      authState === 'READY' ||
+      isReady ||
+      isAuthenticating ||
+      connectionStatus === 'AUTHENTICATED' ||
+      connectionStatus === 'CONNECTED' ||
+      currentProgress.progress > 70
+    ) {
+      logger.info(`[Auth Lock] [${timestamp}] Suppressing QR emission during active state: "${authState}" (isAuthenticating: ${isAuthenticating}). Handshake in progress.`);
       return;
     }
 
@@ -514,6 +536,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       return;
     }
 
+    authState = 'QR_READY';
     startupTimers.qrGenerated = Date.now();
     logger.info(`[Startup Metrics] [${timestamp}] ⏱️ QR Generation Time: ${startupTimers.qrGenerated - startupTimers.start}ms (${((startupTimers.qrGenerated - startupTimers.start) / 1000).toFixed(1)}s)`);
     logger.info(`[WA Event] [${timestamp}] ===== QR CODE RECEIVED =====`);
@@ -553,8 +576,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
  * Starts WhatsApp client on-demand (idempotent, single active instance with promise lock)
  */
 async function startClient() {
-  const invocationStack = new Error().stack;
-  logger.info(`[startClient Invocation] [${new Date().toISOString()}] Called from:\n${invocationStack}`);
+  console.log("Initialize requested from:", new Error().stack);
 
   // 1. Return immediately if already fully connected and ready
   if (isReady && client && client.ready) {
@@ -569,14 +591,21 @@ async function startClient() {
     return activeInitPromise;
   }
 
-  // 3. Return existing browser if already connected and running
+  // 3. Strict Lock: NEVER restart or create another client if authentication is in progress
+  if (authState === 'SCANNING' || authState === 'AUTHENTICATING' || isAuthenticating || connectionStatus === 'AUTHENTICATED') {
+    logger.info(`[Auth Lock] [${new Date().toISOString()}] startClient() ignored: Authentication actively in progress (State: ${authState}, Status: ${connectionStatus}). Waiting for handshake.`);
+    return getStatus();
+  }
+
+  // 4. Return existing browser if already connected and running in QR_READY
   if (client && client.pupBrowser && client.pupBrowser.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
     logger.info('[RemoteAuth] Browser already running and connected. Returning existing instance.');
     return getStatus();
   }
 
-  // 4. Create and lock initialization promise
+  // 5. Create and lock initialization promise
   activeInitPromise = (async () => {
+    authState = 'INITIALIZING';
     startupTimers = {
       start: Date.now(),
       browserLaunched: 0,
@@ -587,11 +616,11 @@ async function startClient() {
     connectionStatus = 'CONNECTING';
     lastError = null;
     emitProgress(10, 'mongo_connected', 'MongoDB connected');
-    startStateMonitor();
 
     try {
       if (client) {
         logger.info('[WhatsApp Diagnostics] Cleaning up previous client before startup...');
+        console.log("Destroy requested from:", new Error().stack);
         try {
           await client.destroy();
         } catch (err) {
@@ -627,6 +656,7 @@ async function startClient() {
       // Configure client with resolved browser and MongoStore
       setupClient(resolvedExecutablePath, mongoStore);
       logger.info(`[client.initialize() Invocation] [${new Date().toISOString()}] Executing client.initialize()...`);
+      console.log("Initialize requested from:", new Error().stack);
 
       await client.initialize();
       logger.info(`[client.initialize() Resolved] [${new Date().toISOString()}] WhatsApp client.initialize() promise resolved successfully.`);
@@ -667,6 +697,7 @@ async function startClient() {
         message: err.message,
         stack: err.stack,
       });
+      authState = 'DISCONNECTED';
       connectionStatus = 'DISCONNECTED';
       isReady = false;
       isAuthenticating = false;
@@ -685,21 +716,28 @@ async function startClient() {
  * Gracefully destroys client and frees memory on explicit user logout
  */
 async function destroyClient() {
-  const invocationStack = new Error().stack;
-  logger.info(`[destroyClient Invocation] [${new Date().toISOString()}] Called from:\n${invocationStack}`);
+  console.log("Destroy requested from:", new Error().stack);
 
-  if (monitorInterval) {
-    clearInterval(monitorInterval);
-    monitorInterval = null;
+  // Strict Lock: NEVER destroy client while SCANNING or AUTHENTICATING
+  if (authState === 'SCANNING' || authState === 'AUTHENTICATING' || isAuthenticating) {
+    logger.warn(`[Auth Lock] [${new Date().toISOString()}] BLOCKED destroyClient() during active authentication (State: ${authState}). Handshake protected.`);
+    return getStatus();
+  }
+
+  // Cancel all active managed timers
+  for (const name of activeTimers.keys()) {
+    clearTrackedTimer(name);
   }
 
   if (client) {
     try {
+      console.log("Logout requested from:", new Error().stack);
       await client.logout();
       logger.info('[WhatsApp Diagnostics] Client logged out.');
     } catch (_) { }
 
     try {
+      console.log("Browser close requested from:", new Error().stack);
       await client.destroy();
       logger.info('[WhatsApp Diagnostics] Client destroyed successfully.');
     } catch (err) {
@@ -718,6 +756,7 @@ async function destroyClient() {
     logger.warn('[RemoteAuth] Error deleting session on logout:', { message: err.message });
   }
 
+  authState = 'DISCONNECTED';
   isReady = false;
   isAuthenticating = false;
   connectionStatus = 'DISCONNECTED';
@@ -744,9 +783,9 @@ async function getQr() {
     };
   }
 
-  if (connectionStatus === 'AUTHENTICATED' || isAuthenticating) {
+  if (authState === 'SCANNING' || authState === 'AUTHENTICATING' || connectionStatus === 'AUTHENTICATED' || isAuthenticating) {
     return {
-      status: 'AUTHENTICATED',
+      status: 'AUTHENTICATING',
       qrCode: null,
       rawQr: null,
       message: 'Authentication in progress...',
@@ -763,6 +802,7 @@ async function getQr() {
 
   return {
     status: connectionStatus,
+    authState,
     qrCode: latestQrDataUrl,
     rawQr: latestQrRaw,
     lastError,
@@ -1067,5 +1107,8 @@ module.exports = {
   events: whatsappEvents,
   get ready() {
     return Boolean(isReady && client && client.ready);
+  },
+  get authState() {
+    return authState;
   },
 };
