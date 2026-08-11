@@ -325,10 +325,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
   client = new Client({
     authStrategy,
+    authTimeoutMs: 300000, // 5 minutes - eliminates 30s default timeout
+    qrMaxRetries: 0,
+    takeoverOnConflict: false,
+    takeoverTimeoutMs: 0,
+    bypassCSP: true,
     puppeteer: puppeteerOptions,
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
     webVersionCache: {
-      type: 'none',
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944883-alpha.html',
     },
   });
 
@@ -506,6 +512,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     } catch (inspErr) {
       logger.debug(`[RemoteAuth] [${timestamp}] Notice inspecting MongoDB session details:`, inspErr.message);
     }
+  });
+
+  client.on('remote_session_loaded', () => {
+    const timestamp = new Date().toISOString();
+    logger.info(`[WA Event] [${timestamp}] REMOTE_SESSION_LOADED`);
   });
 
   client.on('message', () => {
