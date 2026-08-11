@@ -314,7 +314,10 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--js-flags=--max-old-space-size=128',
   ];
 
-  const isDebug = process.env.NODE_ENV !== 'production' && process.env.LOG_LEVEL === 'debug';
+  const isLinux = process.platform === 'linux';
+  const platformUserAgent = isLinux
+    ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
   const puppeteerOptions = {
     headless: 'new',
@@ -323,7 +326,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     protocolTimeout: 0, // No protocol timeout during authentication
     args: [
       ...puppeteerArgs,
-      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      `--user-agent=${platformUserAgent}`,
     ],
   };
 
@@ -355,10 +358,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     takeoverTimeoutMs: 0,
     bypassCSP: true,
     puppeteer: puppeteerOptions,
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    userAgent: platformUserAgent,
     webVersionCache: {
-      type: 'remote',
-      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018944883-alpha.html',
+      type: 'none',
     },
   });
 
@@ -531,13 +533,24 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       clearAllAuthFallbackTimers();
       stopMemoryLogging();
 
-      if (authState === 'SCANNING' || authState === 'AUTHENTICATING') {
-        logger.error(`[WA Disconnected during Auth] [${timestamp}] Disconnected while in state "${authState}". Reason:`, reason);
+      let reasonFormatted;
+      if (typeof reason === 'object' && reason !== null) {
+        try {
+          reasonFormatted = JSON.stringify(reason, Object.getOwnPropertyNames(reason));
+        } catch (_) {
+          reasonFormatted = String(reason);
+        }
       } else {
-        logger.warn(`[WA Event] [${timestamp}] DISCONNECTED:`, reason);
+        reasonFormatted = String(reason);
       }
 
-      emitProgress(0, 'disconnected', `Disconnected: ${reason}`);
+      if (authState === 'SCANNING' || authState === 'AUTHENTICATING') {
+        logger.error(`[WA Disconnected during Auth] [${timestamp}] Disconnected while in state "${authState}". Exact Reason: ${reasonFormatted}`, { rawReason: reason });
+      } else {
+        logger.warn(`[WA Event] [${timestamp}] DISCONNECTED: Exact Reason: ${reasonFormatted}`, { rawReason: reason });
+      }
+
+      emitProgress(0, 'disconnected', `Disconnected: ${reasonFormatted}`);
       authState = 'DISCONNECTED';
       isReady = false;
       isAuthenticating = false;
