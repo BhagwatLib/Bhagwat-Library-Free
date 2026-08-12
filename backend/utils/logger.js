@@ -85,12 +85,10 @@ function writeLog(level, message, meta) {
     console.log(formatted.trim());
   }
 
-  // Append to file
-  try {
-    fs.appendFileSync(logFile, formatted, 'utf8');
-  } catch (err) {
-    console.error('Failed to write to log file:', err);
-  }
+  // Do not block WhatsApp/Puppeteer heartbeats on synchronous disk writes.
+  fs.appendFile(logFile, formatted, 'utf8', (err) => {
+    if (err) console.error('Failed to write to log file:', err.message);
+  });
 }
 
 const logger = {

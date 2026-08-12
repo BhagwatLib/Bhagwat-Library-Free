@@ -6,6 +6,7 @@ const ipRequestMap = new Map();
 // Configuration: 100 requests per 15 minutes per IP for general endpoints
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS = 100;
+const MAX_TRACKED_IPS = 10000;
 
 // Excluded paths: Real-time WhatsApp status polling, SSE event stream, QR checks, and health probes
 const EXCLUDED_PATTERNS = [
@@ -26,6 +27,12 @@ function rateLimiter(req, res, next) {
 
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const now = Date.now();
+
+  if (ipRequestMap.size >= MAX_TRACKED_IPS) {
+    for (const [trackedIp, data] of ipRequestMap) {
+      if (now - data.startTime > WINDOW_MS) ipRequestMap.delete(trackedIp);
+    }
+  }
 
   let clientData = ipRequestMap.get(ip);
 

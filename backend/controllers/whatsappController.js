@@ -29,10 +29,13 @@ const isValidUrl = (urlStr) => {
 async function startWhatsApp(req, res) {
   try {
     logger.info('WhatsApp start requested via API');
-    const status = await whatsappService.startClient();
+    whatsappService.startClient().catch((error) => {
+      logger.error('Background WhatsApp startup failed:', { error: error.message });
+    });
+    const status = whatsappService.getStatus();
     return res.status(200).json({
       success: true,
-      message: 'WhatsApp gateway start initiated',
+      message: 'WhatsApp gateway startup initiated',
       data: status,
     });
   } catch (error) {

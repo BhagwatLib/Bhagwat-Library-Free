@@ -64,23 +64,14 @@ async function handleGracefulShutdown(signal) {
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
-// Catch uncaught exceptions and unhandled promise rejections with full diagnostic stack traces
-process.on('uncaughtException', (err) => {
-  console.error('[PROCESS CRITICAL] Uncaught Exception:', err);
-  logger.error('[PROCESS] Uncaught Exception:', {
+// Log fatal exceptions, then allow Node/process manager to restart a clean
+// worker instead of continuing with a corrupted Puppeteer session.
+process.on('uncaughtExceptionMonitor', (err) => {
+  console.error('[PROCESS CRITICAL] Uncaught exception:', err);
+  logger.error('[PROCESS] Uncaught exception:', {
     message: err?.message,
     name: err?.name,
-    stack: err?.stack || new Error().stack,
-  });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[PROCESS CRITICAL] Unhandled Promise Rejection:', reason);
-  const errorObj = reason instanceof Error ? reason : null;
-  logger.error('[PROCESS] Unhandled Promise Rejection:', {
-    message: errorObj ? errorObj.message : String(reason),
-    name: errorObj ? errorObj.name : 'UnhandledRejection',
-    stack: errorObj ? errorObj.stack : new Error().stack,
+    stack: err?.stack,
   });
 });
 

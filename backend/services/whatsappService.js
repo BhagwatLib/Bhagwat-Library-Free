@@ -282,130 +282,6 @@ function stopMemoryLogging() {
   }
 }
 
-// Attach process-level uncaught exception and unhandled rejection handlers
-process.on('uncaughtException', (err) => {
-  console.error('[PROCESS CRITICAL] Uncaught Exception:', err);
-  logger.error('[PROCESS] Uncaught Exception:', {
-    message: err?.message,
-    name: err?.name,
-    stack: err?.stack || new Error().stack,
-  });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[PROCESS CRITICAL] Unhandled Promise Rejection:', reason);
-  const errorObj = reason instanceof Error ? reason : null;
-  logger.error('[PROCESS] Unhandled Promise Rejection:', {
-    message: errorObj ? errorObj.message : String(reason),
-    name: errorObj ? errorObj.name : 'UnhandledRejection',
-    stack: errorObj ? errorObj.stack : new Error().stack,
-  });
-});
-
-// --- Puppeteer Launch Interceptor & Process Watcher ---
-// Intercepts puppeteer.launch called internally by whatsapp-web.js during client.initialize()
-const originalPuppeteerLaunch = puppeteer.launch.bind(puppeteer);
-puppeteer.launch = async function (options = {}) {
-  const timestamp = new Date().toISOString();
-  logger.info(`[Puppeteer Launch Interceptor] [${timestamp}] puppeteer.launch() invoked.`);
-  logger.info(`[Puppeteer Launch Options] Executable: "${options.executablePath || 'default'}" | Headless: ${options.headless} | Args (${options.args?.length || 0}):`, options.args);
-
-  try {
-    const browser = await originalPuppeteerLaunch(options);
-    const proc = typeof browser.process === 'function' ? browser.process() : null;
-    const pid = proc?.pid;
-    logger.info(`[Puppeteer Launch Success] [${new Date().toISOString()}] Browser spawned successfully. PID: ${pid}`);
-
-    if (proc) {
-      proc.on('exit', (code, signal) => {
-        const exitTs = new Date().toISOString();
-        const exitMsg = `[Chromium Process Exit] [${exitTs}] ⚠️ Chromium (PID: ${pid}) EXITED with code: ${code}, signal: ${signal}`;
-        console.error(exitMsg);
-        logger.error(exitMsg, { pid, code, signal });
-      });
-
-      proc.on('error', (err) => {
-        const errTs = new Date().toISOString();
-        const errMsg = `[Chromium Process Error] [${errTs}] ❌ Chromium (PID: ${pid}) process error: ${err?.message}`;
-        console.error(errMsg, err);
-        logger.error(errMsg, { pid, message: err?.message, stack: err?.stack });
-      });
-
-      proc.on('close', (code, signal) => {
-        const closeTs = new Date().toISOString();
-        logger.warn(`[Chromium Process Close] [${closeTs}] Chromium (PID: ${pid}) process close with code: ${code}, signal: ${signal}`);
-      });
-
-      if (proc.stderr) {
-        proc.stderr.on('data', (chunk) => {
-          const text = chunk.toString().trim();
-          if (text) {
-            logger.warn(`[Chromium Stderr] [PID: ${pid}] ${text}`);
-          }
-        });
-      }
-
-      if (proc.stdout) {
-        proc.stdout.on('data', (chunk) => {
-          const text = chunk.toString().trim();
-          if (text) {
-            logger.debug(`[Chromium Stdout] [PID: ${pid}] ${text}`);
-          }
-        });
-      }
-    }
-
-    if (typeof browser.on === 'function') {
-      browser.on('disconnected', () => {
-        const discTs = new Date().toISOString();
-        const discMsg = `[Puppeteer Browser Disconnected] [${discTs}] ⚠️ Browser instance emitted "disconnected" event (PID: ${pid})`;
-        console.warn(discMsg);
-        logger.warn(discMsg, { pid });
-      });
-
-      browser.on('targetcreated', async (target) => {
-        try {
-          logger.info(`[Puppeteer Target] Created target type="${target.type()}" url="${target.url()}"`);
-          if (target.type() === 'page') {
-            const page = await target.page();
-            if (page) {
-              page.on('console', (msg) => {
-                logger.debug(`[Browser Page Console] [${msg.type()}] ${msg.text()}`);
-              });
-              page.on('pageerror', (pageErr) => {
-                const pErrTs = new Date().toISOString();
-                console.error(`[Browser Page Error] [${pErrTs}]`, pageErr);
-                logger.error(`[Browser Page Error] [${pErrTs}] ${pageErr.message}`, { stack: pageErr.stack });
-              });
-              page.on('error', (crashErr) => {
-                const cErrTs = new Date().toISOString();
-                console.error(`[Browser Page Crash Error] [${cErrTs}]`, crashErr);
-                logger.error(`[Browser Page Crash Error] [${cErrTs}] ${crashErr.message}`, { stack: crashErr.stack });
-              });
-              page.on('requestfailed', (req) => {
-                logger.debug(`[Browser Request Failed] ${req.method()} ${req.url()} - ${req.failure()?.errorText}`);
-              });
-              page.on('close', () => {
-                logger.warn(`[Browser Page Event] Target page closed`);
-              });
-            }
-          }
-        } catch (targetErr) {
-          logger.debug('[Puppeteer Target Hook Notice]', targetErr.message);
-        }
-      });
-    }
-
-    return browser;
-  } catch (launchErr) {
-    const failTs = new Date().toISOString();
-    const failMsg = `[Puppeteer Launch Error] [${failTs}] ❌ puppeteer.launch() threw an exception: ${launchErr.message}`;
-    console.error(failMsg, launchErr);
-    logger.error(failMsg, { message: launchErr.message, stack: launchErr.stack });
-    throw launchErr;
-  }
-};
-
 /**
  * Instantiates and configures single WhatsApp client instance with memory-optimized Puppeteer flags
  */
@@ -450,7 +326,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     headless: 'new',
     dumpio: isDebug,
     ignoreHTTPSErrors: true,
-    protocolTimeout: 180000, // 3 minutes timeout (prevents indefinite hanging if browser socket stalls)
+    protocolTimeout: 0,
     args: [
       ...puppeteerArgs,
       `--user-agent=${platformUserAgent}`,
@@ -640,10 +516,8 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
 
       await handleClientReady();
 
-      // Trigger backup once client is fully ready and stable
-      startTrackedTimer('post_ready_backup_5s', async () => {
-        await forceSaveRemoteSession('post_ready_5s');
-      }, 5000);
+      // RemoteAuth performs its own initial backup after its 60-second
+      // stability delay. An early forced archive can corrupt the session.
     } catch (err) {
       logger.error('[WA Event Error] Error in ready handler:', { message: err?.message, stack: err?.stack });
     }
