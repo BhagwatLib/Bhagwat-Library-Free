@@ -299,6 +299,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
+    // Render free instances are memory constrained. Run Chromium in one
+    // process and turn off browser features WhatsApp Web does not need.
+    ...(process.env.NODE_ENV === 'production' ? ['--single-process'] : []),
     '--disable-accelerated-2d-canvas',
     '--no-first-run',
     '--no-zygote',
@@ -316,6 +319,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--disable-renderer-backgrounding',
     '--disable-sync',
     '--disable-translate',
+    '--disable-features=Translate,MediaRouter,OptimizationHints,AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
     '--metrics-recording-only',
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
