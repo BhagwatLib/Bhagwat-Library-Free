@@ -6,6 +6,6 @@
  * Vite substitutes VITE_BACKEND_URL when the frontend is built, so set it in
  * the hosting provider's environment variables and redeploy after changing it.
  */
-const configuredUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const configuredUrl = import.meta.env.VITE_BACKEND_URL || 'https://sampling-normal-findlaw-ordinance.trycloudflare.com';
 
 export const BACKEND_URL = configuredUrl.replace(/\/+$/, '');
