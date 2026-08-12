@@ -28,10 +28,17 @@ const isValidUrl = (urlStr) => {
  */
 async function startWhatsApp(req, res) {
   try {
-    logger.info('WhatsApp start requested via API');
+    logger.info('[WhatsApp Start Controller] Entered:', {
+      origin: req.headers.origin || 'none',
+      method: req.method,
+      ip: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      path: req.originalUrl || req.url,
+    });
+
     whatsappService.startClient().catch((error) => {
       logger.error('Background WhatsApp startup failed:', { error: error.message });
     });
+
     const status = whatsappService.getStatus();
     return res.status(200).json({
       success: true,

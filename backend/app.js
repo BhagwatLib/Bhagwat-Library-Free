@@ -24,9 +24,8 @@ const schedulerService = require('./services/schedulerService');
 const app = express();
 
 // ---------------------------------------------------------------------------
-// CORS — read allowed origins from environment variable
-// ALLOWED_ORIGINS=https://bhagwat-library-free.vercel.app,http://localhost:5173
-// Multiple domains separated by commas are supported.
+// CORS Configuration & Dynamic Whitelist
+// Explicitly supports Vercel production & preview, Cloudflare Tunnel, and Localhost
 // ---------------------------------------------------------------------------
 const rawOrigins = process.env.ALLOWED_ORIGINS || '';
 const allowedOrigins = rawOrigins
@@ -34,29 +33,84 @@ const allowedOrigins = rawOrigins
   .map((o) => o.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  const clean = origin.trim().replace(/\/+$/, '').toLowerCase();
+
+  // 1. Explicitly configured origins from .env
+  if (allowedOrigins.some((o) => o.toLowerCase() === clean || o === '*')) {
+    return true;
+  }
+
+  // 2. All Vercel deployments (production + preview domains)
+  if (/^https:\/\/[a-z0-9-_.]+\.vercel\.app$/i.test(clean)) {
+    return true;
+  }
+
+  // 3. All Cloudflare Tunnel hostnames
+  if (/^https:\/\/[a-z0-9-_.]+\.trycloudflare\.com$/i.test(clean)) {
+    return true;
+  }
+
+  // 4. Localhost and local network IPs
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/i.test(clean)) {
+    return true;
+  }
+
+  return false;
+}
+
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (server-to-server, mobile, curl, health probes)
-    if (!origin) return callback(null, true);
-
-    // If no whitelist configured or wildcard '*' specified, allow
-    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) return callback(null, true);
-
-    const cleanOrigin = origin.replace(/\/+$/, '');
-    if (allowedOrigins.includes(cleanOrigin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-
-    logger.warn(`CORS blocked request from origin: ${origin}`);
-    return callback(new Error(`CORS policy: origin '${origin}' not allowed`));
+    logger.warn(`[CORS Notice] Blocked request from origin: ${origin}`);
+    return callback(null, false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-api-key',
+    'Accept',
+    'Origin',
+    'X-Requested-With',
+    'Range',
+    'Cache-Control',
+    'Pragma',
+  ],
+  exposedHeaders: ['Content-Length', 'Content-Range', 'Content-Type'],
+  maxAge: 86400,
 };
 
+// ---------------------------------------------------------------------------
+// Global Preflight & CORS Safety Middleware
+// Ensures every request and response (including errors) has proper CORS headers
+// ---------------------------------------------------------------------------
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Accept, Origin, X-Requested-With');
+  }
+
+  // Log incoming requests with origin and IP
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  logger.info(`[HTTP ${req.method}] ${req.originalUrl || req.url} | Origin: ${origin || 'none'} | IP: ${ip}`);
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Pre-flight for all routes
+app.options('*', cors(corsOptions));
 
 
 // ---------------------------------------------------------------------------
@@ -66,7 +120,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ---------------------------------------------------------------------------
-// Trust proxy headers (for reverse proxy / tunnel environments)
+// Trust proxy headers (for Cloudflare Tunnel / reverse proxy)
 // ---------------------------------------------------------------------------
 app.set('trust proxy', 1);
 
@@ -103,6 +157,8 @@ app.get('/health', (req, res) => {
 // Optional API Key middleware (activated only when API_KEY is set in .env)
 // ---------------------------------------------------------------------------
 app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+
   const apiKey = process.env.API_KEY;
   if (apiKey && apiKey !== 'your_optional_api_key_here') {
     const clientKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -114,16 +170,6 @@ app.use((req, res, next) => {
       });
     }
   }
-  next();
-});
-
-// ---------------------------------------------------------------------------
-// Request Logging (method, path, IP, timestamp) — DEBUG level only
-// ---------------------------------------------------------------------------
-app.use((req, res, next) => {
-  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const path = req.originalUrl || req.url;
-  logger.debug(`[HTTP Request] ${req.method} ${path} - IP: ${ip}`);
   next();
 });
 

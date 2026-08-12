@@ -8,19 +8,24 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS = 100;
 const MAX_TRACKED_IPS = 10000;
 
-// Excluded paths: Real-time WhatsApp status polling, SSE event stream, QR checks, and health probes
+// Excluded paths: Real-time WhatsApp endpoints, reminders, invoices, health probes
 const EXCLUDED_PATTERNS = [
-  /^\/api\/whatsapp\/status/,
-  /^\/api\/whatsapp\/events/,
-  /^\/api\/whatsapp\/qr/,
+  /^\/api\/whatsapp/,
+  /^\/api\/invoice/,
+  /^\/api\/reminders/,
   /^\/health/,
   /^\/$/,
 ];
 
 function rateLimiter(req, res, next) {
+  // Always allow preflight requests
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const reqPath = req.originalUrl || req.url || '';
 
-  // Exclude WhatsApp real-time polling and event streaming from the global rate limiter
+  // Exclude WhatsApp real-time polling, startups, and event streaming
   if (EXCLUDED_PATTERNS.some((pattern) => pattern.test(reqPath))) {
     return next();
   }
