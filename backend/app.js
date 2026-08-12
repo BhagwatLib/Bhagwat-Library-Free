@@ -57,7 +57,9 @@ function isAllowedOrigin(origin) {
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (isAllowedOrigin(origin)) {
+    const allowed = isAllowedOrigin(origin);
+    logger.info(`[CORS] Origin received: ${origin || 'none'} | Allowed: ${allowed}`);
+    if (allowed) {
       return callback(null, true);
     }
     logger.warn(`[CORS Notice] Blocked request from origin: ${origin}`);
@@ -75,6 +77,7 @@ const corsOptions = {
     'Range',
     'Cache-Control',
     'Pragma',
+    'Access-Control-Request-Private-Network',
   ],
   exposedHeaders: ['Content-Length', 'Content-Range', 'Content-Type'],
   maxAge: 86400,
@@ -86,11 +89,18 @@ const corsOptions = {
 // ---------------------------------------------------------------------------
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && isAllowedOrigin(origin)) {
+  const isAllowed = isAllowedOrigin(origin);
+
+  if (origin && isAllowed) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Accept, Origin, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, Accept, Origin, X-Requested-With, Access-Control-Request-Private-Network');
+    
+    // Support Chrome Private Network Access (PNA) for public HTTPS -> localhost requests
+    if (req.headers['access-control-request-private-network']) {
+      res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    }
   }
 
   // Log incoming requests with origin and IP
