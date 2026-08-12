@@ -48,7 +48,12 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // Graceful shutdown — save active session and finish open connections before exit
+let shuttingDown = false;
+
 async function handleGracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.error(`[PROCESS] ${signal} received; beginning graceful shutdown.`);
   logger.info(`${signal} received — shutting down gracefully...`);
   try {
     const whatsappService = require('./services/whatsappService');
@@ -63,6 +68,7 @@ async function handleGracefulShutdown(signal) {
 
 process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+process.on('exit', (code) => console.error(`[PROCESS] Exiting with code ${code}.`));
 
 // Log fatal exceptions, then allow Node/process manager to restart a clean
 // worker instead of continuing with a corrupted Puppeteer session.

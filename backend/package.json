@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "postinstall": "npx puppeteer browsers install chrome@146",
+    "postinstall": "npx puppeteer browsers install chrome@146 --path .puppeteer-cache",
     "test": "echo \"No tests configured\" && exit 0"
   },
   "dependencies": {

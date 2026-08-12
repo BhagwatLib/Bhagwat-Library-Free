@@ -6,13 +6,14 @@
 
 const { Client, RemoteAuth, NoAuth, MessageMedia } = require('whatsapp-web.js');
 const sessionStore = require('./whatsapp/sessionStore');
-const qrcodeTerminal = require('qrcode-terminal');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const EventEmitter = require('events');
 const logger = require('../utils/logger');
+// Match Puppeteer's install cache to the cache used at runtime on Render.
+process.env.PUPPETEER_CACHE_DIR ||= path.join(__dirname, '../.puppeteer-cache');
 const puppeteer = require('puppeteer');
 let browsers = null;
 try {
@@ -234,7 +235,13 @@ async function ensureBrowserAvailable() {
     }
   }
 
-  // 5. Only if absolutely missing anywhere on the system, trigger on-demand installation
+  // Chrome must be installed during the production build. Installing it while
+  // handling a QR request delays startup and can trigger host restarts.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Chrome is missing. Rebuild the service so postinstall installs it in backend/.puppeteer-cache.');
+  }
+
+  // Development-only fallback if no browser exists anywhere on the system.
   if (browsers) {
     logger.warn('[Browser Resolver] No existing browser found on disk. Installing Chrome into project cache...');
     try {
@@ -270,7 +277,7 @@ function startMemoryLogging() {
     try {
       const mem = process.memoryUsage();
       const toMB = (bytes) => (bytes / 1024 / 1024).toFixed(1);
-      logger.info(`[Memory Diagnostics 5s] RSS: ${toMB(mem.rss)}MB | Heap: ${toMB(mem.heapUsed)}MB / ${toMB(mem.heapTotal)}MB | External: ${toMB(mem.external)}MB | Auth State: ${authState}`);
+      logger.debug(`[Memory Diagnostics 5s] RSS: ${toMB(mem.rss)}MB | Heap: ${toMB(mem.heapUsed)}MB / ${toMB(mem.heapTotal)}MB | External: ${toMB(mem.external)}MB | Auth State: ${authState}`);
     } catch (_) {}
   }, 5000);
 }
@@ -313,6 +320,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
     '--renderer-process-limit=1',
+    '--js-flags=--max-old-space-size=128',
   ];
 
   const isLinux = process.platform === 'linux';
@@ -682,10 +690,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       lastError = null;
       emitProgress(70, 'qr_generated', 'QR code generated. Scan with phone.');
 
-      console.log('\n--- SCAN THIS QR CODE FOR WHATSAPP AUTHENTICATION ---');
-      qrcodeTerminal.generate(qr, { small: true });
-      console.log('-----------------------------------------------------\n');
-
+      // The frontend receives the QR as a data URL through SSE/status. Do not
+      // print an ASCII QR in production: it floods Render logs and exposes the
+      // pairing token to anyone with log access.
       whatsappEvents.emit('qr', { qrRaw: latestQrRaw, qrDataUrl: latestQrDataUrl });
       whatsappEvents.emit('status_change', getStatus());
     } catch (err) {
