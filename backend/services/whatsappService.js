@@ -699,8 +699,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
  * Starts WhatsApp client on-demand (idempotent, single active instance with promise lock)
  */
 async function startClient() {
-  console.log("Initialize requested from:", new Error().stack);
-
   // 1. Return immediately if already fully connected and ready
   if (isReady && client && client.ready) {
     logger.info('[RemoteAuth] Client already connected and ready. Returning existing session.');
@@ -737,7 +735,6 @@ async function startClient() {
     try {
       if (client && !isAuthenticating && authState !== 'SCANNING' && authState !== 'AUTHENTICATING') {
         logger.info('[WhatsApp Diagnostics] Cleaning up previous client before startup...');
-        console.log("Destroy requested from:", new Error().stack);
         try {
           await client.destroy();
         } catch (err) {
@@ -777,20 +774,6 @@ async function startClient() {
       const toMB = (b) => (b / 1024 / 1024).toFixed(1);
       logger.info(`[client.initialize() Invocation] [${new Date().toISOString()}] Memory before initialize: RSS=${toMB(memBefore.rss)}MB, Heap=${toMB(memBefore.heapUsed)}MB/${toMB(memBefore.heapTotal)}MB, Ext=${toMB(memBefore.external)}MB`);
       logger.info(`[client.initialize() Invocation] Executing client.initialize()...`);
-      console.log("Initialize requested from:", new Error().stack);
-
-      // Start an initialization watchdog to log progress every 5 seconds
-      let initSeconds = 0;
-      const initWatchdog = setInterval(() => {
-        initSeconds += 5;
-        try {
-          const mem = process.memoryUsage();
-          const browserPid = client?.pupBrowser?.process?.()?.pid || 'unknown';
-          const browserConnected = client?.pupBrowser?.isConnected?.() ?? 'not-connected-yet';
-          logger.info(`[client.initialize() Watchdog] [${initSeconds}s elapsed] Status: ${connectionStatus} | AuthState: ${authState} | Browser PID: ${browserPid} | Browser Connected: ${browserConnected} | RSS: ${toMB(mem.rss)}MB | Heap: ${toMB(mem.heapUsed)}MB`);
-        } catch (_) {}
-      }, 5000);
-
       const initStartTime = Date.now();
       try {
         await client.initialize();
@@ -807,8 +790,6 @@ async function startClient() {
           name: initErr?.name,
         });
         throw initErr;
-      } finally {
-        clearInterval(initWatchdog);
       }
 
       if (client.pupBrowser) {
@@ -866,8 +847,6 @@ async function startClient() {
  * Gracefully destroys client and frees memory on explicit user logout
  */
 async function destroyClient() {
-  console.log("Destroy requested from:", new Error().stack);
-
   // Strict Lock: NEVER destroy client while SCANNING or AUTHENTICATING
   if (authState === 'SCANNING' || authState === 'AUTHENTICATING' || isAuthenticating) {
     logger.warn(`[Auth Lock] [${new Date().toISOString()}] BLOCKED destroyClient() during active authentication (State: ${authState}). Handshake protected.`);
@@ -881,13 +860,11 @@ async function destroyClient() {
 
   if (client) {
     try {
-      console.log("Logout requested from:", new Error().stack);
       await client.logout();
       logger.info('[WhatsApp Diagnostics] Client logged out.');
     } catch (_) { }
 
     try {
-      console.log("Browser close requested from:", new Error().stack);
       await client.destroy();
       logger.info('[WhatsApp Diagnostics] Client destroyed successfully.');
     } catch (err) {
