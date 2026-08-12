@@ -66,6 +66,7 @@ process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 
 // Catch uncaught exceptions and unhandled promise rejections with full diagnostic stack traces
 process.on('uncaughtException', (err) => {
+  console.error('[PROCESS CRITICAL] Uncaught Exception:', err);
   logger.error('[PROCESS] Uncaught Exception:', {
     message: err?.message,
     name: err?.name,
@@ -74,6 +75,7 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+  console.error('[PROCESS CRITICAL] Unhandled Promise Rejection:', reason);
   const errorObj = reason instanceof Error ? reason : null;
   logger.error('[PROCESS] Unhandled Promise Rejection:', {
     message: errorObj ? errorObj.message : String(reason),

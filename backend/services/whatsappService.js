@@ -282,6 +282,130 @@ function stopMemoryLogging() {
   }
 }
 
+// Attach process-level uncaught exception and unhandled rejection handlers
+process.on('uncaughtException', (err) => {
+  console.error('[PROCESS CRITICAL] Uncaught Exception:', err);
+  logger.error('[PROCESS] Uncaught Exception:', {
+    message: err?.message,
+    name: err?.name,
+    stack: err?.stack || new Error().stack,
+  });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[PROCESS CRITICAL] Unhandled Promise Rejection:', reason);
+  const errorObj = reason instanceof Error ? reason : null;
+  logger.error('[PROCESS] Unhandled Promise Rejection:', {
+    message: errorObj ? errorObj.message : String(reason),
+    name: errorObj ? errorObj.name : 'UnhandledRejection',
+    stack: errorObj ? errorObj.stack : new Error().stack,
+  });
+});
+
+// --- Puppeteer Launch Interceptor & Process Watcher ---
+// Intercepts puppeteer.launch called internally by whatsapp-web.js during client.initialize()
+const originalPuppeteerLaunch = puppeteer.launch.bind(puppeteer);
+puppeteer.launch = async function (options = {}) {
+  const timestamp = new Date().toISOString();
+  logger.info(`[Puppeteer Launch Interceptor] [${timestamp}] puppeteer.launch() invoked.`);
+  logger.info(`[Puppeteer Launch Options] Executable: "${options.executablePath || 'default'}" | Headless: ${options.headless} | Args (${options.args?.length || 0}):`, options.args);
+
+  try {
+    const browser = await originalPuppeteerLaunch(options);
+    const proc = typeof browser.process === 'function' ? browser.process() : null;
+    const pid = proc?.pid;
+    logger.info(`[Puppeteer Launch Success] [${new Date().toISOString()}] Browser spawned successfully. PID: ${pid}`);
+
+    if (proc) {
+      proc.on('exit', (code, signal) => {
+        const exitTs = new Date().toISOString();
+        const exitMsg = `[Chromium Process Exit] [${exitTs}] ⚠️ Chromium (PID: ${pid}) EXITED with code: ${code}, signal: ${signal}`;
+        console.error(exitMsg);
+        logger.error(exitMsg, { pid, code, signal });
+      });
+
+      proc.on('error', (err) => {
+        const errTs = new Date().toISOString();
+        const errMsg = `[Chromium Process Error] [${errTs}] ❌ Chromium (PID: ${pid}) process error: ${err?.message}`;
+        console.error(errMsg, err);
+        logger.error(errMsg, { pid, message: err?.message, stack: err?.stack });
+      });
+
+      proc.on('close', (code, signal) => {
+        const closeTs = new Date().toISOString();
+        logger.warn(`[Chromium Process Close] [${closeTs}] Chromium (PID: ${pid}) process close with code: ${code}, signal: ${signal}`);
+      });
+
+      if (proc.stderr) {
+        proc.stderr.on('data', (chunk) => {
+          const text = chunk.toString().trim();
+          if (text) {
+            logger.warn(`[Chromium Stderr] [PID: ${pid}] ${text}`);
+          }
+        });
+      }
+
+      if (proc.stdout) {
+        proc.stdout.on('data', (chunk) => {
+          const text = chunk.toString().trim();
+          if (text) {
+            logger.debug(`[Chromium Stdout] [PID: ${pid}] ${text}`);
+          }
+        });
+      }
+    }
+
+    if (typeof browser.on === 'function') {
+      browser.on('disconnected', () => {
+        const discTs = new Date().toISOString();
+        const discMsg = `[Puppeteer Browser Disconnected] [${discTs}] ⚠️ Browser instance emitted "disconnected" event (PID: ${pid})`;
+        console.warn(discMsg);
+        logger.warn(discMsg, { pid });
+      });
+
+      browser.on('targetcreated', async (target) => {
+        try {
+          logger.info(`[Puppeteer Target] Created target type="${target.type()}" url="${target.url()}"`);
+          if (target.type() === 'page') {
+            const page = await target.page();
+            if (page) {
+              page.on('console', (msg) => {
+                logger.debug(`[Browser Page Console] [${msg.type()}] ${msg.text()}`);
+              });
+              page.on('pageerror', (pageErr) => {
+                const pErrTs = new Date().toISOString();
+                console.error(`[Browser Page Error] [${pErrTs}]`, pageErr);
+                logger.error(`[Browser Page Error] [${pErrTs}] ${pageErr.message}`, { stack: pageErr.stack });
+              });
+              page.on('error', (crashErr) => {
+                const cErrTs = new Date().toISOString();
+                console.error(`[Browser Page Crash Error] [${cErrTs}]`, crashErr);
+                logger.error(`[Browser Page Crash Error] [${cErrTs}] ${crashErr.message}`, { stack: crashErr.stack });
+              });
+              page.on('requestfailed', (req) => {
+                logger.debug(`[Browser Request Failed] ${req.method()} ${req.url()} - ${req.failure()?.errorText}`);
+              });
+              page.on('close', () => {
+                logger.warn(`[Browser Page Event] Target page closed`);
+              });
+            }
+          }
+        } catch (targetErr) {
+          logger.debug('[Puppeteer Target Hook Notice]', targetErr.message);
+        }
+      });
+    }
+
+    return browser;
+  } catch (launchErr) {
+    const failTs = new Date().toISOString();
+    const failMsg = `[Puppeteer Launch Error] [${failTs}] ❌ puppeteer.launch() threw an exception: ${launchErr.message}`;
+    console.error(failMsg, launchErr);
+    logger.error(failMsg, { message: launchErr.message, stack: launchErr.stack });
+    throw launchErr;
+  }
+};
+
 /**
  * Instantiates and configures single WhatsApp client instance with memory-optimized Puppeteer flags
  */
@@ -313,7 +437,6 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     '--mute-audio',
     '--safebrowsing-disable-auto-update',
     '--renderer-process-limit=1',
-    '--js-flags=--max-old-space-size=128',
   ];
 
   const isLinux = process.platform === 'linux';
@@ -327,7 +450,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     headless: 'new',
     dumpio: isDebug,
     ignoreHTTPSErrors: true,
-    protocolTimeout: 0, // No protocol timeout during authentication
+    protocolTimeout: 180000, // 3 minutes timeout (prevents indefinite hanging if browser socket stalls)
     args: [
       ...puppeteerArgs,
       `--user-agent=${platformUserAgent}`,
@@ -400,6 +523,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   }
 
   // --- Detailed Diagnostic Lifecycle Event Listeners with Safe Try/Catch ---
+  logger.info('[Event Setup] Registering "loading_screen" event listener...');
   client.on('loading_screen', (percent, message) => {
     try {
       const timestamp = new Date().toISOString();
@@ -435,7 +559,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in loading_screen handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "loading_screen" event listener registered.');
 
+  logger.info('[Event Setup] Registering "authenticated" event listener...');
   client.on('authenticated', async (authPayload) => {
     try {
       const timestamp = new Date().toISOString();
@@ -459,7 +585,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in authenticated handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "authenticated" event listener registered.');
 
+  logger.info('[Event Setup] Registering "auth_failure" event listener...');
   client.on('auth_failure', async (msg) => {
     try {
       const timestamp = new Date().toISOString();
@@ -484,7 +612,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in auth_failure handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "auth_failure" event listener registered.');
 
+  logger.info('[Event Setup] Registering "ready" event listener...');
   client.on('ready', async () => {
     try {
       const timestamp = new Date().toISOString();
@@ -518,7 +648,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in ready handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "ready" event listener registered.');
 
+  logger.info('[Event Setup] Registering "change_state" event listener...');
   client.on('change_state', (state) => {
     try {
       const timestamp = new Date().toISOString();
@@ -530,7 +662,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in change_state handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "change_state" event listener registered.');
 
+  logger.info('[Event Setup] Registering "disconnected" event listener...');
   client.on('disconnected', (reason) => {
     try {
       const timestamp = new Date().toISOString();
@@ -567,7 +701,20 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in disconnected handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "disconnected" event listener registered.');
 
+  logger.info('[Event Setup] Registering "error" event listener...');
+  client.on('error', (err) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[WA Event: error] [${timestamp}] Client error:`, err);
+    logger.error(`[WA Event: error] [${timestamp}] Client error:`, {
+      message: err?.message || String(err),
+      stack: err?.stack,
+    });
+  });
+  logger.info('[Event Setup] "error" event listener registered.');
+
+  logger.info('[Event Setup] Registering "remote_session_saved" event listener...');
   client.on('remote_session_saved', async () => {
     try {
       const timestamp = new Date().toISOString();
@@ -588,7 +735,9 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in remote_session_saved handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "remote_session_saved" event listener registered.');
 
+  logger.info('[Event Setup] Registering "remote_session_loaded" event listener...');
   client.on('remote_session_loaded', () => {
     try {
       const timestamp = new Date().toISOString();
@@ -597,12 +746,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in remote_session_loaded handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "remote_session_loaded" event listener registered.');
 
+  logger.info('[Event Setup] Registering "message" event listener...');
   client.on('message', () => {
     logger.debug('[WA Event] MESSAGE EVENT');
   });
+  logger.info('[Event Setup] "message" event listener registered.');
 
   // Event: QR Code Received
+  logger.info('[Event Setup] Registering "qr" event listener...');
   client.on('qr', async (qr) => {
     try {
       const timestamp = new Date().toISOString();
@@ -665,6 +818,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       logger.error('[WA Event Error] Error in qr handler:', { message: err?.message, stack: err?.stack });
     }
   });
+  logger.info('[Event Setup] "qr" event listener registered.');
 }
 
 /**
@@ -744,11 +898,44 @@ async function startClient() {
 
       // Configure client with resolved browser and MongoStore
       setupClient(resolvedExecutablePath, mongoStore);
-      logger.info(`[client.initialize() Invocation] [${new Date().toISOString()}] Executing client.initialize()...`);
+
+      const memBefore = process.memoryUsage();
+      const toMB = (b) => (b / 1024 / 1024).toFixed(1);
+      logger.info(`[client.initialize() Invocation] [${new Date().toISOString()}] Memory before initialize: RSS=${toMB(memBefore.rss)}MB, Heap=${toMB(memBefore.heapUsed)}MB/${toMB(memBefore.heapTotal)}MB, Ext=${toMB(memBefore.external)}MB`);
+      logger.info(`[client.initialize() Invocation] Executing client.initialize()...`);
       console.log("Initialize requested from:", new Error().stack);
 
-      await client.initialize();
-      logger.info(`[client.initialize() Resolved] [${new Date().toISOString()}] WhatsApp client.initialize() promise resolved successfully.`);
+      // Start an initialization watchdog to log progress every 5 seconds
+      let initSeconds = 0;
+      const initWatchdog = setInterval(() => {
+        initSeconds += 5;
+        try {
+          const mem = process.memoryUsage();
+          const browserPid = client?.pupBrowser?.process?.()?.pid || 'unknown';
+          const browserConnected = client?.pupBrowser?.isConnected?.() ?? 'not-connected-yet';
+          logger.info(`[client.initialize() Watchdog] [${initSeconds}s elapsed] Status: ${connectionStatus} | AuthState: ${authState} | Browser PID: ${browserPid} | Browser Connected: ${browserConnected} | RSS: ${toMB(mem.rss)}MB | Heap: ${toMB(mem.heapUsed)}MB`);
+        } catch (_) {}
+      }, 5000);
+
+      const initStartTime = Date.now();
+      try {
+        await client.initialize();
+        const initDuration = Date.now() - initStartTime;
+        logger.info(`[client.initialize() Resolved] [${new Date().toISOString()}] WhatsApp client.initialize() promise resolved successfully in ${initDuration}ms (${(initDuration / 1000).toFixed(1)}s).`);
+        console.log(`[client.initialize() Resolved] WhatsApp client.initialize() promise resolved in ${initDuration}ms.`);
+      } catch (initErr) {
+        const initDuration = Date.now() - initStartTime;
+        const errTs = new Date().toISOString();
+        console.error(`[client.initialize() Rejected] [${errTs}] Failed after ${initDuration}ms:`, initErr);
+        logger.error(`[client.initialize() Rejected] [${errTs}] Failed after ${initDuration}ms:`, {
+          message: initErr?.message || String(initErr),
+          stack: initErr?.stack,
+          name: initErr?.name,
+        });
+        throw initErr;
+      } finally {
+        clearInterval(initWatchdog);
+      }
 
       if (client.pupBrowser) {
         startupTimers.browserLaunched = Date.now();
