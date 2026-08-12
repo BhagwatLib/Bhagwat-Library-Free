@@ -47,6 +47,18 @@ const server = app.listen(PORT, HOST, () => {
   })();
 });
 
+// Handle server startup errors (e.g. port already in use)
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`[SERVER ERROR] Port ${PORT} is already in use by another running Node process.`);
+    logger.error(`[FIX] Stop other running backend instances or run: npx kill-port ${PORT}`);
+    process.exit(1);
+  } else {
+    logger.error('[SERVER ERROR]', err);
+    process.exit(1);
+  }
+});
+
 // Graceful shutdown — save active session and finish open connections before exit
 let shuttingDown = false;
 

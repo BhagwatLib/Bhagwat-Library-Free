@@ -552,14 +552,30 @@ async function startClient() {
 
       if (client.pupBrowser) {
         client.pupBrowser.on('disconnected', () => {
-          logger.warn('[WhatsApp] Browser disconnected');
+          logger.warn('[WhatsApp Lifecycle] Puppeteer browser disconnected.');
+          isReady = false;
+          if (client) client.ready = false;
+          authState = 'DISCONNECTED';
+          connectionStatus = 'DISCONNECTED';
           emitProgress(0, 'browser_disconnected', 'Browser disconnected');
         });
       }
 
       if (client.pupPage) {
+        client.pupPage.on('framenavigated', (frame) => {
+          if (frame === client.pupPage?.mainFrame()) {
+            logger.info(`[WhatsApp Lifecycle] Main page frame navigated to: ${frame.url()}`);
+          }
+        });
+
         client.pupPage.on('close', () => {
-          logger.warn('[WhatsApp] Browser page closed');
+          logger.warn('[WhatsApp Lifecycle] Puppeteer browser page closed.');
+          isReady = false;
+          if (client) client.ready = false;
+        });
+
+        client.pupPage.on('error', (pageErr) => {
+          logger.error('[WhatsApp Lifecycle] Puppeteer page crashed:', { message: pageErr?.message });
         });
       }
     } catch (err) {
@@ -719,53 +735,150 @@ async function getMediaFromUrl(url, filename) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Verifies that the WhatsApp client, browser, and page are healthy and open.
+ * Verifies that the Puppeteer main frame and execution context are active,
+ * attached, and responsive to evaluation with window.WWebJS.
  */
-async function verifyClientHealth() {
-  if (isReady && client && client.ready && client.pupBrowser?.isConnected() && client.pupPage && !client.pupPage.isClosed()) {
-    return;
-  }
-
-  if (activeInitPromise) {
-    logger.info('[WhatsApp Health] Waiting for in-flight initialization...');
-    await activeInitPromise;
-  } else if (!client || !isReady || !client.ready) {
-    logger.info('[WhatsApp Health] Client not ready. Triggering startClient()...');
-    await startClient();
-  }
-
+async function verifyPageExecutionContext(maxWaitMs = 5000) {
   if (!client || !client.pupPage || client.pupPage.isClosed()) {
-    throw new Error('WhatsApp browser page is closed or unavailable. Please retry shortly.');
+    const err = new Error('WhatsApp browser page is closed or unavailable.');
+    err.statusCode = 503;
+    throw err;
   }
+
+  const startTime = Date.now();
+  let lastErr = null;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const page = client.pupPage;
+      if (page.isClosed()) {
+        const err = new Error('WhatsApp browser page was closed.');
+        err.statusCode = 503;
+        throw err;
+      }
+
+      const mainFrame = page.mainFrame();
+      if (!mainFrame || (typeof mainFrame.isDetached === 'function' && mainFrame.isDetached())) {
+        logger.warn('[WhatsApp Frame] Main frame is detached; waiting for navigation/reload to settle...');
+        await sleep(500);
+        continue;
+      }
+
+      // Check if WWebJS is injected and ready in the active frame
+      const isContextReady = await page.evaluate(() => {
+        return typeof window !== 'undefined' &&
+          typeof window.WWebJS !== 'undefined' &&
+          typeof window.WWebJS.sendMessage === 'function';
+      });
+
+      if (isContextReady) {
+        return true;
+      }
+
+      logger.debug('[WhatsApp Frame] Waiting for window.WWebJS in active frame...');
+      await sleep(500);
+    } catch (err) {
+      lastErr = err;
+      logger.warn('[WhatsApp Frame] Execution context probe notice:', { message: err.message });
+      if (err.message.includes('detached Frame') || err.message.includes('Execution context was destroyed') || err.message.includes('Navigating frame')) {
+        await sleep(500);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  if (lastErr) {
+    const err = new Error(`WhatsApp Web frame is not ready (${lastErr.message}). Current state: ${authState}. Please wait a few seconds and try again.`);
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const err = new Error(`WhatsApp Web frame synchronization timed out. Current state: ${authState}. Please verify connection.`);
+  err.statusCode = 503;
+  throw err;
 }
 
 /**
- * Sends text message to single recipient
+ * Verifies that the WhatsApp client is genuinely READY, authenticated, and responsive.
+ */
+async function verifyClientHealth() {
+  logger.info('[WhatsApp Pre-Send Diagnostic]', {
+    authState,
+    isReady,
+    clientExists: Boolean(client),
+    clientReady: Boolean(client?.ready),
+    clientInfoWid: client?.info?.wid?.user || clientInfo?.wid || 'none',
+    browserConnected: Boolean(client?.pupBrowser?.isConnected()),
+    pageClosed: Boolean(!client?.pupPage || client?.pupPage.isClosed()),
+    activeInitPromise: Boolean(activeInitPromise),
+  });
+
+  if (activeInitPromise) {
+    logger.info('[WhatsApp Health] Waiting for in-flight initialization to complete...');
+    try {
+      await activeInitPromise;
+    } catch (_) {}
+  }
+
+  // Check client state machine
+  if (authState === 'AUTHENTICATING' || isAuthenticating) {
+    const err = new Error(`WhatsApp is not ready. Current state: ${authState} (Authenticating/Syncing). Please wait a moment.`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  if (authState === 'SCANNING' || authState === 'QR_READY') {
+    const err = new Error(`WhatsApp is not ready. Current state: ${authState} (QR Scan Required). Please scan the QR code in WhatsApp Gateway.`);
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if (!client || !isReady || !client.ready || authState !== 'READY') {
+    const err = new Error(`WhatsApp is not ready. Current state: ${authState}. Please ensure WhatsApp is connected.`);
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if (!client.pupBrowser || !client.pupBrowser.isConnected()) {
+    const err = new Error('WhatsApp browser is disconnected. Please reconnect WhatsApp in Gateway.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  if (!client.pupPage || client.pupPage.isClosed()) {
+    const err = new Error('WhatsApp browser page is closed or unavailable. Please reconnect.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  // Verify that the frame is attached and window.WWebJS.sendMessage is ready
+  await verifyPageExecutionContext(5000);
+}
+
+/**
+ * Sends text message to single recipient with frame recovery and comprehensive logging
  */
 async function sendTextMessage(phone, message) {
-  await verifyClientHealth();
-
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
-  logger.debug('[WhatsApp Dispatch] Starting send process:', {
-    originalPhone: phone,
-    sanitizedPhone: normalizedPhone,
-    chatId: rawChatId,
-    messageLength: message ? message.length : 0,
-  });
-
   if (!normalizedPhone || normalizedPhone.length < 10) {
     const err = new Error(`Invalid sanitized phone number: "${normalizedPhone}" (original: "${phone}"). Must be at least 10 digits.`);
+    err.statusCode = 400;
     logger.error('[WhatsApp Dispatch Error]', { message: err.message });
     throw err;
   }
 
   if (!rawChatId.endsWith('@c.us') || rawChatId.length < 15) {
     const err = new Error(`Invalid chatId format: "${rawChatId}". Must match 91XXXXXXXXXX@c.us format.`);
+    err.statusCode = 400;
     logger.error('[WhatsApp Dispatch Error]', { message: err.message });
     throw err;
   }
+
+  logger.info(`[WhatsApp Dispatch] Pre-send check for phone: ${normalizedPhone} | authState: ${authState} | isReady: ${isReady}`);
+  await verifyClientHealth();
 
   let resolvedChatId = rawChatId;
   try {
@@ -780,39 +893,79 @@ async function sendTextMessage(phone, message) {
   }
 
   const startTime = Date.now();
+  logger.info(`[WhatsApp Dispatch] Starting sendMessage to ${resolvedChatId}...`);
+
   try {
     const result = await client.sendMessage(resolvedChatId, message);
     const duration = Date.now() - startTime;
-    logger.info(`[WhatsApp Dispatch] Message sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${result.id?.id || result.id?._serialized})`);
+    const messageId = result?.id?.id || result?.id?._serialized || (typeof result?.id === 'string' ? result.id : null) || 'SENT';
+    logger.info(`[WhatsApp Dispatch] Message sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${messageId})`);
     return {
       success: true,
-      messageId: result.id?.id || result.id?._serialized,
+      messageId,
       chatId: resolvedChatId,
       durationMs: duration,
       timestamp: new Date().toISOString(),
     };
   } catch (err) {
     const duration = Date.now() - startTime;
-    logger.error(`[WhatsApp Dispatch Failed] sendMessage failed after ${duration}ms:`, {
-      message: err.message,
-      stack: err.stack,
-    });
-    throw err;
+    logger.warn(`[WhatsApp Dispatch] First attempt failed after ${duration}ms: ${err.message}`);
+
+    // If failed due to frame detachment / navigation, attempt recovery once
+    if (err.message && (err.message.includes('detached Frame') || err.message.includes('Execution context was destroyed'))) {
+      logger.info('[WhatsApp Dispatch] Attempting frame recovery and retry send...');
+      try {
+        await sleep(1000);
+        await verifyPageExecutionContext(5000);
+        const retryResult = await client.sendMessage(resolvedChatId, message);
+        const retryDuration = Date.now() - startTime;
+        const messageId = retryResult?.id?.id || retryResult?.id?._serialized || 'SENT';
+        logger.info(`[WhatsApp Dispatch] Retry message sent successfully to ${resolvedChatId} in ${retryDuration}ms (Message ID: ${messageId})`);
+        return {
+          success: true,
+          messageId,
+          chatId: resolvedChatId,
+          durationMs: retryDuration,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (retryErr) {
+        logger.error('[WhatsApp Dispatch Failed] Retry send failed:', {
+          message: retryErr.message,
+          stack: retryErr.stack,
+        });
+        const finalErr = new Error(`Failed to send WhatsApp message: ${retryErr.message}`);
+        finalErr.statusCode = 503;
+        throw finalErr;
+      }
+    }
+
+    if (err.message && err.message.includes("Cannot read properties of undefined (reading 'id')")) {
+      const authErr = new Error('WhatsApp session is not active or phone is not authenticated. Please scan the QR code in WhatsApp Gateway first.');
+      authErr.statusCode = 503;
+      throw authErr;
+    }
+
+    const finalErr = new Error(`Failed to send WhatsApp message: ${err.message}`);
+    finalErr.statusCode = 500;
+    throw finalErr;
   }
 }
 
 /**
- * Sends document/media attachment to single recipient
+ * Sends document/media attachment to single recipient with frame recovery and error handling
  */
 async function sendDocument(phone, fileUrl, filename, caption = '') {
-  await verifyClientHealth();
-
   const normalizedPhone = normalizePhoneNumber(phone);
   const rawChatId = normalizedPhone ? `${normalizedPhone}@c.us` : '';
 
   if (!normalizedPhone || normalizedPhone.length < 10) {
-    throw new Error(`Invalid phone number: "${phone}".`);
+    const err = new Error(`Invalid phone number: "${phone}".`);
+    err.statusCode = 400;
+    throw err;
   }
+
+  logger.info(`[WhatsApp Dispatch] Pre-send check (Document) for phone: ${normalizedPhone} | authState: ${authState} | isReady: ${isReady}`);
+  await verifyClientHealth();
 
   let resolvedChatId = rawChatId;
   try {
@@ -826,24 +979,60 @@ async function sendDocument(phone, fileUrl, filename, caption = '') {
   const media = await getMediaFromUrl(fileUrl, filename);
 
   const startTime = Date.now();
+  logger.info(`[WhatsApp Dispatch] Starting sendDocument to ${resolvedChatId}...`);
+
   try {
     const result = await client.sendMessage(resolvedChatId, media, { caption });
     const duration = Date.now() - startTime;
-    logger.info(`[WhatsApp Dispatch] Document sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${result.id?.id || result.id?._serialized})`);
+    const messageId = result?.id?.id || result?.id?._serialized || (typeof result?.id === 'string' ? result.id : null) || 'SENT';
+    logger.info(`[WhatsApp Dispatch] Document sent successfully to ${resolvedChatId} in ${duration}ms (Message ID: ${messageId})`);
     return {
       success: true,
-      messageId: result.id?.id || result.id?._serialized,
+      messageId,
       chatId: resolvedChatId,
       durationMs: duration,
       timestamp: new Date().toISOString(),
     };
   } catch (err) {
     const duration = Date.now() - startTime;
-    logger.error(`[WhatsApp Dispatch Failed] sendDocument failed after ${duration}ms:`, {
-      message: err.message,
-      stack: err.stack,
-    });
-    throw err;
+    logger.warn(`[WhatsApp Dispatch] Document send first attempt failed after ${duration}ms: ${err.message}`);
+
+    if (err.message && (err.message.includes('detached Frame') || err.message.includes('Execution context was destroyed'))) {
+      logger.info('[WhatsApp Dispatch] Attempting frame recovery and retry sendDocument...');
+      try {
+        await sleep(1000);
+        await verifyPageExecutionContext(5000);
+        const retryResult = await client.sendMessage(resolvedChatId, media, { caption });
+        const retryDuration = Date.now() - startTime;
+        const messageId = retryResult?.id?.id || retryResult?.id?._serialized || 'SENT';
+        logger.info(`[WhatsApp Dispatch] Retry document sent successfully to ${resolvedChatId} in ${retryDuration}ms (Message ID: ${messageId})`);
+        return {
+          success: true,
+          messageId,
+          chatId: resolvedChatId,
+          durationMs: retryDuration,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (retryErr) {
+        logger.error('[WhatsApp Dispatch Failed] Retry sendDocument failed:', {
+          message: retryErr.message,
+          stack: retryErr.stack,
+        });
+        const finalErr = new Error(`Failed to send WhatsApp document: ${retryErr.message}`);
+        finalErr.statusCode = 503;
+        throw finalErr;
+      }
+    }
+
+    if (err.message && err.message.includes("Cannot read properties of undefined (reading 'id')")) {
+      const authErr = new Error('WhatsApp session is not active or phone is not authenticated. Please scan the QR code in WhatsApp Gateway first.');
+      authErr.statusCode = 503;
+      throw authErr;
+    }
+
+    const finalErr = new Error(`Failed to send WhatsApp document: ${err.message}`);
+    finalErr.statusCode = 500;
+    throw finalErr;
   }
 }
 
