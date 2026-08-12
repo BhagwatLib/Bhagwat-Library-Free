@@ -315,7 +315,7 @@ export const SeatGrid = () => {
       </div>
 
       {/* MOBILE GRID VIEW (< 1024px) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:hidden gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:hidden gap-2 sm:gap-3">
         {filteredSeats.map((seat) => {
           const isFull = seat.occupiedSlotsCount === 4;
           const isPartial = seat.occupiedSlotsCount > 0 && seat.occupiedSlotsCount < 4;
@@ -324,31 +324,30 @@ export const SeatGrid = () => {
           return (
             <motion.div
               key={seat.seatNumber}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setSelectedSeat(seat)}
               className={clsx(
-                "skeuo-card p-3 flex flex-col justify-between cursor-pointer transition-all min-h-[110px] relative rounded-2xl",
+                "skeuo-card p-2.5 flex flex-col justify-between cursor-pointer transition-all min-h-[105px] relative rounded-xl",
                 isFull
                   ? "border-purple-500/40"
                   : isPartial
-                  ? "border-blue-500/40"
+                  ? "border-cyan-500/40"
                   : "border-slate-300 dark:border-slate-800"
               )}
             >
               {/* Header: Seat Number & Count */}
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-white">
-                  Seat {seat.seatNumber}
+                <span className="text-[11px] font-extrabold text-slate-800 dark:text-white truncate">
+                  #{seat.seatNumber}
                 </span>
                 <span
                   className={clsx(
-                    "skeuo-dial w-5 h-5 text-[9px] font-bold",
+                    "skeuo-dial w-5 h-5 text-[9px] font-black",
                     isFull
-                      ? "text-purple-500"
+                      ? "text-purple-600 dark:text-purple-400"
                       : isPartial
-                      ? "text-blue-500"
-                      : "text-slate-400"
+                      ? "text-cyan-600 dark:text-cyan-400"
+                      : "text-slate-500 dark:text-slate-400"
                   )}
                 >
                   {seat.occupiedSlotsCount}
@@ -356,37 +355,36 @@ export const SeatGrid = () => {
               </div>
 
               {/* Realtime Batch Status Indicators */}
-              <div className="grid grid-cols-4 gap-1 my-2">
+              <div className="grid grid-cols-4 gap-0.5 my-1.5">
                 {BASE_SLOTS.map((slot) => {
                   const sData = seat.slots[slot.id];
                   const isOcc = sData.occupied;
-
 
                   return (
                     <div
                       key={slot.id}
                       className={clsx(
-                        "h-5 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all border",
+                        "h-5 rounded text-[9px] font-extrabold flex items-center justify-center transition-all",
                         isOcc
-                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
-                          : "bg-slate-950/80 border-slate-800 text-slate-600"
+                          ? "bg-emerald-500/25 border border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                          : "bg-slate-200/60 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-600"
                       )}
                       title={`${slot.name}: ${isOcc ? sData.student?.name : "Available"}`}
                     >
-                      {slot.slotCode} {isOcc ? "🟢" : "⚪"}
+                      {slot.slotCode}
                     </div>
                   );
                 })}
               </div>
 
               {/* Footer: Status or Student Names */}
-              <div className="text-[10px] truncate font-medium">
+              <div className="text-[9px] truncate font-bold text-center">
                 {seat.assignedStudents.length > 0 ? (
-                  <span className="text-slate-300">
+                  <span className="text-slate-700 dark:text-slate-300">
                     {seat.assignedStudents.map((s) => s.name.split(" ")[0]).join(", ")}
                   </span>
                 ) : (
-                  <span className="text-emerald-400/80 italic font-semibold">Available</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">🟢 Free</span>
                 )}
               </div>
             </motion.div>

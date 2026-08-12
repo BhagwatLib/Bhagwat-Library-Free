@@ -192,9 +192,9 @@ export const Layout = ({
       </aside>
 
       {/* MAIN CONTENT VIEWPORT */}
-      <div className="flex-1 min-w-0 pb-20 lg:pb-0 overflow-y-auto">
+      <div className="flex-1 min-w-0 overflow-x-hidden flex flex-col h-screen overflow-y-auto">
         {/* Mobile Header Bar */}
-        <header className="lg:hidden px-4 py-3 border-b border-[#757A7E]/40 dark:border-slate-800/80 flex items-center justify-between bg-[#878B8F]/95 dark:bg-[#1A1D24]/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0">
+        <header className="lg:hidden px-4 py-3 border-b border-[#757A7E]/40 dark:border-slate-800/80 flex items-center justify-between bg-[#878B8F]/95 dark:bg-[#1A1D24]/90 backdrop-blur-xl sticky top-0 z-30 flex-shrink-0 shadow-md">
           <div className="flex items-center gap-3">
             <div className="skeuo-dial w-9 h-9">
               <Layers className="w-4 h-4 text-purple-500" />
@@ -204,8 +204,8 @@ export const Layout = ({
                 Bhagwat Library{" "}
                 <Sparkles className="text-amber-400" size={13} />
               </h1>
-              <p className="text-[10px] text-[#3C4048] dark:text-slate-400 font-medium">
-                SaaS Dashboard
+              <p className="text-[10px] text-[#3C4048] dark:text-slate-400 font-semibold">
+                SaaS Admin
               </p>
             </div>
           </div>
@@ -213,23 +213,25 @@ export const Layout = ({
           <div className="flex items-center gap-2">
             <button
               onClick={toggleTheme}
-              className="skeuo-dial w-8 h-8 text-slate-700 dark:text-amber-400"
+              aria-label="Toggle Theme"
+              className="skeuo-dial w-9 h-9 text-slate-700 dark:text-amber-400 active:scale-95"
             >
-              {isDark ? <Sun size={14} /> : <Moon size={14} />}
+              {isDark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <button
               onClick={() => onTabChange("payments")}
-              className="skeuo-dial w-8 h-8 text-slate-600 dark:text-slate-300 relative"
+              aria-label="Payment Alerts"
+              className="skeuo-dial w-9 h-9 text-slate-600 dark:text-slate-300 relative active:scale-95"
             >
-              <Bell size={15} />
-              <span className="jewel-dot amber absolute top-1 right-1" />
+              <Bell size={16} />
+              <span className="jewel-dot amber absolute top-1.5 right-1.5" />
             </button>
           </div>
         </header>
 
         {/* Viewport Content Area */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 custom-scrollbar overflow-y-auto">
-          <div className="max-w-7xl mx-auto space-y-6">{children}</div>
+        <main className="flex-1 p-3.5 sm:p-5 md:p-6 lg:p-8 pb-28 lg:pb-8 custom-scrollbar overflow-y-auto">
+          <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">{children}</div>
         </main>
       </div>
 
@@ -246,7 +248,7 @@ export const Layout = ({
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#878B8F]/95 dark:bg-[#1A1D24]/95 border-t border-[#757A7E]/40 dark:border-slate-800/90 backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around shadow-2xl">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#878B8F]/95 dark:bg-[#1A1D24]/95 border-t border-[#757A7E]/40 dark:border-slate-800/90 backdrop-blur-2xl px-2 pt-1.5 mobile-safe-bottom flex items-center justify-around shadow-2xl">
         {mainBottomTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
@@ -267,9 +269,9 @@ export const Layout = ({
                 }
               }}
               className={clsx(
-                "flex flex-col items-center justify-center min-w-[64px] h-14 rounded-2xl transition-all duration-200 active:scale-95",
+                "flex flex-col items-center justify-center flex-1 max-w-[72px] h-14 rounded-2xl transition-all duration-200 active:scale-90",
                 isActive
-                  ? "text-[#00CEC9] dark:text-cyan-400 font-bold"
+                  ? "text-[#00CEC9] dark:text-cyan-400 font-black"
                   : "text-[#3C4048] dark:text-slate-400 hover:text-[#1A1C1E] dark:hover:text-slate-200",
               )}
             >
@@ -277,13 +279,13 @@ export const Layout = ({
                 className={clsx(
                   "p-1.5 rounded-full transition-all",
                   isActive
-                    ? "skeuo-dial text-[#00CEC9] dark:text-cyan-400 scale-110"
+                    ? "skeuo-dial text-[#00CEC9] dark:text-cyan-400 scale-110 shadow-lg"
                     : "",
                 )}
               >
-                <Icon size={18} />
+                <Icon size={19} />
               </div>
-              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+              <span className="text-[10px] font-bold tracking-tight mt-0.5">
                 {tab.label}
               </span>
             </button>

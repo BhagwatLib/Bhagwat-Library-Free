@@ -224,98 +224,98 @@ export const Dashboard = ({ onTabChange }) => {
         </div>
       </div>
 
-      {/* ROW 1: TOP 4 FLOATING METRIC CARDS (Exact Reference Match) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* ROW 1: TOP 4 FLOATING METRIC CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
         {/* 1. Total Students */}
-        <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
-          <div className="flex items-start gap-4">
-            <div className="skeuo-dial w-14 h-14 glow-purple flex-shrink-0">
+        <SaaSCard className="p-3.5 sm:p-5 flex flex-col justify-between min-h-[125px] sm:h-36" withGrip>
+          <div className="flex items-start gap-2.5 sm:gap-4">
+            <div className="skeuo-dial w-10 h-10 sm:w-14 sm:h-14 glow-purple flex-shrink-0">
               <Users
-                size={22}
-                className="text-purple-600 dark:text-purple-400"
+                size={18}
+                className="text-purple-600 dark:text-purple-400 sm:w-6 sm:h-6"
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
                 Total Students
               </span>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 tracking-tight">
                 {students.length}
               </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-600 dark:text-purple-400 pt-2">
-            <TrendingUp size={13} />
-            <span>Active Enrolments</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-purple-600 dark:text-purple-400 pt-1 sm:pt-2">
+            <TrendingUp size={12} className="shrink-0" />
+            <span className="truncate">Active Enrolments</span>
           </div>
         </SaaSCard>
 
         {/* 2. Total Revenue */}
-        <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
-          <div className="flex items-start gap-4">
-            <div className="skeuo-dial w-14 h-14 glow-cyan flex-shrink-0">
-              <span className="text-xl font-bold text-emerald-600 dark:text-cyan-400">
+        <SaaSCard className="p-3.5 sm:p-5 flex flex-col justify-between min-h-[125px] sm:h-36" withGrip>
+          <div className="flex items-start gap-2.5 sm:gap-4">
+            <div className="skeuo-dial w-10 h-10 sm:w-14 sm:h-14 glow-cyan flex-shrink-0">
+              <span className="text-base sm:text-xl font-bold text-emerald-600 dark:text-cyan-400">
                 ₹
               </span>
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
                 Total Revenue
               </span>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 tracking-tight">
                 ₹{monthlyCollection}
               </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 pt-2">
-            <CheckCircle2 size={13} />
-            <span>Secured Revenue</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 pt-1 sm:pt-2">
+            <CheckCircle2 size={12} className="shrink-0" />
+            <span className="truncate">Secured Revenue</span>
           </div>
         </SaaSCard>
 
         {/* 3. Seat Occupancy */}
-        <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
-          <div className="flex items-start gap-4">
-            <div className="skeuo-dial w-14 h-14 glow-amber flex-shrink-0">
-              <Armchair size={22} className="text-amber-500" />
+        <SaaSCard className="p-3.5 sm:p-5 flex flex-col justify-between min-h-[125px] sm:h-36" withGrip>
+          <div className="flex items-start gap-2.5 sm:gap-4">
+            <div className="skeuo-dial w-10 h-10 sm:w-14 sm:h-14 glow-amber flex-shrink-0">
+              <Armchair size={18} className="text-amber-500 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
                 Seat Occupancy
               </span>
-              <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 sm:mt-1 tracking-tight">
                 {occupiedSeatsCount} / 100
               </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 pt-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span>{availableSeatsCount} Seats Available</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-amber-600 dark:text-amber-400 pt-1 sm:pt-2">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-400 shrink-0" />
+            <span className="truncate">{availableSeatsCount} Available</span>
           </div>
         </SaaSCard>
 
         {/* 4. Pending Dues */}
-        <SaaSCard className="p-5 flex flex-col justify-between h-36" withGrip>
-          <div className="flex items-start gap-4">
-            <div className="skeuo-dial w-14 h-14 glow-red flex-shrink-0">
-              <Clock size={22} className="text-rose-500" />
+        <SaaSCard className="p-3.5 sm:p-5 flex flex-col justify-between min-h-[125px] sm:h-36" withGrip>
+          <div className="flex items-start gap-2.5 sm:gap-4">
+            <div className="skeuo-dial w-10 h-10 sm:w-14 sm:h-14 glow-red flex-shrink-0">
+              <Clock size={18} className="text-rose-500 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
                 Pending Dues
               </span>
-              <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-black text-rose-600 dark:text-rose-400 mt-0.5 sm:mt-1 tracking-tight">
                 ₹{pendingAmount}
               </h3>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 pt-2">
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
-            <span>Action Required</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-rose-600 dark:text-rose-400 pt-1 sm:pt-2">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 shrink-0" />
+            <span className="truncate">Action Required</span>
           </div>
         </SaaSCard>
       </div>

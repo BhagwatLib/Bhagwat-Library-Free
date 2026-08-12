@@ -529,6 +529,47 @@ html.light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
 }
 
 /* ==========================================================================
+   MOBILE PHONE UX & TOUCH OPTIMIZATIONS
+   ========================================================================== */
+
+/* Remove tap blue/gray highlights across all touch devices */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch-optimized momentum scrolling */
+.custom-scrollbar, .overflow-x-auto, .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  /* Hide scrollbars on mobile for clean aesthetic */
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .custom-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Prevent automatic iOS/Android page zoom when focusing form inputs */
+  input[type="text"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="email"],
+  input[type="date"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile Safe Area Padding */
+.mobile-safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+
+/* ==========================================================================
    LIGHT MODE READABILITY & CONTRAST OVERRIDES (INDUSTRIAL GRAY SYSTEM)
    ========================================================================== */
 html.light .text-slate-300 {

@@ -344,10 +344,15 @@ export const StudentForm = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="skeuo-card w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="skeuo-card w-full sm:max-w-lg shadow-2xl animate-in slide-in-from-bottom sm:zoom-in-95 duration-200 max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-300 dark:border-slate-800">
+        {/* Mobile Drag Indicator */}
+        <div className="pt-2.5 pb-0.5 flex sm:hidden justify-center bg-[var(--card-bg)]">
+          <div className="w-12 h-1.5 rounded-full bg-slate-400 dark:bg-slate-700" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-[var(--card-bg)] sticky top-0 z-20">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-[var(--card-bg)] sticky top-0 z-20">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider">
               {mode === "payment"
@@ -360,14 +365,14 @@ export const StudentForm = ({
           </div>
           <button
             onClick={onClose}
-            className="skeuo-dial w-7 h-7 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+            className="skeuo-dial w-8 h-8 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           >
-            <X size={14} />
+            <X size={15} />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto custom-scrollbar flex-1 pb-8">
           {/* Photo Section */}
           <div className="flex justify-center mb-1">
             <div className="relative group">
