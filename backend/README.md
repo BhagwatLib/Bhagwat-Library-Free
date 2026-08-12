@@ -87,7 +87,7 @@ Response:
 }
 ```
 
-### Health Check (for Render / Koyeb / Railway health monitor)
+### Health Check
 ```
 GET /health
 ```
@@ -134,39 +134,29 @@ Response:
 
 ---
 
-## ☁️ Render Deployment Guide
+## 🌐 Architecture & Deployment
 
-1. In the **Render Dashboard**, click **New +** -> **Web Service**.
-2. Connect your GitHub repository.
-3. Set the **Root Directory**: `backend` (if deploying just the backend folder).
-4. Set the **Build Command**:
+The backend runs locally on your PC (or server) and can be exposed to your hosted frontend (e.g. Vercel) via Cloudflare Tunnel:
+
+```
+Frontend (Vercel)  ──►  Cloudflare Tunnel  ──►  Local Backend (localhost:5000)  ──►  WhatsApp Web.js
+                                                                                   └──►  MongoDB Atlas (RemoteAuth)
+```
+
+### Running Locally
+
+1. Start the backend:
    ```bash
-   npm install && npx puppeteer browsers install chrome
-   ```
-5. Set the **Start Command**:
-   ```bash
+   cd backend
    npm start
    ```
-6. Set the **Health Check Path**: `/health`
-7. In **Environment Variables**, add:
-   - `NODE_ENV`: `production`
-   - `PORT`: `5000` (Render will override automatically or use default)
-   - `ALLOWED_ORIGINS`: `https://your-frontend.vercel.app` (your frontend domain)
-   - `PUPPETEER_CACHE_DIR`: `/opt/render/.cache/puppeteer` (optional, for persistent browser caching)
-8. Click **Deploy Web Service**.
 
----
+2. Expose via Cloudflare Tunnel (if hosting frontend remotely on Vercel):
+   ```bash
+   cloudflared tunnel --url http://localhost:5000
+   ```
 
-## ☁️ Koyeb Deployment
-
-1. Push this repository to GitHub.
-2. Create a new Koyeb **Web Service**.
-3. Set the **Run command**: `npm start`
-4. Set the **Build command**: `npm install && npx puppeteer browsers install chrome`
-5. Set the **Health check path**: `/health`
-6. Add environment variables from `.env.example`.
-7. Set `NODE_ENV=production` and `ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app`.
-
+3. Set the generated HTTPS tunnel URL as `VITE_BACKEND_URL` in your frontend environment settings.
 
 ---
 
@@ -174,8 +164,7 @@ Response:
 
 - Never commit `.env` — it is in `.gitignore`
 - Never commit `.wwebjs_auth/` — it contains your WhatsApp session
-- Set `API_KEY` to a strong random string in production
-- Set `ALLOWED_ORIGINS` to your exact frontend URL in production (never leave it empty in production)
+- Set `ALLOWED_ORIGINS` to your frontend URL(s) or leave empty for open development
 
 ---
 
@@ -183,4 +172,5 @@ Response:
 
 - Node.js >= 18
 - npm >= 9
-- Google Chrome / Chromium (for WhatsApp — auto-installed by Puppeteer)
+- Google Chrome or Microsoft Edge installed on the local system
+

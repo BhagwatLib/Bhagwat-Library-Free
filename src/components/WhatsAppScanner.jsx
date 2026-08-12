@@ -24,6 +24,7 @@ import {
   logoutWhatsApp,
   refreshWhatsAppQR,
 } from "../services/whatsappService";
+import { BACKEND_URL } from "../config/backend";
 
 export const WhatsAppScanner = () => {
   const [statusData, setStatusData] = useState({
@@ -90,8 +91,7 @@ export const WhatsAppScanner = () => {
     };
 
     try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
-      eventSource = new EventSource(`${backendUrl}/api/whatsapp/events`);
+      eventSource = new EventSource(`${BACKEND_URL}/api/whatsapp/events`);
 
       eventSource.onopen = () => {
         sseActive = true;
@@ -584,7 +584,7 @@ export const WhatsAppScanner = () => {
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-300 flex items-start gap-2">
               <Sparkles size={16} className="text-blue-400 shrink-0 mt-0.5" />
               <span>
-                <strong>Cloud-Optimized:</strong> Operates on-demand with minimal memory footprint on Render.
+                <strong>Local Gateway:</strong> Operates on-demand with MongoDB RemoteAuth session persistence.
               </span>
             </div>
           </SaaSCard>

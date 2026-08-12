@@ -1,7 +1,7 @@
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase/firebase";
+import { BACKEND_URL } from "../config/backend";
 const COMMUNICATION_COLLECTION = "communicationHistory";
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 
 /**
@@ -280,5 +280,4 @@ export const sendBulkReminders = async (studentsList, messageType = "Membership 
     throw err;
   }
 };
-
 

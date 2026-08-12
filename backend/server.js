@@ -70,14 +70,19 @@ process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 process.on('exit', (code) => console.error(`[PROCESS] Exiting with code ${code}.`));
 
-// Log fatal exceptions, then allow Node/process manager to restart a clean
-// worker instead of continuing with a corrupted Puppeteer session.
-process.on('uncaughtExceptionMonitor', (err) => {
-  console.error('[PROCESS CRITICAL] Uncaught exception:', err);
+// Catch uncaught exceptions and unhandled promise rejections
+process.on('uncaughtException', (err) => {
   logger.error('[PROCESS] Uncaught exception:', {
     message: err?.message,
     name: err?.name,
     stack: err?.stack,
+  });
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('[PROCESS] Unhandled rejection:', {
+    message: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
   });
 });
 

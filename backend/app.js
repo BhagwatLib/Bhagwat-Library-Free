@@ -66,7 +66,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ---------------------------------------------------------------------------
-// Trust proxy headers (important for Koyeb / Render / Railway behind load balancer)
+// Trust proxy headers (for reverse proxy / tunnel environments)
 // ---------------------------------------------------------------------------
 app.set('trust proxy', 1);
 
@@ -86,7 +86,7 @@ app.get('/', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Health check — required by Koyeb, Render, Railway and other platforms
+// Health check endpoint
 // ---------------------------------------------------------------------------
 app.get('/health', (req, res) => {
   res.status(200).json({
