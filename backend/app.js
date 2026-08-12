@@ -25,7 +25,7 @@ const app = express();
 
 // ---------------------------------------------------------------------------
 // CORS Configuration & Dynamic Whitelist
-// Explicitly supports Vercel production & preview, Cloudflare Tunnel, and Localhost
+// Supports local development origins (localhost:5173, localhost:5174, etc.)
 // ---------------------------------------------------------------------------
 const rawOrigins = process.env.ALLOWED_ORIGINS || '';
 const allowedOrigins = rawOrigins
@@ -42,18 +42,13 @@ function isAllowedOrigin(origin) {
     return true;
   }
 
-  // 2. All Vercel deployments (production + preview domains)
-  if (/^https:\/\/[a-z0-9-_.]+\.vercel\.app$/i.test(clean)) {
-    return true;
-  }
-
-  // 3. All Cloudflare Tunnel hostnames
-  if (/^https:\/\/[a-z0-9-_.]+\.trycloudflare\.com$/i.test(clean)) {
-    return true;
-  }
-
-  // 4. Localhost and local network IPs
+  // 2. Localhost and local network IPs (any local dev port)
   if (/^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/i.test(clean)) {
+    return true;
+  }
+
+  // 3. Fallback for deployed frontend if specified
+  if (/^https:\/\/[a-z0-9-_.]+\.vercel\.app$/i.test(clean)) {
     return true;
   }
 

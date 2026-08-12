@@ -24,7 +24,7 @@ const isValidUrl = (urlStr) => {
 
 /**
  * Handles POST /api/whatsapp/start
- * Starts client and begins QR generation on-demand
+ * Starts client and begins QR generation on-demand with distributed gateway lock check
  */
 async function startWhatsApp(req, res) {
   try {
@@ -35,11 +35,22 @@ async function startWhatsApp(req, res) {
       path: req.originalUrl || req.url,
     });
 
-    whatsappService.startClient().catch((error) => {
-      logger.error('Background WhatsApp startup failed:', { error: error.message });
-    });
+    const status = await whatsappService.startClient();
 
-    const status = whatsappService.getStatus();
+    if (status.gateway === 'locked' || status.authState === 'STANDBY') {
+      return res.status(409).json({
+        success: false,
+        gateway: 'locked',
+        instanceId: status.instanceId,
+        deviceType: status.deviceType,
+        sessionOwner: status.sessionOwner,
+        ownerDeviceType: status.ownerDeviceType,
+        whatsappState: status.authState,
+        message: status.message || 'WhatsApp gateway is already active on another device.',
+        data: status,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: 'WhatsApp gateway startup initiated',
@@ -58,9 +69,9 @@ async function startWhatsApp(req, res) {
 /**
  * Handles GET /api/whatsapp/status
  */
-function getStatus(req, res) {
+async function getStatus(req, res) {
   try {
-    const status = whatsappService.getStatus();
+    const status = await whatsappService.getDetailedStatus();
     return res.status(200).json({
       success: true,
       data: status,
@@ -69,6 +80,49 @@ function getStatus(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Failed to retrieve status',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Handles GET /api/whatsapp/lock
+ */
+async function getGatewayLock(req, res) {
+  try {
+    const gatewayLockService = require('../services/gatewayLockService');
+    const sessionStore = require('../services/whatsapp/sessionStore');
+    const lockStatus = await gatewayLockService.getLockStatus(sessionStore.getSessionName());
+    return res.status(200).json({
+      success: true,
+      data: lockStatus,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve gateway lock details',
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Handles POST /api/whatsapp/lock/release
+ */
+async function releaseGatewayLock(req, res) {
+  try {
+    const gatewayLockService = require('../services/gatewayLockService');
+    const sessionStore = require('../services/whatsapp/sessionStore');
+    const released = await gatewayLockService.releaseLock(sessionStore.getSessionName());
+    return res.status(200).json({
+      success: true,
+      message: released ? 'Gateway lock released successfully' : 'No active lock held by this instance',
+      released,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to release gateway lock',
       error: error.message,
     });
   }
@@ -437,6 +491,8 @@ async function sendBulkMessages(req, res, next) {
 module.exports = {
   startWhatsApp,
   getStatus,
+  getGatewayLock,
+  releaseGatewayLock,
   getQr,
   logoutWhatsApp,
   reconnectWhatsApp,

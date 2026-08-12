@@ -134,29 +134,27 @@ Response:
 
 ---
 
-## 🌐 Architecture & Deployment
+## 🌐 Local Architecture
 
-The backend runs locally on your PC (or server) and can be exposed to your hosted frontend (e.g. Vercel) via Cloudflare Tunnel:
+The backend runs locally on your PC at `http://localhost:5000`:
 
 ```
-Frontend (Vercel)  ──►  Cloudflare Tunnel  ──►  Local Backend (localhost:5000)  ──►  WhatsApp Web.js
-                                                                                   └──►  MongoDB Atlas (RemoteAuth)
+Frontend (localhost:5173)  ──►  Local Backend (localhost:5000)  ──►  WhatsApp Web.js
+                                                                    └──►  MongoDB Atlas (RemoteAuth)
 ```
 
 ### Running Locally
 
 1. Start the backend:
    ```bash
-   cd backend
    npm start
+   # or: cd backend && npm start
    ```
 
-2. Expose via Cloudflare Tunnel (if hosting frontend remotely on Vercel):
+2. Start the frontend:
    ```bash
-   cloudflared tunnel --url http://localhost:5000
+   npm run dev
    ```
-
-3. Set the generated HTTPS tunnel URL as `VITE_BACKEND_URL` in your frontend environment settings.
 
 ---
 

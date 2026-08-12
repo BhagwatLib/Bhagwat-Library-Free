@@ -14,9 +14,11 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# Cloudflare Tunnel backend
+# Bhagwat Library Management System
 
-The frontend reads `VITE_BACKEND_URL` at build time. For the free PC-hosted
-backend, set it in the frontend host (for example Vercel) to the HTTPS hostname
-of your named Cloudflare Tunnel, such as `https://api.example.com`, then redeploy
-the frontend. Do not use `localhost` from a remote device.
+Frontend and Local Backend architecture.
+
+## Local Development
+- Backend: `http://localhost:5000`
+- Frontend: `http://localhost:5173`
+

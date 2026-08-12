@@ -6,6 +6,7 @@
 
 const { Client, RemoteAuth, NoAuth, MessageMedia } = require('whatsapp-web.js');
 const sessionStore = require('./whatsapp/sessionStore');
+const gatewayLockService = require('./gatewayLockService');
 const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
@@ -19,13 +20,24 @@ const puppeteer = require('puppeteer');
 class WhatsAppEventEmitter extends EventEmitter { }
 const whatsappEvents = new WhatsAppEventEmitter();
 
+// Listen to distributed gateway lock loss (e.g. if another instance took over)
+gatewayLockService.events.on('lock_lost', async ({ sessionId, instanceId }) => {
+  logger.warn(`[WhatsApp Lifecycle] Gateway lock for session "${sessionId}" was lost by instance "${instanceId}". Transitioning to STANDBY.`);
+  authState = 'STANDBY';
+  connectionStatus = 'STANDBY';
+  isReady = false;
+  if (client) client.ready = false;
+  emitProgress(0, 'lock_lost', 'Gateway lock transferred to another active device');
+  whatsappEvents.emit('status_change', getStatus());
+});
+
 // Singleton State & Authentication Lock State Machine
-// Flow: INITIALIZING -> QR_READY -> SCANNING -> AUTHENTICATING -> READY -> DISCONNECTED
+// Flow: INITIALIZING -> QR_READY -> SCANNING -> AUTHENTICATING -> READY -> DISCONNECTED | STANDBY
 let authState = 'DISCONNECTED';
 let client = null;
 let isReady = false;
 let isAuthenticating = false;
-let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'AUTHENTICATING' | 'CONNECTED'
+let connectionStatus = 'DISCONNECTED'; // 'DISCONNECTED' | 'CONNECTING' | 'QR_READY' | 'AUTHENTICATING' | 'CONNECTED' | 'STANDBY'
 let latestQrRaw = null;
 let latestQrDataUrl = null;
 let lastConnectedTime = null;
@@ -114,8 +126,19 @@ function normalizePhoneNumber(phone) {
  * Returns current status snapshot
  */
 function getStatus() {
+  const instanceInfo = gatewayLockService.getInstanceInfo();
+  const isConnectedReady = Boolean(isReady && client?.ready);
+
   return {
-    isReady: Boolean(isReady && client?.ready),
+    gateway: isConnectedReady ? 'active' : (authState === 'STANDBY' ? 'locked' : (authState === 'DISCONNECTED' ? 'idle' : 'active')),
+    instanceId: instanceInfo.instanceId,
+    deviceType: instanceInfo.deviceType,
+    hostname: instanceInfo.hostname,
+    sessionOwner: isConnectedReady ? instanceInfo.instanceId : null,
+    ownerDeviceType: isConnectedReady ? instanceInfo.deviceType : null,
+    isLockOwner: isConnectedReady,
+    whatsappState: authState,
+    isReady: isConnectedReady,
     status: connectionStatus,
     authState,
     progress: currentProgress,
@@ -126,6 +149,38 @@ function getStatus() {
     lastError,
     timestamp: new Date().toISOString(),
   };
+}
+
+/**
+ * Returns detailed status enriched with live MongoDB distributed lock data
+ */
+async function getDetailedStatus() {
+  const sessionClientId = sessionStore.getSessionName();
+  let lockStatus = null;
+
+  try {
+    lockStatus = await gatewayLockService.getLockStatus(sessionClientId);
+  } catch (err) {
+    logger.warn('[WhatsApp Status] Could not fetch lock status:', { message: err.message });
+  }
+
+  const baseStatus = getStatus();
+
+  if (lockStatus) {
+    return {
+      ...baseStatus,
+      gateway: lockStatus.gateway || baseStatus.gateway,
+      sessionOwner: lockStatus.sessionOwner,
+      ownerDeviceType: lockStatus.ownerDeviceType,
+      ownerHostname: lockStatus.ownerHostname,
+      isLockOwner: lockStatus.isLockOwner,
+      lockExpiresAt: lockStatus.lockExpiresAt,
+      lastHeartbeat: lockStatus.lastHeartbeat,
+      message: lockStatus.message || (baseStatus.isReady ? 'WhatsApp Connected & Ready!' : undefined),
+    };
+  }
+
+  return baseStatus;
 }
 
 /**
@@ -224,6 +279,16 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   }
 
   const sessionClientId = sessionStore.getSessionName();
+  const authDataPath = path.join(__dirname, '../.wwebjs_auth');
+  const tempSessionDir = path.join(authDataPath, `wwebjs_temp_session_${sessionClientId}`);
+
+  try {
+    if (fs.existsSync(tempSessionDir)) {
+      fs.rmSync(tempSessionDir, { recursive: true, force: true });
+      logger.info(`[RemoteAuth] Cleaned up stale temp session dir: ${tempSessionDir}`);
+    }
+  } catch (_) {}
+
   let authStrategy;
 
   if (mongoStore) {
@@ -232,7 +297,7 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       clientId: sessionClientId,
       store: mongoStore,
       backupSyncIntervalMs: 300000, // 5 minutes
-      dataPath: path.join(__dirname, '../.wwebjs_auth'),
+      dataPath: authDataPath,
     });
   } else {
     logger.warn('[RemoteAuth] MongoStore is not available. Falling back to NoAuth.');
@@ -280,6 +345,100 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
     whatsappEvents.emit('status_change', getStatus());
   }
 
+  let authEventCounter = 0;
+  let watchdogInterval = null;
+
+  function startPostAuthReadinessWatchdog() {
+    if (watchdogInterval) return;
+
+    logger.info('[Post-Auth Watchdog] Started post-authentication readiness monitor...');
+    let ticks = 0;
+    const maxTicks = 20;
+
+    watchdogInterval = setInterval(async () => {
+      ticks++;
+
+      if (isReady && client?.ready) {
+        clearInterval(watchdogInterval);
+        watchdogInterval = null;
+        return;
+      }
+
+      if (!client || !client.pupPage || client.pupPage.isClosed() || authState === 'DISCONNECTED') {
+        clearInterval(watchdogInterval);
+        watchdogInterval = null;
+        return;
+      }
+
+      let pageUrl = 'unknown';
+      let wwebjsInjected = false;
+      let uiLoaded = false;
+
+      try {
+        pageUrl = client.pupPage.url();
+
+        // Probe for active WhatsApp Web UI inside page
+        const probe = await client.pupPage.evaluate(() => {
+          const hasApp = Boolean(document.querySelector('#app'));
+          const hasSide = Boolean(document.querySelector('#pane-side, [data-testid="chat-list"], [data-testid="chatlist-header"]'));
+          const hasWWebJS = typeof window.WWebJS !== 'undefined';
+          const hasConn = Boolean(window.require && typeof window.require === 'function' && window.require('WAWebConnModel'));
+          let wid = null;
+          try {
+            if (window.require) {
+              const meUser = window.require('WAWebUserPrefsMeUser');
+              if (meUser) {
+                wid = (meUser.getMaybeMePnUser && meUser.getMaybeMePnUser()) || (meUser.getMaybeMeLidUser && meUser.getMaybeMeLidUser());
+              }
+            }
+          } catch (_) {}
+
+          return { hasApp, hasSide, hasWWebJS, hasConn, wid: wid ? String(wid) : null };
+        });
+
+        wwebjsInjected = probe.hasWWebJS;
+        uiLoaded = probe.hasSide || (probe.hasApp && probe.hasConn);
+
+        logger.info(`[Post-Auth Watchdog Tick #${ticks}]`, {
+          pageUrl,
+          uiLoaded,
+          wwebjsInjected,
+          hasConn: probe.hasConn,
+          wid: probe.wid || client?.info?.wid?.user || 'none',
+          authState,
+          isReady,
+        });
+
+        // If WhatsApp Web UI is active and Wid/Conn is available, trigger client readiness
+        if (uiLoaded && (probe.wid || client?.info?.wid || probe.hasConn)) {
+          logger.info('[Post-Auth Watchdog] Detected fully loaded WhatsApp Web app context. Synchronizing READY state...');
+          clearInterval(watchdogInterval);
+          watchdogInterval = null;
+
+          if (!client.info && probe.wid) {
+            try {
+              client.info = {
+                pushname: 'Bhagwat Library Admin',
+                wid: { user: probe.wid.replace(/\D/g, '') },
+                platform: 'web',
+              };
+            } catch (_) {}
+          }
+
+          await handleClientReady();
+        }
+      } catch (probeErr) {
+        logger.debug(`[Post-Auth Watchdog Tick #${ticks}] Probe notice: ${probeErr.message}`);
+      }
+
+      if (ticks >= maxTicks) {
+        logger.info('[Post-Auth Watchdog] Max watch ticks reached. Stopping watchdog.');
+        clearInterval(watchdogInterval);
+        watchdogInterval = null;
+      }
+    }, 1500);
+  }
+
   // --- Diagnostic Lifecycle Event Listeners ---
   client.on('loading_screen', (percent, message) => {
     try {
@@ -310,21 +469,47 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('authenticated', async (authPayload) => {
+    authEventCounter++;
+    const authStart = Date.now();
+    let currentUrl = 'unknown';
+    let isAttached = false;
+
+    try {
+      if (client?.pupPage && !client.pupPage.isClosed()) {
+        currentUrl = client.pupPage.url();
+        isAttached = true;
+      }
+    } catch (_) {}
+
+    logger.info(`[WA Event ENTER] AUTHENTICATED #${authEventCounter}`, {
+      timestamp: new Date().toISOString(),
+      authState,
+      isAuthenticating,
+      isReady,
+      pageUrl: currentUrl,
+      isPageAttached: isAttached,
+      authPayload: authPayload ? JSON.stringify(authPayload).substring(0, 100) : 'none',
+    });
+
     try {
       authState = 'AUTHENTICATING';
       isAuthenticating = true;
       connectionStatus = 'AUTHENTICATING';
       clearAllAuthFallbackTimers();
 
-      logger.info('[WA Event] AUTHENTICATED - Handshake completed');
       emitProgress(85, 'authenticated', 'Authenticated - Completing handshake...');
 
       latestQrRaw = null;
       latestQrDataUrl = null;
       lastError = null;
       whatsappEvents.emit('status_change', getStatus());
+
+      // Start post-authentication readiness monitor
+      startPostAuthReadinessWatchdog();
     } catch (err) {
       logger.error('[WA Event Error] Error in authenticated handler:', { message: err?.message });
+    } finally {
+      logger.info(`[WA Event EXIT] AUTHENTICATED #${authEventCounter} (${Date.now() - authStart}ms)`);
     }
   });
 
@@ -352,6 +537,14 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
   });
 
   client.on('ready', async () => {
+    logger.info('[WA Event ENTER] READY - Client connected and ready', {
+      timestamp: new Date().toISOString(),
+      wid: client?.info?.wid?.user || 'pending',
+      pushname: client?.info?.pushname || 'pending',
+      platform: client?.info?.platform || 'web',
+      pageUrl: client?.pupPage?.url() || 'none',
+    });
+
     try {
       authState = 'READY';
       isAuthenticating = false;
@@ -359,7 +552,11 @@ function setupClient(customExecutablePath = null, mongoStore = null) {
       connectionStatus = 'CONNECTED';
       clearAllAuthFallbackTimers();
 
-      logger.info('[WA Event] READY - Client connected and ready');
+      if (watchdogInterval) {
+        clearInterval(watchdogInterval);
+        watchdogInterval = null;
+      }
+
       emitProgress(100, 'ready', 'WhatsApp Connected & Ready!');
       await handleClientReady();
     } catch (err) {
@@ -527,6 +724,25 @@ async function startClient() {
       const sessionClientId = sessionStore.getSessionName();
       logger.info(`[RemoteAuth] Active clientId: "${sessionClientId}"`);
 
+      // 1. Acquire Distributed Gateway Lock for this device instance
+      logger.info(`[Gateway Lock] Checking and acquiring session ownership for "${sessionClientId}"...`);
+      const lockResult = await gatewayLockService.acquireLock(sessionClientId);
+
+      if (!lockResult.acquired) {
+        logger.warn(`[Gateway Lock] Cannot start WhatsApp on this instance: Session is currently locked by another device.`, lockResult.lock);
+        authState = 'STANDBY';
+        connectionStatus = 'STANDBY';
+        isReady = false;
+        latestQrRaw = null;
+        latestQrDataUrl = null;
+        lastError = {
+          message: lockResult.message || 'WhatsApp gateway is already active on another device.',
+          timestamp: new Date().toISOString(),
+        };
+        emitProgress(0, 'locked_by_other', lockResult.message || 'Gateway active on another device');
+        return await getDetailedStatus();
+      }
+
       // Check if existing session is present in MongoDB
       const hasExistingSession = await sessionStore.sessionExists();
       if (hasExistingSession) {
@@ -563,9 +779,17 @@ async function startClient() {
 
       if (client.pupPage) {
         client.pupPage.on('framenavigated', (frame) => {
-          if (frame === client.pupPage?.mainFrame()) {
-            logger.info(`[WhatsApp Lifecycle] Main page frame navigated to: ${frame.url()}`);
-          }
+          const isMain = frame === client.pupPage?.mainFrame();
+          const frameUrl = frame.url();
+          logger.info(`[WhatsApp Navigation] ${isMain ? 'Main' : 'Child'} frame navigated to: ${frameUrl}`, {
+            isMainFrame: isMain,
+            url: frameUrl,
+            authState,
+            isReady,
+            isAuthenticating,
+            pageUrl: client.pupPage?.url(),
+            isAttached: !client.pupPage?.isClosed(),
+          });
         });
 
         client.pupPage.on('close', () => {
@@ -588,6 +812,10 @@ async function startClient() {
         message: err.message,
         stack: err.stack,
       });
+      // Release lock on initialization error so other device is not blocked
+      try {
+        await gatewayLockService.releaseLock(sessionStore.getSessionName());
+      } catch (_) {}
       authState = 'DISCONNECTED';
       connectionStatus = 'DISCONNECTED';
       isReady = false;
@@ -597,7 +825,7 @@ async function startClient() {
       activeInitPromise = null;
     }
 
-    return getStatus();
+    return await getDetailedStatus();
   })();
 
   return activeInitPromise;
@@ -637,6 +865,14 @@ async function destroyClient() {
     logger.info('[RemoteAuth] Session deleted on explicit logout');
   } catch (err) {
     logger.warn('[RemoteAuth] Error deleting session on logout:', { message: err.message });
+  }
+
+  // Release distributed gateway lock
+  try {
+    await gatewayLockService.releaseLock(sessionStore.getSessionName());
+    logger.info('[Gateway Lock] Distributed lock released on explicit destroyClient().');
+  } catch (err) {
+    logger.warn('[Gateway Lock] Error releasing lock on destroyClient():', { message: err.message });
   }
 
   authState = 'DISCONNECTED';
@@ -819,6 +1055,19 @@ async function verifyClientHealth() {
     try {
       await activeInitPromise;
     } catch (_) {}
+  }
+
+  // 0. Verify that this backend instance owns the distributed gateway lock
+  const sessionClientId = sessionStore.getSessionName();
+  const ownsLock = await gatewayLockService.isLockOwner(sessionClientId);
+  if (!ownsLock) {
+    const lockStatus = await gatewayLockService.getLockStatus(sessionClientId);
+    const ownerMsg = lockStatus.sessionOwner
+      ? ` Session is currently owned by: ${lockStatus.sessionOwner} (${lockStatus.ownerDeviceType} on ${lockStatus.ownerHostname || 'other device'}).`
+      : '';
+    const err = new Error(`Cannot send WhatsApp message: This backend instance does not hold the active gateway lock.${ownerMsg}`);
+    err.statusCode = 409;
+    throw err;
   }
 
   // Check client state machine
@@ -1127,11 +1376,21 @@ async function forceSaveRemoteSession(trigger = 'manual') {
 }
 
 /**
- * Saves current session before graceful server shutdown
+ * Saves current session and cleanly releases gateway lock before graceful server shutdown
  */
 async function persistSessionBeforeExit() {
   logger.info('[RemoteAuth] Flushing and saving WhatsApp session to MongoDB before shutdown...');
-  await forceSaveRemoteSession('graceful_shutdown');
+  try {
+    await forceSaveRemoteSession('graceful_shutdown');
+  } catch (_) {}
+
+  try {
+    const sessionClientId = sessionStore.getSessionName();
+    await gatewayLockService.releaseLock(sessionClientId);
+    logger.info('[Gateway Lock] Distributed lock released cleanly before exit.');
+  } catch (err) {
+    logger.warn('[Gateway Lock] Notice during exit lock release:', { message: err.message });
+  }
 }
 
 module.exports = {
@@ -1141,6 +1400,7 @@ module.exports = {
   persistSessionBeforeExit,
   getQr,
   getStatus,
+  getDetailedStatus,
   sendTextMessage,
   sendWhatsAppMessage: sendTextMessage,
   sendDocument,

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node backend/server.js",
+    "server": "node backend/server.js",
+    "server:dev": "nodemon backend/server.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",
