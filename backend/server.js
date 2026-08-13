@@ -45,6 +45,17 @@ const server = app.listen(PORT, HOST, () => {
       logger.warn('[RemoteAuth] Startup session check notice:', { message: err.message });
     }
   })();
+
+  // Initialize and start the Firebase -> MongoDB real-time backup sync listener
+  (async () => {
+    try {
+      const firebaseSyncService = require('./services/backup/firebaseSyncService');
+      logger.info('[BackupSync] Starting real-time Firebase to MongoDB backup sync service...');
+      await firebaseSyncService.startSyncListener();
+    } catch (err) {
+      logger.error('[BackupSync] Failed to start real-time backup sync service:', { message: err.message });
+    }
+  })();
 });
 
 // Handle server startup errors (e.g. port already in use)
@@ -67,6 +78,11 @@ async function handleGracefulShutdown(signal) {
   shuttingDown = true;
   console.error(`[PROCESS] ${signal} received; beginning graceful shutdown.`);
   logger.info(`${signal} received — shutting down gracefully...`);
+  try {
+    const firebaseSyncService = require('./services/backup/firebaseSyncService');
+    firebaseSyncService.stopSyncListener();
+  } catch (_) {}
+
   try {
     const whatsappService = require('./services/whatsappService');
     await whatsappService.persistSessionBeforeExit();

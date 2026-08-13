@@ -19,6 +19,7 @@ const errorHandler = require('./middleware/errorHandler');
 const whatsappRoutes = require('./routes/whatsapp');
 const invoiceRoutes = require('./routes/invoice');
 const reminderRoutes = require('./routes/reminders');
+const backupRoutes = require('./routes/backup');
 const schedulerService = require('./services/schedulerService');
 
 const app = express();
@@ -189,6 +190,7 @@ app.use('/api', rateLimiter);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/invoice', invoiceRoutes);
 app.use('/api/reminders', reminderRoutes);
+app.use('/api/backup', backupRoutes);
 
 // ---------------------------------------------------------------------------
 // 404 handler
